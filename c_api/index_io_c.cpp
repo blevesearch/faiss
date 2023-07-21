@@ -11,6 +11,7 @@
 
 #include "index_io_c.h"
 #include <faiss/index_io.h>
+#include <faiss/impl/io.h>
 #include "macros_impl.h"
 
 using faiss::Index;
@@ -30,6 +31,15 @@ int faiss_write_index_fname(const FaissIndex* idx, const char* fname) {
     CATCH_AND_HANDLE
 }
 
+int faiss_write_index_buf(const FaissIndex* idx, char** buf) {
+    try {
+        faiss::VectorIOWriter writer;
+        faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
+        memcpy((void*)(*buf), writer.data.data(), writer.data.size());
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_read_index(FILE* f, int io_flags, FaissIndex** p_out) {
     try {
         auto out = faiss::read_index(f, io_flags);
@@ -45,6 +55,16 @@ int faiss_read_index_fname(
     try {
         auto out = faiss::read_index(fname, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(out);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_read_index_buf(const char* buf, int io_flags, FaissIndex** p_out) {
+    try {
+        faiss::VectorIOReader *reader;
+        memcpy(reader->data.data(), buf, sizeof(buf));
+        auto index = faiss::read_index(reader, io_flags);
+        *p_out = reinterpret_cast<FaissIndex*>(index);
     }
     CATCH_AND_HANDLE
 }
