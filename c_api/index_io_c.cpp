@@ -67,11 +67,13 @@ int faiss_read_index_fname(
     CATCH_AND_HANDLE
 }
 
-int faiss_read_index_buf(const char* buf, int io_flags, FaissIndex** p_out) {
+int faiss_read_index_buf(const unsigned char* buf, int size, int io_flags, FaissIndex** p_out) {
     try {
-        faiss::VectorIOReader *reader;
-        memcpy(reader->data.data(), buf, sizeof(buf));
-        auto index = faiss::read_index(reader, io_flags);
+        faiss::VectorIOReader reader;
+        reader.data.resize(size);
+        memcpy(reader.data.data(), buf, size);
+
+        auto index = faiss::read_index(&reader, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(index);
     }
     CATCH_AND_HANDLE

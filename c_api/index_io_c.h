@@ -47,7 +47,8 @@ int faiss_read_index(FILE* f, int io_flags, FaissIndex** p_out);
  */
 int faiss_read_index_fname(const char* fname, int io_flags, FaissIndex** p_out);
 
-int faiss_read_index_buf(const char* buf, int io_flags, FaissIndex** p_out);
+int faiss_read_index_buf(const unsigned char* buf, int limit, int io_flags,
+        FaissIndex** p_out);
 
 /** Write index to a file.
  * This is equivalent to `faiss::write_index_binary` when a file descriptor is
