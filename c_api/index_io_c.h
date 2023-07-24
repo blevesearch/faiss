@@ -32,7 +32,7 @@ int faiss_write_index(const FaissIndex* idx, FILE* f);
  */
 int faiss_write_index_fname(const FaissIndex* idx, const char* fname);
 
-int faiss_write_index_buf(const FaissIndex* idx, char** buf);
+int faiss_write_index_buf(const FaissIndex* idx, int* buf_size, unsigned char** buf);
 
 #define FAISS_IO_FLAG_MMAP 1
 #define FAISS_IO_FLAG_READ_ONLY 2
