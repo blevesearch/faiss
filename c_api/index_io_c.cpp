@@ -31,11 +31,19 @@ int faiss_write_index_fname(const FaissIndex* idx, const char* fname) {
     CATCH_AND_HANDLE
 }
 
-int faiss_write_index_buf(const FaissIndex* idx, char** buf) {
+int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf) {
     try {
         faiss::VectorIOWriter writer;
+
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
-        memcpy((void*)(*buf), writer.data.data(), writer.data.size());
+        unsigned char* tempBuf = (unsigned char*)malloc((writer.data.size() + 1) * sizeof(uint8_t));
+        std::copy(writer.data.begin(), writer.data.end(), tempBuf);
+        tempBuf[writer.data.size()] = 0;
+
+        // return the serialized index content to the passed buf
+        // furthermore, return its size (perhaps useful for memory management)
+        *buf = tempBuf;
+        *size = writer.data.size();
     }
     CATCH_AND_HANDLE
 }
