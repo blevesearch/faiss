@@ -28,6 +28,7 @@ set(FAISS_C_SRC
   error_impl.cpp
   index_factory_c.cpp
   index_io_c.cpp
+  index_io_c_ex.cpp
   impl/AuxIndexStructures_c.cpp
   utils/distances_c.cpp
 )
