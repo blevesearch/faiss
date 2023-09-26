@@ -11,7 +11,20 @@
 
 #include "index_io_c.h"
 #include <faiss/index_io.h>
+#include <chrono>
+#include <faiss/impl/io.h>
 #include "macros_impl.h"
+using namespace std::chrono_literals;
+
+template <
+    class result_t   = std::chrono::milliseconds,
+    class clock_t    = std::chrono::steady_clock,
+    class duration_t = std::chrono::milliseconds
+>
+auto since(std::chrono::time_point<clock_t, duration_t> const& start)
+{
+    return std::chrono::duration_cast<result_t>(clock_t::now() - start);
+}
 
 using faiss::Index;
 using faiss::IndexBinary;

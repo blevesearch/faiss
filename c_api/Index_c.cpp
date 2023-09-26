@@ -77,6 +77,10 @@ int faiss_Index_search(
     try {
         reinterpret_cast<const faiss::Index*>(index)->search(
                 n, x, k, distances, labels);
+        // printf("printing the distances\n");
+        // for (int i = 0; i < n * k; i++) {
+        //     printf("%d - %f\n", i, distances[i]);
+        // }
     }
     CATCH_AND_HANDLE
 }
@@ -153,6 +157,22 @@ int faiss_Index_remove_ids(
 int faiss_Index_reconstruct(const FaissIndex* index, idx_t key, float* recons) {
     try {
         reinterpret_cast<const faiss::Index*>(index)->reconstruct(key, recons);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_Index_reconstruct_batch(const FaissIndex* index, idx_t n, const idx_t* keys, float* recons) {
+    try {
+        reinterpret_cast<const faiss::Index*>(index)->reconstruct_batch(n, keys, recons);
+    }
+    CATCH_AND_HANDLE
+}
+
+
+int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, const idx_t add_id) {
+    try {
+        reinterpret_cast<faiss::Index*>(index)->merge_from(
+                *reinterpret_cast<faiss::Index*>(other), add_id);
     }
     CATCH_AND_HANDLE
 }

@@ -194,20 +194,21 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
                 " WARN! inverted lists not stored with IVF object\n");
         return nullptr;
     } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
-        auto ails = new ArrayInvertedLists(0, 0);
-        READ1(ails->nlist);
-        READ1(ails->code_size);
-        ails->ids.resize(ails->nlist);
-        ails->codes.resize(ails->nlist);
+        size_t nlist, code_size;
+        READ1(nlist);
+        READ1(code_size);
+        auto ails = new ArrayInvertedLists(nlist, code_size);
         std::vector<size_t> sizes(ails->nlist);
         read_ArrayInvertedLists_sizes(f, sizes);
+        // for (size_t i = 0; i < ails->nlist; i++) {
+        //     ails->ids[i].resize(sizes[i]);
+        //     ails->codes[i].resize(sizes[i] * ails->code_size);
+        // }
         for (size_t i = 0; i < ails->nlist; i++) {
-            ails->ids[i].resize(sizes[i]);
-            ails->codes[i].resize(sizes[i] * ails->code_size);
-        }
-        for (size_t i = 0; i < ails->nlist; i++) {
-            size_t n = ails->ids[i].size();
+            size_t n = sizes[i];
             if (n > 0) {
+                ails->ids[i].resize(n);
+                ails->codes[i].resize(n * ails->code_size);
                 READANDCHECK(ails->codes[i].data(), n * ails->code_size);
                 READANDCHECK(ails->ids[i].data(), n);
             }

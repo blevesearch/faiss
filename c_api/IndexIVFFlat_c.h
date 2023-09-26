@@ -79,6 +79,15 @@ int faiss_IndexIVFFlat_update_vectors(
         idx_t* idx,
         const float* v);
 
+/** initialize a direct map
+ *
+ * @param new_maintain_direct_map    if true, create a direct map,
+ *                                   else clear it
+ */
+int faiss_IndexIVFFlat_make_direct_map(
+        FaissIndexIVFFlat* index,
+        int new_maintain_direct_map);
+
 #ifdef __cplusplus
 }
 #endif

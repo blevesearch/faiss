@@ -190,6 +190,11 @@ int faiss_Index_remove_ids(
  */
 int faiss_Index_reconstruct(const FaissIndex* index, idx_t key, float* recons);
 
+int faiss_Index_reconstruct_batch(const FaissIndex* index, idx_t n, const idx_t* keys, float* recons);
+
+
+int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
+
 /** Reconstruct vectors i0 to i0 + ni - 1
  *
  * this function may not be defined for some indexes
