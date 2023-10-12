@@ -99,14 +99,3 @@ int faiss_IndexIVFFlat_update_vectors(
     }
     CATCH_AND_HANDLE
 }
-
-int faiss_IndexIVFFlat_make_direct_map(
-        FaissIndexIVFFlat* index,
-        int new_maintain_direct_map) {
-            try {
-
-        reinterpret_cast<IndexIVFFlat*>(index)->set_direct_map_type(
-                static_cast<faiss::DirectMap::Type>(new_maintain_direct_map));
-    }
-    CATCH_AND_HANDLE
-}

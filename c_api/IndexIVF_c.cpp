@@ -142,6 +142,17 @@ int faiss_IndexIVF_make_direct_map(
     CATCH_AND_HANDLE
 }
 
+int faiss_IndexIVF_set_direct_map(
+        FaissIndexIVF* index,
+        int direct_map_type) {
+            try {
+
+        reinterpret_cast<IndexIVF*>(index)->set_direct_map_type(
+                static_cast<faiss::DirectMap::Type>(direct_map_type));
+    }
+    CATCH_AND_HANDLE
+}
+
 double faiss_IndexIVF_imbalance_factor(const FaissIndexIVF* index) {
     return reinterpret_cast<const IndexIVF*>(index)
             ->invlists->imbalance_factor();
