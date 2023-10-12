@@ -77,10 +77,6 @@ int faiss_Index_search(
     try {
         reinterpret_cast<const faiss::Index*>(index)->search(
                 n, x, k, distances, labels);
-        // printf("printing the distances\n");
-        // for (int i = 0; i < n * k; i++) {
-        //     printf("%d - %f\n", i, distances[i]);
-        // }
     }
     CATCH_AND_HANDLE
 }

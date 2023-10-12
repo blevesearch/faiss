@@ -24,11 +24,6 @@ int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf)
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
         unsigned char* tempBuf = (unsigned char*)malloc((writer.data.size()) * sizeof(uint8_t));
         std::copy(writer.data.begin(), writer.data.end(), tempBuf);
-        // tempBuf[writer.data.size()] = 0;
-        // unsigned char* tempBuf = &writer.data[0];
-
-        // return the serialized index content to the passed buf
-        // furthermore, return its size (perhaps useful for memory management)
         *buf = tempBuf;
         *size = writer.data.size();
         writer.data.clear();
@@ -39,8 +34,6 @@ int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf)
 int faiss_read_index_buf(const unsigned char* buf, int size, int io_flags, FaissIndex** p_out) {
     try {
         faiss::VectorIOReader reader;
-        // reader.data.resize(size);
-        // memcpy(reader.data.data(), buf, size);
         reader.data.assign(buf, buf + size);
         auto index = faiss::read_index(&reader, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(index);

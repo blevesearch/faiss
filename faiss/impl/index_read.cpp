@@ -200,10 +200,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         auto ails = new ArrayInvertedLists(nlist, code_size);
         std::vector<size_t> sizes(ails->nlist);
         read_ArrayInvertedLists_sizes(f, sizes);
-        // for (size_t i = 0; i < ails->nlist; i++) {
-        //     ails->ids[i].resize(sizes[i]);
-        //     ails->codes[i].resize(sizes[i] * ails->code_size);
-        // }
+
         for (size_t i = 0; i < ails->nlist; i++) {
             size_t n = sizes[i];
             if (n > 0) {
