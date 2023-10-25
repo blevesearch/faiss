@@ -31,10 +31,20 @@ int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf)
     CATCH_AND_HANDLE
 }
 
+int checksum(const unsigned char* buf, int size) {
+
+    for (int i = 0; i < size; i++) {
+
+    }
+
+    return 0;
+}
+
 int faiss_read_index_buf(const unsigned char* buf, int size, int io_flags, FaissIndex** p_out) {
     try {
         faiss::VectorIOReader reader;
         reader.data.assign(buf, buf + size);
+        printf("the error while reading index from ptr %p of size %d\n", buf, size);
         auto index = faiss::read_index(&reader, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(index);
     }

@@ -56,6 +56,40 @@ size_t VectorIOReader::operator()(void* ptr, size_t size, size_t nitems) {
 }
 
 /***********************************************************************
+ * IO Buffer
+ ***********************************************************************/
+
+// size_t BufIOWriter::operator()(const void* ptr, size_t size, size_t nitems) {
+//      size_t bytes = size * nitems;
+//     if (bytes > 0) {
+//         size_t o = buf_size;
+//         // data.resize(o + bytes);
+//         // memcpy(&data[o], ptr, size * nitems);
+//         buf = (uint8_t*) realloc(buf, o + bytes);
+//         memcpy(&buf[o], ptr, size * nitems);
+//     }
+//     return nitems;
+// }
+
+size_t BufIOReader::operator()(void* ptr, size_t size, size_t nitems) {
+    if (rp >= buf_size)
+        return 0;
+    size_t nremain = (buf_size - rp) / size;
+    if (nremain < nitems)
+        nitems = nremain;
+    if (size * nitems > 0) {
+        memcpy(ptr, &buf[rp], size * nitems);
+        rp += size * nitems;
+    }
+
+    return nitems;
+}
+
+BufIOReader::~BufIOReader() {
+    free(buf);
+}
+
+/***********************************************************************
  * IO File
  ***********************************************************************/
 

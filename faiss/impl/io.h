@@ -61,6 +61,21 @@ struct VectorIOWriter : IOWriter {
     size_t operator()(const void* ptr, size_t size, size_t nitems) override;
 };
 
+// struct BufIOWriter : IOWriter {
+//     uint8_t* buf;
+//     size_t buf_size;
+//     size_t operator()(const void* ptr, size_t size, size_t nitems) override;
+//     ~BufIOWriter() override;
+// }
+
+struct BufIOReader : IOReader {
+    uint8_t* buf;
+    size_t rp = 0;
+    size_t buf_size;
+    size_t operator()(void* ptr, size_t size, size_t nitems) override;
+    ~BufIOReader() override;
+};
+
 struct FileIOReader : IOReader {
     FILE* f = nullptr;
     bool need_close = false;
