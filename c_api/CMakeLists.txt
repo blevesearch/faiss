@@ -15,12 +15,14 @@ set(FAISS_C_SRC
   IndexFlat_c.cpp
   IndexIVFFlat_c.cpp
   IndexIVF_c.cpp
+  IndexIVF_c_ex.cpp
   IndexLSH_c.cpp
   IndexPreTransform_c.cpp
   VectorTransform_c.cpp
   IndexShards_c.cpp
   IndexReplicas_c.cpp
   Index_c.cpp
+  Index_c_ex.cpp
   IndexBinary_c.cpp
   IndexScalarQuantizer_c.cpp
   MetaIndexes_c.cpp
