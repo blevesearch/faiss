@@ -7,7 +7,7 @@
 
 // Copyright 2023-present Facebook. All Rights Reserved.
 // -*- c++ -*-
-#include "IndexIVF_c.h"
+#include "IndexIVF_c_ex.h"
 #include <faiss/IndexIVF.h>
 #include "macros_impl.h"
 
