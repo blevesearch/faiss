@@ -222,6 +222,17 @@ endif()
 set(FAISS_HEADERS ${FAISS_HEADERS} PARENT_SCOPE)
 
 add_library(faiss ${FAISS_SRC})
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(
+    faiss PRIVATE
+    "-Wno-sign-compare"
+    "-Wno-unused-function"
+    "-Wno-unused-variable"
+    "-Wno-redundant-decls"
+    "-Wno-maybe-uninitialized"
+    "-Wno-format"
+  )
+endif()
 
 add_library(faiss_avx2 ${FAISS_SRC})
 if(NOT FAISS_OPT_LEVEL STREQUAL "avx2")
