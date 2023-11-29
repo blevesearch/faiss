@@ -37,6 +37,7 @@ size_t VectorIOWriter::operator()(const void* ptr, size_t size, size_t nitems) {
     if (bytes > 0) {
         size_t o = data.size();
         data.resize(o + bytes);
+        //  printf("performing a memcpy ptr %p data %p\n", ptr, &data[0]);
         memcpy(&data[o], ptr, size * nitems);
     }
     return nitems;
@@ -59,18 +60,6 @@ size_t VectorIOReader::operator()(void* ptr, size_t size, size_t nitems) {
  * IO Buffer
  ***********************************************************************/
 
-// size_t BufIOWriter::operator()(const void* ptr, size_t size, size_t nitems) {
-//      size_t bytes = size * nitems;
-//     if (bytes > 0) {
-//         size_t o = buf_size;
-//         // data.resize(o + bytes);
-//         // memcpy(&data[o], ptr, size * nitems);
-//         buf = (uint8_t*) realloc(buf, o + bytes);
-//         memcpy(&buf[o], ptr, size * nitems);
-//     }
-//     return nitems;
-// }
-
 size_t BufIOReader::operator()(void* ptr, size_t size, size_t nitems) {
     if (rp >= buf_size)
         return 0;
@@ -86,7 +75,7 @@ size_t BufIOReader::operator()(void* ptr, size_t size, size_t nitems) {
 }
 
 BufIOReader::~BufIOReader() {
-    free(buf);
+    buf = NULL;
 }
 
 /***********************************************************************
