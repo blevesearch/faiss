@@ -19,13 +19,13 @@ using faiss::IndexBinary;
 
 int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf) {
     try {
-        faiss::VectorIOWriter writer;
+        faiss::BufIOWriter writer;
+
+        writer.buf = (uint8_t*)malloc(writer.buf_cap * sizeof(uint8_t));
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
-        unsigned char* tempBuf = (unsigned char*)malloc((writer.data.size()) * sizeof(uint8_t));
-        std::copy(writer.data.begin(), writer.data.end(), tempBuf);
-        *buf = tempBuf;
-        *size = writer.data.size();
-        writer.data.clear();
+        *buf = writer.buf;
+        *size = writer.buf_size;
+        writer.buf = NULL;
     }
     CATCH_AND_HANDLE
 }

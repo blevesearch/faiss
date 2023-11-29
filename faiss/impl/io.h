@@ -61,6 +61,16 @@ struct VectorIOWriter : IOWriter {
     size_t operator()(const void* ptr, size_t size, size_t nitems) override;
 };
 
+struct BufIOWriter : IOWriter {
+    uint8_t* buf;
+    size_t buf_size = 0;
+    // default it to zero. the capacity is to be initialized when
+    // the read operation is performed for the first time with a chunk of data.
+    size_t buf_cap = 0;
+    size_t operator()(const void* ptr, size_t size, size_t nitems) override;
+    ~BufIOWriter() override;
+};
+
 struct BufIOReader : IOReader {
     const uint8_t* buf;
     size_t rp = 0;
