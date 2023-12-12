@@ -20,6 +20,7 @@ using faiss::DistanceComputer;
 using faiss::IDSelector;
 using faiss::IDSelectorAnd;
 using faiss::IDSelectorBatch;
+using faiss::IDSelectorArray;
 using faiss::IDSelectorNot;
 using faiss::IDSelectorOr;
 using faiss::IDSelectorRange;
@@ -115,6 +116,18 @@ int faiss_IDSelectorBatch_new(
     try {
         *p_sel = reinterpret_cast<FaissIDSelectorBatch*>(
                 new IDSelectorBatch(n, indices));
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IDSelectorArray_new(
+        FaissIDSelectorArray** p_sel,
+        size_t n,
+        const idx_t* indices) {
+    try {
+        *p_sel = reinterpret_cast<FaissIDSelectorArray*>(
+                new IDSelectorArray(n, indices));
         return 0;
     }
     CATCH_AND_HANDLE

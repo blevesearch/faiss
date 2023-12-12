@@ -66,6 +66,13 @@ int faiss_IDSelectorRange_new(
         idx_t imin,
         idx_t imax);
 
+FAISS_DECLARE_CLASS(IDSelectorArray)
+
+int faiss_IDSelectorArray_new(
+        FaissIDSelectorArray** p_sel,
+        size_t n,
+        const idx_t* indices);
+
 /** Remove ids from a set. Repetitions of ids in the indices set
  * passed to the constructor does not hurt performance. The hash
  * function used for the bloom filter and GCC's implementation of
