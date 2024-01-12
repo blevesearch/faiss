@@ -12,11 +12,23 @@
 #include "macros_impl.h"
 
 using faiss::IndexIVF;
+using faiss::SearchParametersIVF;
 
 int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
     try {
         reinterpret_cast<IndexIVF*>(index)->set_direct_map_type(
                 static_cast<faiss::DirectMap::Type>(direct_map_type));
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_SearchParametersIVF_new_with_sel(
+        FaissSearchParametersIVF** p_sp,
+        FaissIDSelector* sel) {
+    try {
+        SearchParametersIVF* sp = new SearchParametersIVF;
+        sp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
+        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(sp);
     }
     CATCH_AND_HANDLE
 }

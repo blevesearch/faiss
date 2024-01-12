@@ -23,6 +23,10 @@ int faiss_IndexIVF_set_direct_map(
         FaissIndexIVF* index,
         int direct_map_type);
 
+int faiss_SearchParametersIVF_new_with_sel(
+        FaissSearchParametersIVF** p_sp,
+        FaissIDSelector* sel);
+
 #ifdef __cplusplus
 }
 #endif
