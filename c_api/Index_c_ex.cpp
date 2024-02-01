@@ -8,7 +8,7 @@
 // Copyright 2023-present Facebook. All Rights Reserved.
 // -*- c++ -*-
 
-#include "Index_c.h"
+#include "Index_c_ex.h"
 #include <faiss/Index.h>
 #include "macros_impl.h"
 
@@ -28,6 +28,12 @@ int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, const idx_t add
                 *reinterpret_cast<faiss::Index*>(other), add_id);
     }
     CATCH_AND_HANDLE
+}
+
+size_t faiss_Index_size(FaissIndex* index) {
+    auto xIndex = reinterpret_cast<faiss::Index*>(index);
+    size_t rv = sizeof(xIndex);
+    return rv;
 }
 
 }

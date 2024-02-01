@@ -12,8 +12,10 @@
 #define FAISS_INDEX_EX_C_H
 
 #include <stddef.h>
+#include <stdio.h>
 #include "faiss_c.h"
 #include "Index_c.h"
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,6 +26,8 @@ int faiss_Index_reconstruct_batch(const FaissIndex* index, idx_t n,
 
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
+
+size_t faiss_Index_size(FaissIndex* index);
 
 #ifdef __cplusplus
 }
