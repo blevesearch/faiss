@@ -23,7 +23,7 @@ extern "C" {
 
 /** Write index to buffer
  */
-int faiss_write_index_buf(const FaissIndex* idx, int* buf_size, unsigned char** buf);
+int faiss_write_index_buf(const FaissIndex* idx, size_t* buf_size, unsigned char** buf);
 
 /** Read index from buffer
  */

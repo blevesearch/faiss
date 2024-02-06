@@ -17,7 +17,7 @@
 using faiss::Index;
 using faiss::IndexBinary;
 
-int faiss_write_index_buf(const FaissIndex* idx, int* size, unsigned char** buf) {
+int faiss_write_index_buf(const FaissIndex* idx, size_t* size, unsigned char** buf) {
     try {
         faiss::VectorIOWriter writer;
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
