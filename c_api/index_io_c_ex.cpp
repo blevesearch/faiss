@@ -30,7 +30,7 @@ int faiss_write_index_buf(const FaissIndex* idx, size_t* size, unsigned char** b
     CATCH_AND_HANDLE
 }
 
-int faiss_read_index_buf(const uint8_t* buf, int size, int io_flags, FaissIndex** p_out) {
+int faiss_read_index_buf(const uint8_t* buf, size_t size, int io_flags, FaissIndex** p_out) {
     try {
         faiss::BufIOReader reader;
         reader.buf = buf;

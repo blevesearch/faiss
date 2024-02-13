@@ -27,7 +27,7 @@ int faiss_write_index_buf(const FaissIndex* idx, size_t* buf_size, unsigned char
 
 /** Read index from buffer
  */
-int faiss_read_index_buf(const unsigned char* buf, int limit, int io_flags,
+int faiss_read_index_buf(const unsigned char* buf, size_t limit, int io_flags,
         FaissIndex** p_out);
 
 #ifdef __cplusplus
