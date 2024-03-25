@@ -148,6 +148,13 @@ struct OnDiskInvertedListsIOHook : InvertedListsIOHook {
             size_t nlist,
             size_t code_size,
             const std::vector<size_t>& sizes) const override;
+
+    InvertedLists* read_ArrayInvertedLists_MMAP(
+            IOReader* f,
+            int io_flags,
+            size_t nlist,
+            size_t code_size,
+            const std::vector<size_t>& sizes) const override;
 };
 
 } // namespace faiss

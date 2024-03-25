@@ -224,7 +224,16 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         read_ArrayInvertedLists_sizes(f, sizes);
         return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists(
                 f, io_flags, nlist, code_size, sizes);
-    } else {
+    } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_READ_MMAP)) {
+        int h2 = (io_flags & 0xffff0000) | (fourcc("il__") & 0x0000ffff);
+        size_t nlist, code_size;
+        READ1(nlist);
+        READ1(code_size);
+        std::vector<size_t> sizes(nlist);
+        read_ArrayInvertedLists_sizes(f, sizes);
+        return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists_MMAP(
+                f, io_flags, nlist, code_size, sizes);
+    }else {
         return InvertedListsIOHook::lookup(h)->read(f, io_flags);
     }
 }

@@ -48,6 +48,13 @@ struct InvertedListsIOHook {
             size_t code_size,
             const std::vector<size_t>& sizes) const;
 
+    virtual InvertedLists* read_ArrayInvertedLists_MMAP(
+            IOReader* f,
+            int io_flags,
+            size_t nlist,
+            size_t code_size,
+            const std::vector<size_t>& sizes) const;
+
     virtual ~InvertedListsIOHook() {}
 
     /**************************** Manage the set of callbacks ******/

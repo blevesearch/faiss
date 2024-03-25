@@ -99,4 +99,13 @@ InvertedLists* InvertedListsIOHook::read_ArrayInvertedLists(
     FAISS_THROW_FMT("read to array not implemented for %s", classname.c_str());
 }
 
+InvertedLists* InvertedListsIOHook::read_ArrayInvertedLists_MMAP(
+        IOReader*,
+        int,
+        size_t,
+        size_t,
+        const std::vector<size_t>&) const {
+    FAISS_THROW_FMT("read to array not implemented for %s", classname.c_str());
+}
+
 } // namespace faiss

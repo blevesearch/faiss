@@ -741,6 +741,31 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     return od;
 }
 
+InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists_MMAP(
+        IOReader* f,
+        int /* io_flags */,
+        size_t nlist,
+        size_t code_size,
+        const std::vector<size_t>& sizes) const {
+    auto ails = new OnDiskInvertedLists();
+    ails->nlist = nlist;
+    ails->code_size = code_size;
+    ails->read_only = true;
+    ails->lists.resize(nlist);
+
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+
+    size_t o = reader->rp;
+    for (size_t i = 0; i < ails->nlist; i++) {
+        OnDiskInvertedLists::List& l = ails->lists[i];
+        l.size = l.capacity = sizes[i];
+        l.offset = o;
+        o += l.size * (sizeof(idx_t) + ails->code_size);
+    }
+
+    return ails;
+}
+
 /** read from a ArrayInvertedLists into this invertedlist type */
 InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
         IOReader* f,
