@@ -756,6 +756,10 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists_MMAP(
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
 
     size_t o = reader->rp;
+    ails->totsize = reader->buf_size;
+    FAISS_THROW_IF_NOT(o <= ails->totsize);
+    ails->ptr = const_cast<uint8_t*>(reader->buf);
+
     for (size_t i = 0; i < ails->nlist; i++) {
         OnDiskInvertedLists::List& l = ails->lists[i];
         l.size = l.capacity = sizes[i];

@@ -34,6 +34,7 @@ int faiss_write_index_fname(const FaissIndex* idx, const char* fname);
 
 #define FAISS_IO_FLAG_MMAP 1
 #define FAISS_IO_FLAG_READ_ONLY 2
+#define FAISS_IO_FLAG_READ_MMAP 32
 
 /** Read index from a file.
  * This is equivalent to `faiss:read_index` when a file descriptor is given.

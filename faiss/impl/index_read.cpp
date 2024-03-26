@@ -193,6 +193,17 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
                 "read_InvertedLists:"
                 " WARN! inverted lists not stored with IVF object\n");
         return nullptr;
+    } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_READ_MMAP)) {
+        // forcing to use the OnDiskInvertedLists for now
+        int h2 = fourcc("ilod");
+        printf("the ilod\n");
+        size_t nlist, code_size;
+        READ1(nlist);
+        READ1(code_size);
+        std::vector<size_t> sizes(nlist);
+        read_ArrayInvertedLists_sizes(f, sizes);
+        return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists_MMAP(
+                f, io_flags, nlist, code_size, sizes);
     } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
         size_t nlist, code_size;
         READ1(nlist);
@@ -223,15 +234,6 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         std::vector<size_t> sizes(nlist);
         read_ArrayInvertedLists_sizes(f, sizes);
         return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists(
-                f, io_flags, nlist, code_size, sizes);
-    } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_READ_MMAP)) {
-        int h2 = (io_flags & 0xffff0000) | (fourcc("il__") & 0x0000ffff);
-        size_t nlist, code_size;
-        READ1(nlist);
-        READ1(code_size);
-        std::vector<size_t> sizes(nlist);
-        read_ArrayInvertedLists_sizes(f, sizes);
-        return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists_MMAP(
                 f, io_flags, nlist, code_size, sizes);
     }else {
         return InvertedListsIOHook::lookup(h)->read(f, io_flags);
