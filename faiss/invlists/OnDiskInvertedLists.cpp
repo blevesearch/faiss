@@ -353,6 +353,7 @@ OnDiskInvertedLists::OnDiskInvertedLists(
           filename(filename),
           totsize(0),
           ptr(nullptr),
+          pre_mapped(false),
           read_only(false),
           locks(new LockLevels()),
           pf(new OngoingPrefetch(this)),
@@ -369,11 +370,16 @@ OnDiskInvertedLists::~OnDiskInvertedLists() {
 
     // unmap all lists
     if (ptr != nullptr) {
-        int err = munmap(ptr, totsize);
-        if (err != 0) {
-            fprintf(stderr, "mumap error: %s", strerror(errno));
+        if (!pre_mapped) {
+            int err = munmap(ptr, totsize);
+            if (err != 0) {
+                fprintf(stderr, "mumap error: %s", strerror(errno));
+            }
+        } else {
+            ptr = nullptr;
         }
     }
+
     delete locks;
 }
 
@@ -751,6 +757,11 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists_MMAP(
     ails->nlist = nlist;
     ails->code_size = code_size;
     ails->read_only = true;
+
+    // setting this true is to ensure that the destructor does not unmap
+    // since the unmapping and mapping responsiblity is that of the parent
+    // layer.
+    ails->pre_mapped = true;
     ails->lists.resize(nlist);
 
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);

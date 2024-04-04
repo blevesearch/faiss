@@ -195,8 +195,9 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         return nullptr;
     } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_READ_MMAP)) {
         // forcing to use the OnDiskInvertedLists for now
+        // need a more flexible way binding the API invokation with the
+        // io_flag passed
         int h2 = fourcc("ilod");
-        printf("the ilod\n");
         size_t nlist, code_size;
         READ1(nlist);
         READ1(code_size);
