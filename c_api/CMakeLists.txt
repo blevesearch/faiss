@@ -26,6 +26,7 @@ set(FAISS_C_SRC
   IndexBinary_c.cpp
   IndexScalarQuantizer_c.cpp
   MetaIndexes_c.cpp
+  jemalloc_stat_c.cpp
   clone_index_c.cpp
   error_impl.cpp
   index_factory_c.cpp
@@ -35,7 +36,11 @@ set(FAISS_C_SRC
   utils/distances_c.cpp
 )
 add_library(faiss_c ${FAISS_C_SRC})
-target_link_libraries(faiss_c PRIVATE faiss)
+
+target_include_directories(faiss_c PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../jemalloc_faiss/install/include>)
+
+target_link_libraries(faiss_c PRIVATE jemalloc_faiss faiss)
 install(TARGETS faiss_c
   EXPORT faiss-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

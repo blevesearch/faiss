@@ -28,6 +28,8 @@ if(FAISS_ENABLE_GPU)
   enable_language(CUDA)
 endif()
 
+add_subdirectory(jemalloc_faiss)
+
 add_subdirectory(faiss)
 
 if(FAISS_ENABLE_GPU)
