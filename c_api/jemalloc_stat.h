@@ -10,7 +10,7 @@
 #define JEMALLOC_STAT_H
 
 #include <stddef.h>
-#include <jemalloc/jemalloc_faiss.h>
+#include <jemalloc/jemalloc.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

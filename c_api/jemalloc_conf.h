@@ -9,7 +9,7 @@
 #ifndef JEMALLOC_CONF_H
 #define JEMALLOC_CONF_H
 
-#include <jemalloc/jemalloc_faiss.h>
+#include <jemalloc/jemalloc.h>
 /* jemalloc checks for this symbol, and it's contents for the config to use. */
 const char* malloc_conf =
 #ifndef __APPLE__

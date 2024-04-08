@@ -36,11 +36,7 @@ set(FAISS_C_SRC
   utils/distances_c.cpp
 )
 add_library(faiss_c ${FAISS_C_SRC})
-
-target_include_directories(faiss_c PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../jemalloc_faiss/install/include>)
-
-target_link_libraries(faiss_c PRIVATE jemalloc_faiss faiss)
+target_link_libraries(faiss_c PRIVATE Jemalloc::noprefix faiss)
 install(TARGETS faiss_c
   EXPORT faiss-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

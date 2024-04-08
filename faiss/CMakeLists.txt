@@ -274,8 +274,8 @@ endif()
 target_compile_definitions(faiss PRIVATE FINTEGER=int)
 target_compile_definitions(faiss_avx2 PRIVATE FINTEGER=int)
 
-target_link_libraries(faiss PRIVATE jemalloc_faiss)
-target_link_libraries(faiss_avx2 PRIVATE jemalloc_faiss)
+target_link_libraries(faiss PRIVATE Jemalloc::noprefix)
+target_link_libraries(faiss_avx2 PRIVATE Jemalloc::noprefix)
 
 find_package(OpenMP REQUIRED)
 target_link_libraries(faiss PRIVATE OpenMP::OpenMP_CXX)

@@ -28,7 +28,12 @@ if(FAISS_ENABLE_GPU)
   enable_language(CUDA)
 endif()
 
-add_subdirectory(jemalloc_faiss)
+if(NOT TARGET Jemalloc::noprefix)
+  find_package(Jemalloc REQUIRED)
+  if(NOT TARGET Jemalloc::noprefix)
+    message(FATAL_ERROR "Found Jemalloc, but missing custom target Jemalloc::noprefix!")
+  endif()
+endif()
 
 add_subdirectory(faiss)
 
