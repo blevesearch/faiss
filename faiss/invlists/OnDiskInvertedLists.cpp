@@ -747,22 +747,15 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     return od;
 }
 
-InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists_MMAP(
+InvertedLists* read_ArrayInvertedLists_MMAP(
         IOReader* f,
-        int /* io_flags */,
-        size_t nlist,
-        size_t code_size,
-        const std::vector<size_t>& sizes) const {
-    auto ails = new OnDiskInvertedLists();
-    ails->nlist = nlist;
-    ails->code_size = code_size;
-    ails->read_only = true;
+        OnDiskInvertedLists* ails,
+        const std::vector<size_t>& sizes) {
 
     // setting this true is to ensure that the destructor does not unmap
     // since the unmapping and mapping responsiblity is that of the parent
     // layer.
     ails->pre_mapped = true;
-    ails->lists.resize(nlist);
 
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
 
@@ -784,7 +777,7 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists_MMAP(
 /** read from a ArrayInvertedLists into this invertedlist type */
 InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
         IOReader* f,
-        int /* io_flags */,
+        int io_flags,
         size_t nlist,
         size_t code_size,
         const std::vector<size_t>& sizes) const {
@@ -793,6 +786,10 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     ails->code_size = code_size;
     ails->read_only = true;
     ails->lists.resize(nlist);
+
+    if (io_flags & IO_FLAG_READ_MMAP) {
+        return read_ArrayInvertedLists_MMAP(f, ails, sizes);
+    }
 
     FileIOReader* reader = dynamic_cast<FileIOReader*>(f);
     FAISS_THROW_IF_NOT_MSG(reader, "mmap only supported for File objects");

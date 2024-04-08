@@ -203,7 +203,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         READ1(code_size);
         std::vector<size_t> sizes(nlist);
         read_ArrayInvertedLists_sizes(f, sizes);
-        return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists_MMAP(
+        return InvertedListsIOHook::lookup(h2)->read_ArrayInvertedLists(
                 f, io_flags, nlist, code_size, sizes);
     } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
         size_t nlist, code_size;
