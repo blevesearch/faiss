@@ -532,6 +532,36 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
 
 int read_old_fmt_hack = 0;
 
+/*
+flat indexes which store the codes directly, can use this API instead to have a
+pointer to the mmaped region to avoid allocation costs. works specifically with
+BufIOReader as of now.
+
+TODO: need more asserts
+*/
+void read_codes_mmaped(IOReader* f, IndexFlat* idxf) {
+    idxf->mmaped = true;
+
+    // read the size of codes data
+    size_t size;
+    READANDCHECK(&size, 1);
+    FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
+    size *= 4;
+
+    // size == ntotal * code_size == ntotal * d * sizeof(float)
+    // the size value can change for indexes with encodings like
+    // SQ, PQ etc. TODO: need to explore those.
+    idxf->mmaped_size = size;
+
+    // BufIOReader is the reader which has a direct pointer to the mmaped
+    // byte array, so we can directly set the codes_ptr to the mmaped region
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    size_t o = reader->rp;
+    idxf->codes_ptr = const_cast<uint8_t*>(reader->buf);
+    idxf->codes_ptr += o;
+    reader->rp += size;
+}
+
 Index* read_index(IOReader* f, int io_flags) {
     Index* idx = nullptr;
     uint32_t h;
@@ -547,9 +577,17 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
-        READXBVECTOR(idxf->codes);
-        FAISS_THROW_IF_NOT(
+
+
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_codes_mmaped(f, idxf);
+            // TODO: have an assert around codes_ptr
+        } else {
+            READXBVECTOR(idxf->codes);
+            FAISS_THROW_IF_NOT(
                 idxf->codes.size() == idxf->ntotal * idxf->code_size);
+        }
+
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
