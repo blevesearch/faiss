@@ -24,6 +24,15 @@ IndexFlatCodes::IndexFlatCodes() :
             mmaped(false),
             codes_ptr(nullptr) {}
 
+IndexFlatCodes::~IndexFlatCodes() {
+    // setting the pointer to nullptr so that the mmap'd region is zero counted
+    // from faiss side and safe to be free'd/GC'd etc. on calling application layer
+    // of faiss.
+    if (mmaped) {
+        codes_ptr = nullptr;
+    }
+}
+
 void IndexFlatCodes::add(idx_t n, const float* x) {
     FAISS_THROW_IF_NOT(is_trained);
     if (n == 0) {
