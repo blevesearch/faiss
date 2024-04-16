@@ -758,6 +758,7 @@ InvertedLists* read_ArrayInvertedLists_MMAP(
     ails->pre_mapped = true;
 
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
 
     size_t o = reader->rp;
     ails->totsize = reader->buf_size;

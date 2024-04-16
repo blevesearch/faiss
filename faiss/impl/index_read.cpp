@@ -556,9 +556,12 @@ void read_codes_mmaped(IOReader* f, IndexFlat* idxf) {
     // BufIOReader is the reader which has a direct pointer to the mmaped
     // byte array, so we can directly set the codes_ptr to the mmaped region
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
-    size_t o = reader->rp;
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+
     idxf->codes_ptr = const_cast<uint8_t*>(reader->buf);
-    idxf->codes_ptr += o;
+    // seek to the point where the codes section begins
+    idxf->codes_ptr += reader->rp;
+    // update read pointer appropriately
     reader->rp += size;
 }
 
