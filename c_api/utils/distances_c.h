@@ -12,6 +12,7 @@
 #define FAISS_DISTANCES_C_H
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
