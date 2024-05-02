@@ -257,6 +257,12 @@ struct OnDiskInvertedLists::OngoingPrefetch {
 int OnDiskInvertedLists::OngoingPrefetch::global_cs = 0;
 
 void OnDiskInvertedLists::prefetch_lists(const idx_t* list_nos, int n) const {
+
+    // avoid prefetch when the ondisk-ivf is already prepared for read-only paths
+    // helpful when the queries are not batched
+    if (pre_mapped) {
+        return;
+    }
     pf->prefetch_lists(list_nos, n);
 }
 
