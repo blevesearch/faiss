@@ -21,6 +21,10 @@
 extern "C" {
 #endif
 
+#define FAISS_IO_FLAG_SKIP_PREFETCH 32
+#define FAISS_IO_FLAG_READ_MMAP 64
+#define FAISS_IO_FLAG_ONDISK_IVF 0x646f0000
+
 /** Write index to buffer
  */
 int faiss_write_index_buf(const FaissIndex* idx, size_t* buf_size, unsigned char** buf);

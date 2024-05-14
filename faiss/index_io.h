@@ -52,8 +52,10 @@ const int IO_FLAG_ONDISK_SAME_DIR = 4;
 const int IO_FLAG_SKIP_IVF_DATA = 8;
 // don't initialize precomputed table after loading
 const int IO_FLAG_SKIP_PRECOMPUTE_TABLE = 16;
+// skip prefetch phase while searching over the inverted lists
+const int IO_FLAG_SKIP_PREFETCH = 32;
 // read the index from an already mmap'd data buffer
-const int IO_FLAG_READ_MMAP = 32 | 0x646f0000;
+const int IO_FLAG_READ_MMAP = 64 | 0x646f0000;
 // try to memmap data (useful to load an ArrayInvertedLists as an
 // OnDiskInvertedLists)
 const int IO_FLAG_MMAP = IO_FLAG_SKIP_IVF_DATA | 0x646f0000;

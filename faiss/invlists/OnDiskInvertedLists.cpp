@@ -260,7 +260,7 @@ void OnDiskInvertedLists::prefetch_lists(const idx_t* list_nos, int n) const {
 
     // avoid prefetch when the ondisk-ivf is already prepared for read-only paths
     // helpful when the queries are not batched
-    if (pre_mapped) {
+    if (!prefetch) {
         return;
     }
     pf->prefetch_lists(list_nos, n);
@@ -360,6 +360,7 @@ OnDiskInvertedLists::OnDiskInvertedLists(
           totsize(0),
           ptr(nullptr),
           pre_mapped(false),
+          prefetch(true),
           read_only(false),
           locks(new LockLevels()),
           pf(new OngoingPrefetch(this)),
@@ -753,14 +754,19 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     return od;
 }
 
+/**
+ * This is function just an alternate way to use the OnDiskInvertedLists.
+ * It's useful when the index is read using BufIOReader from a uint8_t* buffer
+ * which is already mmap'd by the application layer.
+ * All the responbility of handling this mmap pointer now falls on the app layer
+**/
 InvertedLists* read_ArrayInvertedLists_MMAP(
         IOReader* f,
         OnDiskInvertedLists* ails,
         const std::vector<size_t>& sizes) {
 
     // setting this true is to ensure that the destructor does not unmap
-    // since the unmapping and mapping responsiblity is that of the parent
-    // layer.
+    // since the mmap control is on the parent layer of faiss.
     ails->pre_mapped = true;
 
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
@@ -769,6 +775,8 @@ InvertedLists* read_ArrayInvertedLists_MMAP(
     size_t o = reader->rp;
     ails->totsize = reader->buf_size;
     FAISS_THROW_IF_NOT(o <= ails->totsize);
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
+    // using the base pointer to the mmap'd region
     ails->ptr = const_cast<uint8_t*>(reader->buf);
 
     for (size_t i = 0; i < ails->nlist; i++) {
@@ -778,6 +786,9 @@ InvertedLists* read_ArrayInvertedLists_MMAP(
         o += l.size * (sizeof(idx_t) + ails->code_size);
     }
 
+    // updating the read pointer appropriately, this is needed when the IVF
+    // wrapped with another index class.
+    reader->rp = o;
     return ails;
 }
 
@@ -793,6 +804,9 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     ails->code_size = code_size;
     ails->read_only = true;
     ails->lists.resize(nlist);
+    if (io_flags & IO_FLAG_SKIP_PREFETCH) {
+        ails->prefetch = false;
+    }
 
     if (io_flags & IO_FLAG_READ_MMAP) {
         return read_ArrayInvertedLists_MMAP(f, ails, sizes);

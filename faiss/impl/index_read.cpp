@@ -523,13 +523,11 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
 
 int read_old_fmt_hack = 0;
 
-/*
-flat indexes which store the codes directly, can use this API instead to have a
-pointer to the mmaped region to avoid allocation costs. works specifically with
-BufIOReader as of now.
-
-TODO: need more asserts
-*/
+/**
+ * flat indexes which store the codes directly, can use this API instead to have a
+ * pointer to the mmaped region to avoid allocation costs. works specifically with
+ * BufIOReader as of now.
+**/
 void read_codes_mmaped(IOReader* f, IndexFlat* idxf) {
     idxf->mmaped = true;
 
@@ -539,15 +537,18 @@ void read_codes_mmaped(IOReader* f, IndexFlat* idxf) {
     FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
     size *= 4;
 
-    // size == ntotal * code_size == ntotal * d * sizeof(float)
-    // the size value can change for indexes with encodings like
-    // SQ, PQ etc. TODO: need to explore those.
+    // size == ntotal * code_size == ntotal * d * sizeof(float) for IndexFlat
+    // NOTE: the code_size value can change for indexes with encodings like
+    // SQ, PQ although the size value will still be equal to ntotal * code_size
+    // bytes which is accessible via codes_ptr.
+    FAISS_THROW_IF_NOT(size == idxf->ntotal * idxf->code_size);
     idxf->mmaped_size = size;
 
     // BufIOReader is the reader which has a direct pointer to the mmaped
     // byte array, so we can directly set the codes_ptr to the mmaped region
     BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
     FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
 
     idxf->codes_ptr = const_cast<uint8_t*>(reader->buf);
     // seek to the point where the codes section begins
@@ -575,7 +576,6 @@ Index* read_index(IOReader* f, int io_flags) {
 
         if (io_flags & IO_FLAG_READ_MMAP) {
             read_codes_mmaped(f, idxf);
-            // TODO: have an assert around codes_ptr
         } else {
             READXBVECTOR(idxf->codes);
             FAISS_THROW_IF_NOT(
