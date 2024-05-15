@@ -573,7 +573,6 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
 
-
         if (io_flags & IO_FLAG_READ_MMAP) {
             read_codes_mmaped(f, idxf);
         } else {
@@ -581,7 +580,6 @@ Index* read_index(IOReader* f, int io_flags) {
             FAISS_THROW_IF_NOT(
                 idxf->codes.size() == idxf->ntotal * idxf->code_size);
         }
-
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {

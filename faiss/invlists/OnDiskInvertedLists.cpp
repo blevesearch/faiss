@@ -260,7 +260,7 @@ void OnDiskInvertedLists::prefetch_lists(const idx_t* list_nos, int n) const {
 
     // avoid prefetch when the ondisk-ivf is already prepared for read-only paths
     // helpful when the queries are not batched
-    if (!prefetch) {
+    if (skip_prefetch) {
         return;
     }
     pf->prefetch_lists(list_nos, n);
@@ -360,7 +360,7 @@ OnDiskInvertedLists::OnDiskInvertedLists(
           totsize(0),
           ptr(nullptr),
           pre_mapped(false),
-          prefetch(true),
+          skip_prefetch(false),
           read_only(false),
           locks(new LockLevels()),
           pf(new OngoingPrefetch(this)),
@@ -755,7 +755,7 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
 }
 
 /**
- * This is function just an alternate way to use the OnDiskInvertedLists.
+ * This function is just an alternate way to use the OnDiskInvertedLists.
  * It's useful when the index is read using BufIOReader from a uint8_t* buffer
  * which is already mmap'd by the application layer.
  * All the responbility of handling this mmap pointer now falls on the app layer
@@ -805,7 +805,7 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     ails->read_only = true;
     ails->lists.resize(nlist);
     if (io_flags & IO_FLAG_SKIP_PREFETCH) {
-        ails->prefetch = false;
+        ails->skip_prefetch = true;
     }
 
     if (io_flags & IO_FLAG_READ_MMAP) {
