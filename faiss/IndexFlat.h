@@ -54,15 +54,9 @@ struct IndexFlat : IndexFlatCodes {
 
     // get pointer to the floating point data
     float* get_xb() {
-        if (mmaped) {
-            return (float*)(codes_ptr);
-        }
         return (float*)codes.data();
     }
     const float* get_xb() const {
-        if (mmaped) {
-            return (const float*)(codes_ptr);
-        }
         return (const float*)codes.data();
     }
 

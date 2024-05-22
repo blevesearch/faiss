@@ -24,9 +24,6 @@ struct IndexFlatCodes : Index {
 
     /// encoded dataset, size ntotal * code_size
     std::vector<uint8_t> codes;
-    bool mmaped; // true if codes_ptr is pointing to a mmaped region
-    size_t mmaped_size;
-    uint8_t* volatile codes_ptr;
 
     IndexFlatCodes();
 

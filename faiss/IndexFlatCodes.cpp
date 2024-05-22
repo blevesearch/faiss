@@ -18,20 +18,9 @@ namespace faiss {
 IndexFlatCodes::IndexFlatCodes(size_t code_size, idx_t d, MetricType metric)
         : Index(d, metric), code_size(code_size) {}
 
-IndexFlatCodes::IndexFlatCodes() :
-            code_size(0),
-            mmaped_size(0),
-            mmaped(false),
-            codes_ptr(nullptr) {}
+IndexFlatCodes::IndexFlatCodes() : code_size(0) {}
 
-IndexFlatCodes::~IndexFlatCodes() {
-    // setting the pointer to nullptr so that the mmap'd region is zero counted
-    // from faiss side and safe to be free'd/GC'd etc. on calling application layer
-    // of faiss.
-    if (mmaped) {
-        codes_ptr = nullptr;
-    }
-}
+IndexFlatCodes::~IndexFlatCodes() {}
 
 void IndexFlatCodes::add(idx_t n, const float* x) {
     FAISS_THROW_IF_NOT(is_trained);

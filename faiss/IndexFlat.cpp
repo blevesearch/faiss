@@ -169,10 +169,6 @@ FlatCodesDistanceComputer* IndexFlat::get_FlatCodesDistanceComputer() const {
 }
 
 void IndexFlat::reconstruct(idx_t key, float* recons) const {
-    if (mmaped) {
-        memcpy(recons, &(codes_ptr[key * code_size]), code_size);
-        return;
-    }
     memcpy(recons, &(codes[key * code_size]), code_size);
 }
 
