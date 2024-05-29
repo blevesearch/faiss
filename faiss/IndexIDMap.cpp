@@ -120,7 +120,6 @@ void IndexIDMapTemplate<IndexT>::search(
     }
     index->search(n, x, k, distances, labels, params);
     idx_t* li = labels;
-#pragma omp parallel for
     for (idx_t i = 0; i < n * k; i++) {
         li[i] = li[i] < 0 ? li[i] : id_map[li[i]];
     }

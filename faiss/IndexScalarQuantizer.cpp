@@ -58,7 +58,7 @@ void IndexScalarQuantizer::search(
     FAISS_THROW_IF_NOT(
             metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
 
-#pragma omp parallel
+#pragma omp parallel if (n > 1)
     {
         InvertedListScanner* scanner =
                 sq.select_InvertedListScanner(metric_type, nullptr, true, sel);
