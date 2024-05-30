@@ -601,8 +601,10 @@ void train_NonUniform(
             }
         }
         std::vector<float> trained_d(2);
-        // add an openMP guard here to prevent spawning threads
-        // when d = 1 (which would indicate sequential execution) 
+
+// Add an openMP guard here to prevent spawning threads
+// when d = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
 #pragma omp parallel for if (d > 1)
         for (int j = 0; j < d; j++) {
             train_Uniform(rs, rs_arg, n, k, xt.data() + j * n, trained_d);
@@ -1159,8 +1161,10 @@ void ScalarQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
     std::unique_ptr<SQuantizer> squant(select_quantizer());
 
     memset(codes, 0, code_size * n);
-    // add an openMP guard here to prevent spawning threads
-    // when n = 1 (which would indicate sequential execution) 
+
+// Add an openMP guard here to prevent spawning threads
+// when n = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
 #pragma omp parallel for if (n > 1)
     for (int64_t i = 0; i < n; i++)
         squant->encode_vector(x + i * d, codes + i * code_size);
@@ -1169,8 +1173,9 @@ void ScalarQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
 void ScalarQuantizer::decode(const uint8_t* codes, float* x, size_t n) const {
     std::unique_ptr<SQuantizer> squant(select_quantizer());
 
-    // add an openMP guard here to prevent spawning threads
-    // when n = 1 (which would indicate sequential execution) 
+// Add an openMP guard here to prevent spawning threads
+// when n = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
 #pragma omp parallel for if (n > 1)
     for (int64_t i = 0; i < n; i++)
         squant->decode_vector(codes + i * code_size, x + i * d);
