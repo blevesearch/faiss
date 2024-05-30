@@ -58,6 +58,9 @@ void IndexScalarQuantizer::search(
     FAISS_THROW_IF_NOT(
             metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
 
+// adding an openMP guard here to spawn threads only if n > 1, where n is the number 
+// of queries in the batch. If n = 1, then the search is done in a single thread.
+// This is done to avoid the overhead of spawning threads for executing sequential code.
 #pragma omp parallel if (n > 1)
     {
         InvertedListScanner* scanner =
