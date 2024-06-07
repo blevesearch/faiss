@@ -11,6 +11,7 @@
 #include "Index_c.h"
 #include <faiss/Index.h>
 #include <faiss/impl/IDSelector.h>
+#include <faiss/OMPConfig.h>
 #include "macros_impl.h"
 
 extern "C" {
@@ -222,4 +223,9 @@ int faiss_Index_sa_decode(
     }
     CATCH_AND_HANDLE
 }
+
+void faiss_set_omp_threads(unsigned int n) {
+    faiss::set_num_omp_threads(n);
+}
+
 }

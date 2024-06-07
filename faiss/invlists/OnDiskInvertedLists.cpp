@@ -611,7 +611,7 @@ size_t OnDiskInvertedLists::merge_from(
     size_t nmerged = 0;
     double t0 = getmillisecs(), last_t = t0;
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (size_t j = 0; j < nlist; j++) {
         List& l = lists[j];
         for (int i = 0; i < n_il; i++) {

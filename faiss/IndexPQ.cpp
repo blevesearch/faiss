@@ -332,7 +332,7 @@ void IndexPQ::search_core_polysemous(
     if (false) {
         pq.compute_codes(x, q_codes, n);
     } else {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (idx_t qi = 0; qi < n; qi++) {
             pq.compute_code_from_distance_table(
                     dis_tables + qi * pq.M * pq.ksub,
@@ -344,7 +344,7 @@ void IndexPQ::search_core_polysemous(
 
     int bad_code_size = 0;
 
-#pragma omp parallel for reduction(+ : n_pass, bad_code_size)
+#pragma omp parallel for reduction(+ : n_pass, bad_code_size) num_threads(num_omp_threads)
     for (idx_t qi = 0; qi < n; qi++) {
         const uint8_t* q_code = q_codes + qi * pq.code_size;
 
@@ -488,7 +488,7 @@ void IndexPQ::hamming_distance_histogram(
     memset(hist, 0, sizeof(*hist) * (nbits + 1));
     size_t bs = 256;
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<int64_t> histi(nbits + 1);
         hamdis_t* distances = new hamdis_t[nb * bs];
@@ -931,7 +931,7 @@ void MultiIndexQuantizer::search(
     if (k == 1) {
         // simple version that just finds the min in each table
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < n; i++) {
             const float* dis_table = dis_tables + i * pq.ksub * pq.M;
             float dis = 0;
@@ -957,7 +957,7 @@ void MultiIndexQuantizer::search(
         }
 
     } else {
-#pragma omp parallel if (n > 1)
+#pragma omp parallel if (n > 1) num_threads(num_omp_threads)
         {
             MinSumK<float, SemiSortedArray<float>, false> msk(
                     k, pq.M, pq.nbits, pq.ksub);
@@ -1094,7 +1094,7 @@ void MultiIndexQuantizer2::search(
         }
 
     } else {
-#pragma omp parallel if (n > 1)
+#pragma omp parallel if (n > 1) num_threads(num_omp_threads)
         {
             MinSumK<float, PreSortedArray<float>, false> msk(
                     K, pq.M, pq.nbits, k2);

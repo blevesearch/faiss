@@ -21,7 +21,7 @@ void ivfOffsetToUserIndex(
         const std::vector<std::vector<idx_t>>& listOffsetToUserIndex) {
     FAISS_ASSERT(numLists == listOffsetToUserIndex.size());
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t q = 0; q < queries; ++q) {
         for (idx_t r = 0; r < k; ++r) {
             auto offsetIndex = indices[q * k + r];

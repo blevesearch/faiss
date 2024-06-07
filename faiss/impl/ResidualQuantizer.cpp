@@ -174,7 +174,7 @@ void beam_search_encode_step(
     }
     InterruptCallback::check();
 
-#pragma omp parallel for if (n > 100)
+#pragma omp parallel for if (n > 100) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* codes_i = codes + i * m * beam_size;
         int32_t* new_codes_i = new_codes + i * (m + 1) * new_beam_size;
@@ -1187,7 +1187,7 @@ void beam_search_encode_step_tab(
 {
     FAISS_THROW_IF_NOT(ldc >= K);
 
-#pragma omp parallel for if (n > 100) schedule(dynamic)
+#pragma omp parallel for if (n > 100) schedule(dynamic) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         std::vector<float> cent_distances(beam_size * K);
         std::vector<float> cd_common(K);

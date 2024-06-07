@@ -469,7 +469,7 @@ void ivf_residual_add_from_flat_codes(
     const ResidualQuantizer& rq = index->rq;
 
     // populate inverted lists
-#pragma omp parallel if (nb > 10000)
+#pragma omp parallel if (nb > 10000) num_threads(num_omp_threads)
     {
         std::vector<uint8_t> tmp_code(index->code_size);
         std::vector<float> tmp(rq.d);

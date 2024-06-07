@@ -401,7 +401,7 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
 
     if (dsub < 16) { // simple direct computation
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < n; i++)
             compute_code(x + i * d, codes + i * code_size);
 
@@ -410,7 +410,7 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
         ScopeDeleter<float> del(dis_tables);
         compute_distance_tables(n, x, dis_tables);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < n; i++) {
             uint8_t* code = codes + i * code_size;
             const float* tab = dis_tables + i * ksub * M;
@@ -473,7 +473,7 @@ void ProductQuantizer::compute_distance_tables(
 #endif
             if (dsub < 16) {
 
-#pragma omp parallel for if (nx > 1)
+#pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
         for (int64_t i = 0; i < nx; i++) {
             compute_distance_table(x + i * d, dis_tables + i * ksub * M);
         }
@@ -507,7 +507,7 @@ void ProductQuantizer::compute_inner_prod_tables(
 #endif
             if (dsub < 16) {
 
-#pragma omp parallel for if (nx > 1)
+#pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
         for (int64_t i = 0; i < nx; i++) {
             compute_inner_prod_table(x + i * d, dis_tables + i * ksub * M);
         }
@@ -681,7 +681,7 @@ void pq_knn_search_with_tables(
     size_t k = res->k, nx = res->nh;
     size_t ksub = pq.ksub, M = pq.M;
 
-#pragma omp parallel for if (nx > 1)
+#pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
     for (int64_t i = 0; i < nx; i++) {
         /* query preparation for asymmetric search: compute look-up tables */
         const float* dis_table = dis_tables + i * ksub * M;
@@ -782,7 +782,7 @@ void ProductQuantizer::compute_sdc_table() {
     sdc_table.resize(M * ksub * ksub);
 
     if (dsub < 4) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int mk = 0; mk < M * ksub; mk++) {
             // allow omp to schedule in a more fine-grained way
             // `collapse` is not supported in OpenMP 2.x
@@ -796,7 +796,7 @@ void ProductQuantizer::compute_sdc_table() {
     } else {
         // NOTE: it would disable the omp loop in pairwise_L2sqr
         // but still accelerate especially when M >= 4
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int m = 0; m < M; m++) {
             const float* cents = centroids.data() + m * ksub * dsub;
             float* dis_tab = sdc_table.data() + m * ksub * ksub;
@@ -817,7 +817,7 @@ void ProductQuantizer::search_sdc(
     FAISS_THROW_IF_NOT(nbits == 8);
     size_t k = res->k;
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < nq; i++) {
         /* Compute distances and keep smallest values */
         idx_t* heap_ids = res->ids + i * k;

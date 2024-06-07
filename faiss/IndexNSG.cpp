@@ -11,6 +11,7 @@
 
 #include <omp.h>
 
+
 #include <cinttypes>
 #include <memory>
 
@@ -91,7 +92,7 @@ void IndexNSG::search(
     for (idx_t i0 = 0; i0 < n; i0 += check_period) {
         idx_t i1 = std::min(i0 + check_period, n);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             VisitedTable vt(ntotal);
 
@@ -222,7 +223,7 @@ void IndexNSG::add(idx_t n, const float* x) {
 
         // cast from idx_t to int
         const int* knn_graph = index.nndescent.final_graph.data();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (idx_t i = 0; i < ntotal * GK; i++) {
             knng[i] = knn_graph[i];
         }
@@ -260,7 +261,7 @@ void IndexNSG::reconstruct(idx_t key, float* recons) const {
 void IndexNSG::check_knn_graph(const idx_t* knn_graph, idx_t n, int K) const {
     idx_t total_count = 0;
 
-#pragma omp parallel for reduction(+ : total_count)
+#pragma omp parallel for reduction(+ : total_count) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         int count = 0;
         for (int j = 0; j < K; j++) {

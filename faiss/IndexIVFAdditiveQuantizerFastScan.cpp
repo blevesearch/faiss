@@ -13,6 +13,7 @@
 
 #include <omp.h>
 
+
 #include <memory>
 
 #include <faiss/impl/AuxIndexStructures.h>
@@ -241,7 +242,7 @@ void IndexIVFAdditiveQuantizerFastScan::estimate_norm_scale(
 
     float scale = 0;
 
-#pragma omp parallel for reduction(+ : scale)
+#pragma omp parallel for reduction(+ : scale) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         const float* lut = dis_tables.get() + i * M * ksub;
         scale += quantize_lut::aq_estimate_norm_scale(M, ksub, 2, lut);
@@ -283,7 +284,7 @@ void IndexIVFAdditiveQuantizerFastScan::encode_vectors(
         std::vector<float> residuals(n * d);
         std::vector<float> centroids(n * d);
 
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             if (list_nos[i] < 0) {
                 memset(residuals.data() + i * d, 0, sizeof(residuals[0]) * d);
@@ -293,7 +294,7 @@ void IndexIVFAdditiveQuantizerFastScan::encode_vectors(
             }
         }
 
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             auto c = centroids.data() + i * d;
             quantizer->reconstruct(list_nos[i], c);
@@ -426,7 +427,7 @@ void IndexIVFAdditiveQuantizerFastScan::compute_LUT(
         // bias = coef * <q, c>
         // NOTE: q^2 is not added to `biases`
         biases.resize(n * nprobe);
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             std::vector<float> centroid(d);
             float* c = centroid.data();
@@ -457,7 +458,7 @@ void IndexIVFAdditiveQuantizerFastScan::compute_LUT(
         FAISS_THROW_IF_NOT(norm_tabs.size() == norm_dim12);
 
         // combine them
-#pragma omp parallel for if (n > 100)
+#pragma omp parallel for if (n > 100) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             float* tab = dis_tables.data() + i * dim12 + ip_dim12;
             memcpy(tab, norm_lut, norm_dim12 * sizeof(*tab));
