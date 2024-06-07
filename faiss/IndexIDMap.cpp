@@ -137,7 +137,7 @@ void IndexIDMapTemplate<IndexT>::range_search(
     FAISS_THROW_IF_NOT_MSG(
             !params, "search params not supported for this index");
     index->range_search(n, x, radius, result);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < result->lims[result->nq]; i++) {
         result->labels[i] = result->labels[i] < 0 ? result->labels[i]
                                                   : id_map[result->labels[i]];

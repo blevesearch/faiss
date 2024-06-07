@@ -15,6 +15,7 @@
 
 #include <omp.h>
 
+
 #include <faiss/Index.h>
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>

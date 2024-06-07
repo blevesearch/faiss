@@ -17,6 +17,7 @@
 #include <cstring>
 
 #include <omp.h>
+#include <faiss/OMPConfig.h>
 
 #include <faiss/IndexFlat.h>
 #include <faiss/impl/FaissAssert.h>
@@ -152,7 +153,7 @@ void compute_centroids(
 
     size_t line_size = codec ? codec->sa_code_size() : d * sizeof(float);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();
@@ -192,7 +193,7 @@ void compute_centroids(
         }
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t ci = 0; ci < k; ci++) {
         if (hassign[ci] == 0) {
             continue;

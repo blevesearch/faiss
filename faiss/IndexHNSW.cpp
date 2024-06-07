@@ -10,6 +10,7 @@
 #include <faiss/IndexHNSW.h>
 
 #include <omp.h>
+
 #include <cassert>
 #include <cinttypes>
 #include <cmath>
@@ -188,7 +189,7 @@ void hnsw_add_vertices(
 
             bool interrupt = false;
 
-#pragma omp parallel if (i1 > i0 + 100)
+#pragma omp parallel if (i1 > i0 + 100) num_threads(num_omp_threads)
             {
                 VisitedTable vt(ntotal);
 
@@ -305,7 +306,7 @@ void IndexHNSW::search(
     for (idx_t i0 = 0; i0 < n; i0 += check_period) {
         idx_t i1 = std::min(i0 + check_period, n);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             VisitedTable vt(ntotal);
 
@@ -379,7 +380,7 @@ void IndexHNSW::reconstruct(idx_t key, float* recons) const {
 }
 
 void IndexHNSW::shrink_level_0_neighbors(int new_size) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         DistanceComputer* dis = storage_distance_computer(storage);
         ScopeDeleter1<DistanceComputer> del(dis);
@@ -429,7 +430,7 @@ void IndexHNSW::search_level_0(
 
     storage_idx_t ntotal = hnsw.levels.size();
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> qdis(
                 storage_distance_computer(storage));
@@ -470,7 +471,7 @@ void IndexHNSW::init_level_0_from_knngraph(
         const idx_t* I) {
     int dest_size = hnsw.nb_neighbors(0);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < ntotal; i++) {
         DistanceComputer* qdis = storage_distance_computer(storage);
         std::vector<float> vec(d);
@@ -511,7 +512,7 @@ void IndexHNSW::init_level_0_from_entry_points(
     for (int i = 0; i < ntotal; i++)
         omp_init_lock(&locks[i]);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         VisitedTable vt(ntotal);
 
@@ -546,7 +547,7 @@ void IndexHNSW::init_level_0_from_entry_points(
 void IndexHNSW::reorder_links() {
     int M = hnsw.nb_neighbors(0);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> distances(M);
         std::vector<size_t> order(M);
@@ -745,7 +746,7 @@ void ReconstructFromNeighbors::reconstruct_n(
         storage_idx_t n0,
         storage_idx_t ni,
         float* x) const {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> tmp(index.d);
 #pragma omp for
@@ -844,7 +845,7 @@ void ReconstructFromNeighbors::add_codes(size_t n, const float* x) {
         return;
     }
     codes.resize(codes.size() + code_size * n);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < n; i++) {
         estimate_code(
                 x + i * index.d,
@@ -1027,7 +1028,7 @@ void IndexHNSW2Level::search(
                 labels,
                 false);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             VisitedTable vt(ntotal);
             DistanceComputer* dis = storage_distance_computer(storage);

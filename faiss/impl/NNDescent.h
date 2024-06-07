@@ -18,6 +18,7 @@
 
 #include <omp.h>
 
+
 #include <faiss/Index.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/platform_macros.h>
