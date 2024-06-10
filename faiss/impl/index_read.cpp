@@ -527,9 +527,7 @@ Index* read_index(IOReader* f, int io_flags) {
     Index* idx = nullptr;
     uint32_t h;
     READ1(h);
-    setbuf(stdout, NULL);
     if (h == fourcc("IxFI") || h == fourcc("IxF2") || h == fourcc("IxFl")) {
-        printf("if 1\n");
         IndexFlat* idxf;
         if (h == fourcc("IxFI")) {
             idxf = new IndexFlatIP();
@@ -547,7 +545,6 @@ Index* read_index(IOReader* f, int io_flags) {
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
-        printf("if 2\n");
         IndexLSH* idxl = new IndexLSH();
         read_index_header(idxl, f);
         READ1(idxl->nbits);
@@ -581,7 +578,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = idxl;
     } else if (
             h == fourcc("IxPQ") || h == fourcc("IxPo") || h == fourcc("IxPq")) {
-                printf("if 3\n");
         // IxPQ and IxPo were merged into the same IndexPQ object
         IndexPQ* idxp = new IndexPQ();
         read_index_header(idxp, f);
@@ -601,7 +597,6 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         idx = idxp;
     } else if (h == fourcc("IxRQ") || h == fourcc("IxRq")) {
-        printf("if 4\n");
         IndexResidualQuantizer* idxr = new IndexResidualQuantizer();
         read_index_header(idxr, f);
         if (h == fourcc("IxRQ")) {
@@ -613,7 +608,6 @@ Index* read_index(IOReader* f, int io_flags) {
         READVECTOR(idxr->codes);
         idx = idxr;
     } else if (h == fourcc("IxLS")) {
-        printf("if 5\n");
         auto idxr = new IndexLocalSearchQuantizer();
         read_index_header(idxr, f);
         read_LocalSearchQuantizer(&idxr->lsq, f);
@@ -621,7 +615,6 @@ Index* read_index(IOReader* f, int io_flags) {
         READVECTOR(idxr->codes);
         idx = idxr;
     } else if (h == fourcc("IxPR")) {
-        printf("if 6\n");
         auto idxpr = new IndexProductResidualQuantizer();
         read_index_header(idxpr, f);
         read_ProductResidualQuantizer(&idxpr->prq, f);
@@ -629,7 +622,6 @@ Index* read_index(IOReader* f, int io_flags) {
         READVECTOR(idxpr->codes);
         idx = idxpr;
     } else if (h == fourcc("IxPL")) {
-        printf("if 7\n");
         auto idxpl = new IndexProductLocalSearchQuantizer();
         read_index_header(idxpl, f);
         read_ProductLocalSearchQuantizer(&idxpl->plsq, f);
@@ -637,7 +629,6 @@ Index* read_index(IOReader* f, int io_flags) {
         READVECTOR(idxpl->codes);
         idx = idxpl;
     } else if (h == fourcc("ImRQ")) {
-        printf("if 8\n");
         ResidualCoarseQuantizer* idxr = new ResidualCoarseQuantizer();
         read_index_header(idxr, f);
         read_ResidualQuantizer(&idxr->rq, f);
@@ -647,7 +638,6 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (
             h == fourcc("ILfs") || h == fourcc("IRfs") || h == fourcc("IPRf") ||
             h == fourcc("IPLf")) {
-                printf("if 9\n");
         bool is_LSQ = h == fourcc("ILfs");
         bool is_RQ = h == fourcc("IRfs");
         bool is_PLSQ = h == fourcc("IPLf");
@@ -696,7 +686,6 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (
             h == fourcc("IVLf") || h == fourcc("IVRf") || h == fourcc("NPLf") ||
             h == fourcc("NPRf")) {
-                printf("if 10\n");
         bool is_LSQ = h == fourcc("IVLf");
         bool is_RQ = h == fourcc("IVRf");
         bool is_PLSQ = h == fourcc("NPLf");
@@ -745,7 +734,6 @@ Index* read_index(IOReader* f, int io_flags) {
         ivaqfs->init_code_packer();
         idx = ivaqfs;
     } else if (h == fourcc("IvFl") || h == fourcc("IvFL")) { // legacy
-        printf("if 11\n");
         IndexIVFFlat* ivfl = new IndexIVFFlat();
         std::vector<std::vector<idx_t>> ids;
         read_ivf_header(ivfl, f, &ids);
@@ -766,7 +754,6 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         idx = ivfl;
     } else if (h == fourcc("IwFd")) {
-        printf("if 12\n");
         IndexIVFFlatDedup* ivfl = new IndexIVFFlatDedup();
         read_ivf_header(ivfl, f);
         ivfl->code_size = ivfl->d * sizeof(float);
@@ -781,14 +768,12 @@ Index* read_index(IOReader* f, int io_flags) {
         read_InvertedLists(ivfl, f, io_flags);
         idx = ivfl;
     } else if (h == fourcc("IwFl")) {
-        printf("if 13\n");
         IndexIVFFlat* ivfl = new IndexIVFFlat();
         read_ivf_header(ivfl, f);
         ivfl->code_size = ivfl->d * sizeof(float);
         read_InvertedLists(ivfl, f, io_flags);
         idx = ivfl;
     } else if (h == fourcc("IxSQ")) {
-        printf("if 14\n");
         IndexScalarQuantizer* idxs = new IndexScalarQuantizer();
         read_index_header(idxs, f);
         read_ScalarQuantizer(&idxs->sq, f);
@@ -796,7 +781,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idxs->code_size = idxs->sq.code_size;
         idx = idxs;
     } else if (h == fourcc("IxLa")) {
-        printf("if 15\n");
         int d, nsq, scale_nbit, r2;
         READ1(d);
         READ1(nsq);
@@ -807,7 +791,6 @@ Index* read_index(IOReader* f, int io_flags) {
         READVECTOR(idxl->trained);
         idx = idxl;
     } else if (h == fourcc("IvSQ")) { // legacy
-      printf("if 16\n");
         IndexIVFScalarQuantizer* ivsc = new IndexIVFScalarQuantizer();
         std::vector<std::vector<idx_t>> ids;
         read_ivf_header(ivsc, f, &ids);
@@ -818,7 +801,6 @@ Index* read_index(IOReader* f, int io_flags) {
             READVECTOR(ail->codes[i]);
         idx = ivsc;
     } else if (h == fourcc("IwSQ") || h == fourcc("IwSq")) {
-        printf("if 17\n");
         IndexIVFScalarQuantizer* ivsc = new IndexIVFScalarQuantizer();
         read_ivf_header(ivsc, f);
         read_ScalarQuantizer(&ivsc->sq, f);
@@ -833,7 +815,6 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (
             h == fourcc("IwLS") || h == fourcc("IwRQ") || h == fourcc("IwPL") ||
             h == fourcc("IwPR")) {
-                printf("if 18\n");
         bool is_LSQ = h == fourcc("IwLS");
         bool is_RQ = h == fourcc("IwRQ");
         bool is_PLSQ = h == fourcc("IwPL");
@@ -865,7 +846,6 @@ Index* read_index(IOReader* f, int io_flags) {
         read_InvertedLists(iva, f, io_flags);
         idx = iva;
     } else if (h == fourcc("IwSh")) {
-        printf("if 19\n");
         IndexIVFSpectralHash* ivsp = new IndexIVFSpectralHash();
         read_ivf_header(ivsp, f);
         ivsp->vt = read_VectorTransform(f);
@@ -881,11 +861,9 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (
             h == fourcc("IvPQ") || h == fourcc("IvQR") || h == fourcc("IwPQ") ||
             h == fourcc("IwQR")) {
-                printf("if 20\n");
         idx = read_ivfpq(f, h, io_flags);
 
     } else if (h == fourcc("IxPT")) {
-        printf("if 21\n");
         IndexPreTransform* ixpt = new IndexPreTransform();
         ixpt->own_fields = true;
         read_index_header(ixpt, f);
@@ -901,13 +879,11 @@ Index* read_index(IOReader* f, int io_flags) {
         ixpt->index = read_index(f, io_flags);
         idx = ixpt;
     } else if (h == fourcc("Imiq")) {
-        printf("if 22\n");
         MultiIndexQuantizer* imiq = new MultiIndexQuantizer();
         read_index_header(imiq, f);
         read_ProductQuantizer(&imiq->pq, f);
         idx = imiq;
     } else if (h == fourcc("IxRF")) {
-        printf("if 23\n");
         IndexRefine* idxrf = new IndexRefine();
         read_index_header(idxrf, f);
         idxrf->base_index = read_index(f, io_flags);
@@ -924,7 +900,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idxrf->own_refine_index = true;
         idx = idxrf;
     } else if (h == fourcc("IxMp") || h == fourcc("IxM2")) {
-        printf("if 24\n");
         bool is_map2 = h == fourcc("IxM2");
         IndexIDMap* idxmap = is_map2 ? new IndexIDMap2() : new IndexIDMap();
         read_index_header(idxmap, f);
@@ -936,7 +911,6 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         idx = idxmap;
     } else if (h == fourcc("Ix2L")) {
-        printf("if 25\n");
         Index2Layer* idxp = new Index2Layer();
         read_index_header(idxp, f);
         idxp->q1.quantizer = read_index(f, io_flags);
@@ -951,7 +925,6 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (
             h == fourcc("IHNf") || h == fourcc("IHNp") || h == fourcc("IHNs") ||
             h == fourcc("IHN2")) {
-                printf("if 26\n");
         IndexHNSW* idxhnsw = nullptr;
         if (h == fourcc("IHNf"))
             idxhnsw = new IndexHNSWFlat();
@@ -971,7 +944,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = idxhnsw;
     } else if (
             h == fourcc("INSf") || h == fourcc("INSp") || h == fourcc("INSs")) {
-                printf("if 27\n");
         IndexNSG* idxnsg;
         if (h == fourcc("INSf"))
             idxnsg = new IndexNSGFlat();
@@ -991,7 +963,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idxnsg->own_fields = true;
         idx = idxnsg;
     } else if (h == fourcc("INNf")) {
-        printf("if 28\n");
         IndexNNDescent* idxnnd = new IndexNNDescentFlat();
         read_index_header(idxnnd, f);
         read_NNDescent(&idxnnd->nndescent, f);
@@ -999,7 +970,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idxnnd->own_fields = true;
         idx = idxnnd;
     } else if (h == fourcc("IPfs")) {
-        printf("if 29\n");
         IndexPQFastScan* idxpqfs = new IndexPQFastScan();
         read_index_header(idxpqfs, f);
         read_ProductQuantizer(&idxpqfs->pq, f);
@@ -1019,7 +989,6 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = idxpqfs;
 
     } else if (h == fourcc("IwPf")) {
-        printf("if 30\n");
         IndexIVFPQFastScan* ivpq = new IndexIVFPQFastScan();
         read_ivf_header(ivpq, f);
         READ1(ivpq->by_residual);
@@ -1041,7 +1010,6 @@ Index* read_index(IOReader* f, int io_flags) {
 
         idx = ivpq;
     } else if (h == fourcc("IRMf")) {
-        printf("if 31\n");
         IndexRowwiseMinMax* imm = new IndexRowwiseMinMax();
         read_index_header(imm, f);
 
@@ -1050,7 +1018,6 @@ Index* read_index(IOReader* f, int io_flags) {
 
         idx = imm;
     } else if (h == fourcc("IRMh")) {
-        printf("if 32\n");
         IndexRowwiseMinMaxFP16* imm = new IndexRowwiseMinMaxFP16();
         read_index_header(imm, f);
 
