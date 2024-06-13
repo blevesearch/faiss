@@ -67,6 +67,7 @@ struct BufIOReader : IOReader {
     size_t buf_size;
     size_t operator()(void* ptr, size_t size, size_t nitems) override;
     ~BufIOReader() override;
+    uint8_t* readPointer(size_t size);
 };
 
 struct FileIOReader : IOReader {
