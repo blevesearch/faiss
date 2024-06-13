@@ -38,6 +38,8 @@ int faiss_write_index_buf(const FaissIndex* idx, size_t* buf_size, uint8_t** buf
 int faiss_read_index_buf(const uint8_t* buf, size_t limit, int io_flags,
         FaissIndex** p_out);
 
+void faiss_free_buf(uint8_t** buf);
+
 #ifdef __cplusplus
 }
 #endif

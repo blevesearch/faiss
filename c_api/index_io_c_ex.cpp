@@ -40,3 +40,8 @@ int faiss_read_index_buf(const uint8_t* buf, size_t size, int io_flags, FaissInd
     }
     CATCH_AND_HANDLE
 }
+
+void faiss_free_buf(uint8_t** buf) {
+    free(*buf);
+    *buf = nullptr;
+}
