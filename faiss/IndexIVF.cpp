@@ -59,6 +59,10 @@ void Level1Quantizer::train_q1(
         const float* x,
         bool verbose,
         MetricType metric_type) {
+
+    printf("Starting train q1\n");
+    verbose = true;
+
     size_t d = quantizer->d;
     if (quantizer->is_trained && (quantizer->ntotal == nlist)) {
         if (verbose)
@@ -115,6 +119,9 @@ void Level1Quantizer::train_q1(
         }
         quantizer->add(nlist, clus.centroids.data());
     }
+
+    printf("Ending train q1\n");
+
 }
 
 size_t Level1Quantizer::coarse_code_size() const {
@@ -1065,6 +1072,10 @@ void IndexIVF::train(idx_t n, const float* x) {
     if (verbose)
         printf("Training level-1 quantizer\n");
 
+    setbuf(stdout, NULL);
+
+    printf("Starting train\n");
+
     train_q1(n, x, verbose, metric_type);
 
     if (verbose)
@@ -1072,6 +1083,8 @@ void IndexIVF::train(idx_t n, const float* x) {
 
     train_residual(n, x);
     is_trained = true;
+    
+    printf("Ending train\n");
 }
 
 void IndexIVF::train_residual(idx_t /*n*/, const float* /*x*/) {
