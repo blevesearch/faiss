@@ -238,7 +238,7 @@ void IndexIVFPQ::encode_vectors(
 void IndexIVFPQ::sa_decode(idx_t n, const uint8_t* codes, float* x) const {
     size_t coarse_size = coarse_code_size();
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 

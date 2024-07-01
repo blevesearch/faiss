@@ -11,6 +11,7 @@
 
 #include <omp.h>
 
+
 #include <cinttypes>
 #include <cstdio>
 
@@ -52,7 +53,7 @@ void IndexIVFFlat::add_core(
 
     DirectMapAdd dm_adder(direct_map, n, xids);
 
-#pragma omp parallel reduction(+ : n_add)
+#pragma omp parallel reduction(+ : n_add) num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();
@@ -278,7 +279,7 @@ void IndexIVFFlatDedup::add_with_ids(
 
     int64_t n_add = 0, n_dup = 0;
 
-#pragma omp parallel reduction(+ : n_add, n_dup)
+#pragma omp parallel reduction(+ : n_add, n_dup) num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();
@@ -423,7 +424,7 @@ size_t IndexIVFFlatDedup::remove_ids(const IDSelector& sel) {
 
     std::vector<int64_t> toremove(nlist);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < nlist; i++) {
         int64_t l0 = invlists->list_size(i), l = l0, j = 0;
         InvertedLists::ScopedIds idsi(invlists, i);

@@ -10,6 +10,7 @@
 // basic int types and size_t
 #include <cstdint>
 #include <cstdio>
+#include <faiss/OMPConfig.h>
 
 #ifdef _MSC_VER
 

@@ -193,7 +193,7 @@ void LocalSearchQuantizer::train(size_t n, const float* x) {
     // compute standard derivations of each dimension
     std::vector<float> stddev(d, 0);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < d; i++) {
         float mean = 0;
         for (size_t j = 0; j < n; j++) {
@@ -563,7 +563,7 @@ void LocalSearchQuantizer::icm_encode_impl(
         float mean_obj = 0.0f;
 
         // select the best code for every vector xi
-#pragma omp parallel for reduction(+ : n_betters, mean_obj)
+#pragma omp parallel for reduction(+ : n_betters, mean_obj) num_threads(num_omp_threads)
         for (int64_t i = 0; i < n; i++) {
             if (icm_objs[i] < best_objs[i]) {
                 best_objs[i] = icm_objs[i];
@@ -597,7 +597,7 @@ void LocalSearchQuantizer::icm_encode_step(
     FAISS_THROW_IF_NOT(M != 0 && K != 0);
     FAISS_THROW_IF_NOT(binaries != nullptr);
 
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(dynamic) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         std::vector<float> objs(K);
 
@@ -683,7 +683,7 @@ void LocalSearchQuantizer::perturb_codes(
 void LocalSearchQuantizer::compute_binary_terms(float* binaries) const {
     LSQTimerScope scope(&lsq_timer, "compute_binary_terms");
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t m12 = 0; m12 < M * M; m12++) {
         size_t m1 = m12 / M;
         size_t m2 = m12 % M;
@@ -739,7 +739,7 @@ void LocalSearchQuantizer::compute_unary_terms(
     std::vector<float> norms(M * K);
     fvec_norms_L2sqr(norms.data(), codebooks.data(), d, M * K);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         for (size_t m = 0; m < M; m++) {
             float* u = unaries + m * n * K + i * K;
@@ -759,7 +759,7 @@ float LocalSearchQuantizer::evaluate(
     std::vector<float> decoded_x(n * d, 0.0f);
     float obj = 0.0f;
 
-#pragma omp parallel for reduction(+ : obj)
+#pragma omp parallel for reduction(+ : obj) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const auto code = codes + i * M;
         const auto decoded_i = decoded_x.data() + i * d;

@@ -77,7 +77,7 @@ void IndexIVFAdditiveQuantizer::encode_vectors(
         // subtract centroids
         std::vector<float> residuals(n * d);
 
-#pragma omp parallel for if (n > 10000)
+#pragma omp parallel for if (n > 10000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             quantizer->compute_residual(
                     x + i * d,
@@ -106,7 +106,7 @@ void IndexIVFAdditiveQuantizer::sa_decode(
         float* x) const {
     const size_t coarse_size = coarse_code_size();
 
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 

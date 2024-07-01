@@ -185,7 +185,7 @@ void NSG::build(
         final_graph = std::make_shared<nsg::Graph<int>>(n, R);
         std::fill_n(final_graph->data, n * R, EMPTY_ID);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < n; i++) {
             int cnt = 0;
             for (int j = 0; j < R; j++) {
@@ -357,7 +357,7 @@ void NSG::link(
         const nsg::Graph<idx_t>& knn_graph,
         nsg::Graph<Node>& graph,
         bool /* verbose */) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::unique_ptr<float[]> vec(new float[storage->d]);
 
@@ -386,7 +386,7 @@ void NSG::link(
     } // omp parallel
 
     std::vector<std::mutex> locks(ntotal);
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> dis(
                 storage_distance_computer(storage));
@@ -662,7 +662,7 @@ int NSG::attach_unlinked(
 }
 
 void NSG::check_graph() const {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < ntotal; i++) {
         for (int j = 0; j < R; j++) {
             int id = final_graph->at(i, j);

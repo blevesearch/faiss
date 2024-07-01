@@ -27,6 +27,7 @@
 
 #include <omp.h>
 
+
 #include <algorithm>
 #include <vector>
 
@@ -274,7 +275,7 @@ size_t merge_result_table_with(
         int64_t translation) {
     size_t n1 = 0;
 
-#pragma omp parallel reduction(+ : n1)
+#pragma omp parallel reduction(+ : n1) num_threads(num_omp_threads)
     {
         std::vector<int64_t> tmpI(k);
         std::vector<float> tmpD(k);
@@ -499,7 +500,7 @@ bool check_openmp() {
     std::vector<int> nt_per_thread(10);
     size_t sum = 0;
     bool in_parallel = true;
-#pragma omp parallel reduction(+ : sum)
+#pragma omp parallel reduction(+ : sum) num_threads(num_omp_threads)
     {
         if (!omp_in_parallel()) {
             in_parallel = false;

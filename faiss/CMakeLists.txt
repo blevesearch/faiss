@@ -47,6 +47,7 @@ set(FAISS_SRC
   IndexShardsIVF.cpp
   MatrixStats.cpp
   MetaIndexes.cpp
+  OMPConfig.cpp
   VectorTransform.cpp
   clone_index.cpp
   index_factory.cpp
@@ -138,6 +139,7 @@ set(FAISS_HEADERS
   MatrixStats.h
   MetaIndexes.h
   MetricType.h
+  OMPConfig.h
   VectorTransform.h
   clone_index.h
   index_factory.h

@@ -13,6 +13,7 @@
 
 #include <omp.h>
 
+
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/pq4_fast_scan.h>
 #include <faiss/utils/utils.h>

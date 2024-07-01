@@ -13,6 +13,7 @@
 
 #include <omp.h>
 
+
 #include <memory>
 
 #include <faiss/impl/AuxIndexStructures.h>
@@ -252,7 +253,7 @@ void IndexIVFPQFastScan::compute_LUT(
                 AlignedTable<float> ip_table(n * dim12);
                 pq.compute_inner_prod_tables(n, x, ip_table.get());
 
-#pragma omp parallel for if (n * nprobe > 8000)
+#pragma omp parallel for if (n * nprobe > 8000) num_threads(num_omp_threads)
                 for (idx_t ij = 0; ij < n * nprobe; ij++) {
                     idx_t i = ij / nprobe;
                     float* tab = dis_tables.get() + ij * dim12;
@@ -277,7 +278,7 @@ void IndexIVFPQFastScan::compute_LUT(
                 biases.resize(n * nprobe);
                 memset(biases.get(), 0, sizeof(float) * n * nprobe);
 
-#pragma omp parallel for if (n * nprobe > 8000)
+#pragma omp parallel for if (n * nprobe > 8000) num_threads(num_omp_threads)
                 for (idx_t ij = 0; ij < n * nprobe; ij++) {
                     idx_t i = ij / nprobe;
                     float* xij = &xrel[ij * d];

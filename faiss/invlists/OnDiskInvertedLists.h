@@ -77,6 +77,8 @@ struct OnDiskInvertedLists : InvertedLists {
     size_t totsize;
     uint8_t* ptr;   // mmap base pointer
     bool read_only; /// are inverted lists mapped read-only
+    bool pre_mapped;// whether the content is already mmap'd before class creation
+    bool skip_prefetch; // whether to skip prefetching the lists while performing search
 
     OnDiskInvertedLists(size_t nlist, size_t code_size, const char* filename);
 

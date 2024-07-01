@@ -10,6 +10,7 @@
 #include <faiss/IndexIVF.h>
 
 #include <omp.h>
+
 #include <cstdint>
 #include <mutex>
 
@@ -237,7 +238,7 @@ void IndexIVF::add_core(
 
     DirectMapAdd dm_adder(direct_map, n, xids);
 
-#pragma omp parallel reduction(+ : nadd)
+#pragma omp parallel reduction(+ : nadd) num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();
@@ -346,7 +347,7 @@ void IndexIVF::search(
         std::mutex exception_mutex;
         std::string exception_string;
 
-#pragma omp parallel for if (nt > 1)
+#pragma omp parallel for if (nt > 1) num_threads(num_omp_threads)
         for (idx_t slice = 0; slice < nt; slice++) {
             IndexIVFStats local_stats;
             idx_t i0 = n * slice / nt;
@@ -444,7 +445,7 @@ void IndexIVF::search_preassigned(
                      : pmode == 1 ? nprobe > 1
                                   : nprobe * n > 1);
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap) num_threads(num_omp_threads)
     {
         InvertedListScanner* scanner =
                 get_InvertedListScanner(store_pairs, sel);
@@ -781,7 +782,7 @@ void IndexIVF::range_search_preassigned(
                      : pmode == 1 ? nprobe > 1
                                   : nprobe * nx > 1);
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis) num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(result);
         std::unique_ptr<InvertedListScanner> scanner(

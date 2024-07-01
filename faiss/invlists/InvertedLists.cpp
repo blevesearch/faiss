@@ -81,7 +81,7 @@ InvertedListsIterator* InvertedLists::get_iterator(size_t /*list_no*/) const {
 }
 
 void InvertedLists::merge_from(InvertedLists* oivf, size_t add_id) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < nlist; i++) {
         size_t list_size = oivf->list_size(i);
         ScopedIds ids(oivf, i);

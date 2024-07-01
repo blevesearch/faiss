@@ -13,6 +13,7 @@
 
 #include <omp.h>
 
+
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/LocalSearchQuantizer.h>
 #include <faiss/impl/LookupTableScaler.h>
@@ -131,7 +132,7 @@ void IndexAdditiveQuantizerFastScan::estimate_norm_scale(
     // TODO: try max of scales
     double scale = 0;
 
-#pragma omp parallel for reduction(+ : scale)
+#pragma omp parallel for reduction(+ : scale) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         const float* lut = dis_tables.data() + i * M * ksub;
         scale += quantize_lut::aq_estimate_norm_scale(M, ksub, 2, lut);

@@ -10,6 +10,7 @@
 #include <faiss/utils/sorting.h>
 
 #include <omp.h>
+
 #include <algorithm>
 
 #include <faiss/impl/FaissAssert.h>
@@ -148,7 +149,7 @@ void fvec_argsort_parallel(size_t n, const float* vals, size_t* perm) {
         }
     }
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     for (size_t i = 0; i < n; i++) {
         permA[i] = i;
     }
@@ -158,7 +159,7 @@ void fvec_argsort_parallel(size_t n, const float* vals, size_t* perm) {
     std::vector<SegmentS> segs(nt);
 
     // independent sorts
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int t = 0; t < nt; t++) {
         size_t i0 = t * n / nt;
         size_t i1 = (t + 1) * n / nt;

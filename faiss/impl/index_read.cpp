@@ -188,12 +188,15 @@ static void read_ArrayInvertedLists_sizes(
 InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
     uint32_t h;
     READ1(h);
+    bool load_mem = !((io_flags & IO_FLAG_READ_MMAP) ||
+                      (io_flags & IO_FLAG_SKIP_IVF_DATA));
+
     if (h == fourcc("il00")) {
         fprintf(stderr,
                 "read_InvertedLists:"
                 " WARN! inverted lists not stored with IVF object\n");
         return nullptr;
-    } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
+    } else if (h == fourcc("ilar") && load_mem) {
         size_t nlist, code_size;
         READ1(nlist);
         READ1(code_size);
@@ -212,7 +215,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         }
         return ails;
 
-    } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_SKIP_IVF_DATA)) {
+    } else if (h == fourcc("ilar") && !load_mem) {
         // code is always ilxx where xx is specific to the type of invlists we
         // want so we get the 16 high bits from the io_flag and the 16 low bits
         // as "il"
@@ -535,9 +538,10 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
+
         READXBVECTOR(idxf->codes);
         FAISS_THROW_IF_NOT(
-                idxf->codes.size() == idxf->ntotal * idxf->code_size);
+            idxf->codes.size() == idxf->ntotal * idxf->code_size);
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
