@@ -295,21 +295,21 @@ void Clustering::train_encoded(
             int(index.d),
             int(d));
 
-    printf("Clustering::train_encoded\n");
+    printf("Clustering::train_encoded [n] = [%d]\n", nx);
     double t0 = getmillisecs();
 
-    printf("Clustering::get millisecs over\n");
+    printf("Clustering::get millisecs over [n] = [%d]\n", nx);
     if (!codec) {
         // Check for NaNs in input data. Normally it is the user's
         // responsibility, but it may spare us some hard-to-debug
         // reports.
-        printf("Clustering::check for NaNs\n");
+        printf("Clustering::check for NaNs [n] = [%d]\n", nx);
         const float* x = reinterpret_cast<const float*>(x_in);
         for (size_t i = 0; i < nx * d; i++) {
             FAISS_THROW_IF_NOT_MSG(
                     std::isfinite(x[i]), "input contains NaN's or Inf's");
         }
-        printf("Clustering::check for NaNs over\n");
+        printf("Clustering::check for NaNs over [n] = [%d]\n", nx);
     }
 
     const uint8_t* x = x_in;
@@ -318,7 +318,7 @@ void Clustering::train_encoded(
     size_t line_size = codec ? codec->sa_code_size() : sizeof(float) * d;
 
     if (nx > k * max_points_per_centroid) {
-        printf("Clustering::subsample training set\n");
+        printf("Clustering::subsample training set [n] = [%d]\n", nx);
         uint8_t* x_new;
         float* weights_new;
         nx = subsample_training_set(
@@ -327,9 +327,9 @@ void Clustering::train_encoded(
         x = x_new;
         del3.reset(weights_new);
         weights = weights_new;
-        printf("Clustering::subsample training set over\n");
+        printf("Clustering::subsample training set over [n] = [%d]\n", nx);
     } else if (nx < k * min_points_per_centroid) {
-        printf("subsample_training_set nx < k * min_points_per_centroid\n");
+        printf("subsample_training_set nx < k * min_points_per_centroid [n] = [%d]\n", nx);
         fprintf(stderr,
                 "WARNING clustering %" PRId64
                 " points to %zd centroids: "
@@ -340,7 +340,6 @@ void Clustering::train_encoded(
     }
 
     if (nx == k) {
-        printf("nx == k corenr case\n");
         // this is a corner case, just copy training set to clusters
         if (verbose) {
             printf("Number of training points (%" PRId64
@@ -363,7 +362,7 @@ void Clustering::train_encoded(
         index.add(k, centroids.data());
         return;
     }
-    printf("nx != k corenr case over\n");
+    printf("nx != k corner case over [n] = [%d]\n", nx);
 
     if (verbose) {
         printf("Clustering %" PRId64
@@ -412,12 +411,10 @@ void Clustering::train_encoded(
     // temporary buffer to decode vectors during the optimization
     std::vector<float> decode_buffer(codec ? d * decode_block_size : 0);
 
-    printf("Clustering::train_encoded before outer loop\n");
-
-
+    verbose = true;
     for (int redo = 0; redo < nredo; redo++) {
         if (verbose && nredo > 1) {
-            printf("Outer iteration %d / %d\n", redo, nredo);
+            printf("Outer iteration %d / %d [n] = [%d]\n", redo, nredo, nx);
         }
 
         // initialize (remaining) centroids with random points from the dataset
@@ -436,11 +433,11 @@ void Clustering::train_encoded(
             }
         }
 
-        printf("redo %d centroids initialized post_process_centroids calling now\n", redo);
+        printf("redo %d centroids initialized post_process_centroids calling now [n] = [%d]\n", redo, nx);
 
         post_process_centroids();
 
-        printf("redo %d centroids initialized post_process_centroids calling over\n", redo);
+        printf("redo %d centroids initialized post_process_centroids calling over [n] = [%d]\n", redo, nx);
         // prepare the index
 
         if (index.ntotal != 0) {
@@ -452,32 +449,31 @@ void Clustering::train_encoded(
             index.train(k, centroids.data());
         }
 
-        printf("index training over\n");
+        printf("index training over [n] = [%d]\n", nx);
 
         index.add(k, centroids.data());
 
-        printf("index add over\n");
+        printf("index add over [n] = [%d]\n", nx);
 
         // k-means iterations
 
         float obj = 0;
         for (int i = 0; i < niter; i++) {
 
-            printf("  Iteration %d\n", i);
+            printf("  Iteration %d - [n] = [%d]\n", i, nx);
 
             double t0s = getmillisecs();
 
             if (!codec) {
-                printf("  Iteration %d !codec\n", i);
+                printf("     !CODEC Iteration %d - [n] = [%d]\n", i, nx);
                 index.search(
                         nx,
                         reinterpret_cast<const float*>(x),
                         1,
                         dis.get(),
                         assign.get());
-                printf("  no codec search over\n");
+                printf("  !CODEC Iteration OVER %d - [n] = [%d]\n", i, nx);
             } else {
-                printf("  Iteration %d codec\n", i);
                 // search by blocks of decode_block_size vectors
                 size_t code_size = codec->sa_code_size();
                 for (size_t i0 = 0; i0 < nx; i0 += decode_block_size) {
@@ -494,7 +490,6 @@ void Clustering::train_encoded(
                             dis.get() + i0,
                             assign.get() + i0);
                 }
-                printf("  codec search over\n");
             }
 
             InterruptCallback::check();
@@ -580,7 +575,7 @@ void Clustering::train_encoded(
     if (nredo > 1) {
 
         printf("Clustering::nredo > 1\n");
-        
+
         centroids = best_centroids;
         iteration_stats = best_iteration_stats;
         index.reset();

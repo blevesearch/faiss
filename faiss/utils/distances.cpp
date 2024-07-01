@@ -207,6 +207,7 @@ void exhaustive_inner_product_blas(
             {
                 float one = 1, zero = 0;
                 FINTEGER nyi = j1 - j0, nxi = i1 - i0, di = d;
+                printf("calling sgemm_ with [n] = [%d]\n", nx);
                 sgemm_("Transpose",
                        "Not transpose",
                        &nyi,
@@ -220,6 +221,7 @@ void exhaustive_inner_product_blas(
                        &zero,
                        ip_block.get(),
                        &nyi);
+                printf("sgemm_ over with [n] = [%d]\n", nx);
             }
 
             res.add_results(j0, j1, ip_block.get());
@@ -614,7 +616,9 @@ void knn_inner_product(
         int64_t* ids,
         const IDSelector* sel) {
     int64_t imin = 0;
+    printf("knn_inner_product [nx] - [%d]\n", nx);
     if (auto selr = dynamic_cast<const IDSelectorRange*>(sel)) {
+        printf("knn_inner_product [nx] - [%d] Inside first if\n", nx);
         imin = std::max(selr->imin, int64_t(0));
         int64_t imax = std::min(selr->imax, int64_t(ny));
         ny = imax - imin;
@@ -622,11 +626,13 @@ void knn_inner_product(
         sel = nullptr;
     }
     if (auto sela = dynamic_cast<const IDSelectorArray*>(sel)) {
+        printf("knn_inner_product [nx] - [%d] inside second if\n", nx);
         knn_inner_products_by_idx(
                 x, y, sela->ids, d, nx, sela->n, k, val, ids, 0);
         return;
     }
     if (k < distance_compute_min_k_reservoir) {
+        printf("knn_inner_product [nx] - [%d] inside third if\n", nx);
         using RH = HeapResultHandler<CMin<float, int64_t>>;
         RH res(nx, val, ids, k);
         if (sel) {
@@ -637,6 +643,7 @@ void knn_inner_product(
             exhaustive_inner_product_blas(x, y, d, nx, ny, res);
         }
     } else {
+        printf("knn_inner_product [nx] - [%d] inside else\n", nx);
         using RH = ReservoirResultHandler<CMin<float, int64_t>>;
         RH res(nx, val, ids, k);
         if (sel) {

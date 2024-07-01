@@ -33,10 +33,13 @@ void IndexFlat::search(
     IDSelector* sel = params ? params->sel : nullptr;
     FAISS_THROW_IF_NOT(k > 0);
 
+    printf("IndexFlat::search [n] - [%d]\n", n);
     // we see the distances and labels as heaps
     if (metric_type == METRIC_INNER_PRODUCT) {
+        printf("IndexFlat::metric_type METRIC_INNER_PRODUCT [n] - [%d]\n", n);
         float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
         knn_inner_product(x, get_xb(), d, n, ntotal, &res, sel);
+        printf("IndexFlat::metric_type METRIC_INNER_PRODUCT OVER [n] - [%d]\n", n);
     } else if (metric_type == METRIC_L2) {
         float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
         knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, sel);

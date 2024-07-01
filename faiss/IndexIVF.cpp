@@ -59,8 +59,6 @@ void Level1Quantizer::train_q1(
         const float* x,
         bool verbose,
         MetricType metric_type) {
-
-    printf("Starting train q1\n");
     verbose = true;
 
     size_t d = quantizer->d;
@@ -82,9 +80,11 @@ void Level1Quantizer::train_q1(
         Clustering clus(d, nlist, cp);
         quantizer->reset();
         if (clustering_index) {
+            printf("clustering_index is not null [n] = [%d]\n", n);
             clus.train(n, x, *clustering_index);
             quantizer->add(nlist, clus.centroids.data());
         } else {
+            printf("clustering_index is null [n] = [%d]\n", n);
             clus.train(n, x, *quantizer);
         }
         quantizer->is_trained = true;
@@ -119,8 +119,6 @@ void Level1Quantizer::train_q1(
         }
         quantizer->add(nlist, clus.centroids.data());
     }
-
-    printf("Ending train q1\n");
 
 }
 
@@ -1074,7 +1072,7 @@ void IndexIVF::train(idx_t n, const float* x) {
 
     setbuf(stdout, NULL);
 
-    printf("Starting train\n");
+    printf("Starting train for [n] = [%d]\n", n);
 
     train_q1(n, x, verbose, metric_type);
 
@@ -1084,7 +1082,7 @@ void IndexIVF::train(idx_t n, const float* x) {
     train_residual(n, x);
     is_trained = true;
     
-    printf("Ending train\n");
+    printf("Ending train for [n] = [%d]\n", n);
 }
 
 void IndexIVF::train_residual(idx_t /*n*/, const float* /*x*/) {
