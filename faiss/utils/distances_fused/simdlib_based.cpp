@@ -257,17 +257,19 @@ void exhaustive_L2sqr_fused_cmax(
         }
     }
 
-    const size_t nx_p = (nx / NX_POINTS_PER_LOOP) * NX_POINTS_PER_LOOP;
+    const ssize_t nx_p = (ssize_t)((nx / NX_POINTS_PER_LOOP) * NX_POINTS_PER_LOOP);
     // the main loop.
 #pragma omp parallel for schedule(dynamic) num_threads(num_omp_threads)
-    for (size_t i = 0; i < nx_p; i += NX_POINTS_PER_LOOP) {
+    // use signed instead of size_t because of C3016 error on windows:
+    // https://learn.microsoft.com/en-us/cpp/error-messages/compiler-errors-2/compiler-error-c3016
+    for (ssize_t i = 0; i < nx_p; i += (ssize_t)NX_POINTS_PER_LOOP) {
         kernel<DIM, NX_POINTS_PER_LOOP, NY_POINTS_PER_LOOP>(
-                x, y, y_transposed.data(), ny, res, y_norms, i);
+                x, y, y_transposed.data(), ny, res, y_norms, (size_t)i);
     }
 
-    for (size_t i = nx_p; i < nx; i++) {
+    for (ssize_t i = nx_p; i < (ssize_t)nx; i++) {
         kernel<DIM, 1, NY_POINTS_PER_LOOP>(
-                x, y, y_transposed.data(), ny, res, y_norms, i);
+                x, y, y_transposed.data(), ny, res, y_norms, (size_t)i);
     }
 
     // Does nothing for Top1BlockResultHandler, but
