@@ -35,7 +35,13 @@ set(FAISS_C_SRC
   utils/distances_c.cpp
 )
 add_library(faiss_c ${FAISS_C_SRC})
-target_link_libraries(faiss_c PRIVATE faiss)
+if(FAISS_OPT_LEVEL STREQUAL "generic")
+  target_link_libraries(faiss_c PRIVATE faiss)
+elseif(FAISS_OPT_LEVEL STREQUAL "avx2")
+  target_link_libraries(faiss_c PRIVATE faiss_avx2)
+elseif(FAISS_OPT_LEVEL STREQUAL "avx512")
+  target_link_libraries(faiss_c PRIVATE faiss_avx512)
+endif()
 install(TARGETS faiss_c
   EXPORT faiss-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

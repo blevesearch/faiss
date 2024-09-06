@@ -57,6 +57,11 @@ option(FAISS_ENABLE_RAFT "Enable RAFT for GPU indexes." OFF)
 option(FAISS_ENABLE_PYTHON "Build Python extension." ON)
 option(FAISS_ENABLE_C_API "Build C API." OFF)
 
+# Force FAISS_OPT_LEVEL to "generic" if not building on x86_64.
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  set(FAISS_OPT_LEVEL "generic" CACHE STRING "No AVX since not building on x86_64" FORCE)
+endif()
+
 if(FAISS_ENABLE_GPU)
   set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
   enable_language(CUDA)
