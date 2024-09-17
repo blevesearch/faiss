@@ -46,7 +46,7 @@ int faiss_Search_closest_eligible_centroids(
 
 /*
     Search the clusters whose IDs are in 'assign' and
-    return return the 'k' nearest neighbours from among them.     
+    return the 'k' nearest neighbours from among them.     
 
     @param n: number of queries.
     @param x: query vector, size n * d.
