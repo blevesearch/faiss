@@ -41,7 +41,7 @@ int faiss_Search_closest_eligible_centroids(
         int k, 
         float* centroid_distances,
         idx_t* centroid_ids,
-        const faiss::SearchParameters* params) {
+        const FaissSearchParameters* params) {
     try {
         faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index); 
         assert(index_ivf);
