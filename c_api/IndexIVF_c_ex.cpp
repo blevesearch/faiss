@@ -12,6 +12,7 @@
 #include "macros_impl.h"
 
 using faiss::IndexIVF;
+using faiss::SearchParameters;
 using faiss::SearchParametersIVF;
 
 int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
@@ -39,12 +40,14 @@ int faiss_Search_closest_eligible_centroids(
         float* query,
         int k, 
         float* centroid_distances,
-        idx_t* centroid_ids) {
+        idx_t* centroid_ids,
+        const faiss::SearchParameters* params) {
     try {
         faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index); 
         assert(index_ivf);
 
-        index_ivf->quantizer->search(n, query, k, centroid_distances, centroid_ids);
+        index_ivf->quantizer->search(n, query, k, centroid_distances, centroid_ids,
+        params);
     }
     CATCH_AND_HANDLE
 }

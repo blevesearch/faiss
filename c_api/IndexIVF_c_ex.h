@@ -41,7 +41,8 @@ int faiss_Search_closest_eligible_centroids(
         float* query,
         int k,
         float* centroid_distances,
-        idx_t* centroid_ids
+        idx_t* centroid_ids,
+        const FaissSearchParameters* params
 );
 
 /*
