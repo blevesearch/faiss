@@ -46,8 +46,7 @@ int faiss_Search_closest_eligible_centroids(
         faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index); 
         assert(index_ivf);
 
-        index_ivf->quantizer->search(n, query, k, centroid_distances, centroid_ids,
-        params);
+        index_ivf->quantizer->search(n, query, k, centroid_distances, centroid_ids, params);
     }
     CATCH_AND_HANDLE
 }
