@@ -41,12 +41,13 @@ int faiss_Search_closest_eligible_centroids(
         float* query,
         int k,
         float* centroid_distances,
-        idx_t* centroid_ids
+        idx_t* centroid_ids,
+        const FaissSearchParameters* params
 );
 
 /*
     Search the clusters whose IDs are in 'assign' and
-    return return the 'k' nearest neighbours from among them.     
+    return the 'k' nearest neighbours from among them.     
 
     @param n: number of queries.
     @param x: query vector, size n * d.
@@ -88,7 +89,6 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         idx_t n,
         const uint8_t* codes,
         float* dists);
-
 
 #ifdef __cplusplus
 }
