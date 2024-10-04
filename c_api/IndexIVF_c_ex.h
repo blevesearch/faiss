@@ -67,14 +67,27 @@ int faiss_IndexIVF_search_preassigned_with_params(
         int store_pairs,
         const FaissSearchParametersIVF* params);
 
+    /** Given a query vector x, compute distance to provided codes
+     * for the input list_no. This is a special purpose method
+     * to be used as a flat distance computer for an inverted
+     * list where codes are provided externally. This allows to
+     * use the quantizer while computing distance for the quantized
+     * codes.
+     *
+     * @param list_no list number for inverted list
+     * @param x - input query vector
+     * @param n - number of codes
+     * @param codes - input codes
+     * @param dists - output computed distances
+     */
 
-int faiss_Search_closest_eligible_centroids(
-        FaissIndex* index,
-        float* query,
-         FaissSearchParameters* params,
-        float* centroid_distances,
-        idx_t* centroid_ids
-);
+int faiss_IndexIVF_compute_distance_to_codes_for_list(
+        FaissIndexIVF* index,
+        idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists);
 
 
 #ifdef __cplusplus

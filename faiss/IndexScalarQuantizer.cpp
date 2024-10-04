@@ -282,4 +282,28 @@ void IndexIVFScalarQuantizer::reconstruct_from_offset(
     }
 }
 
+void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(const idx_t list_no,
+        const float* x,
+	idx_t n,
+	const uint8_t* codes,
+	float* dists) const {
+
+    ScalarQuantizer::SQDistanceComputer* dc =
+            sq.get_distance_computer(metric_type);
+    dc->code_size = sq.code_size;
+
+    if (by_residual) {
+        // shift of x_in wrt centroid
+	std::vector<float> tmp(d);
+        quantizer->compute_residual(x, tmp.data(), list_no);
+        dc->set_query(tmp.data());
+    } else {
+        dc->set_query(x);
+    }
+
+    dc->distance_to_codes(n, codes, dists);
+
+    return;
+}
+
 } // namespace faiss

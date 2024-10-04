@@ -103,6 +103,14 @@ struct IndexIVFScalarQuantizer : IndexIVF {
 
     /* standalone codec interface */
     void sa_decode(idx_t n, const uint8_t* bytes, float* x) const override;
+
+    void compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) const override;
+
 };
 
 } // namespace faiss

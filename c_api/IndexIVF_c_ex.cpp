@@ -67,3 +67,18 @@ int faiss_IndexIVF_search_preassigned_with_params(
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_IndexIVF_compute_distance_to_codes_for_list(
+        FaissIndexIVF* index,
+        idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) {
+    try {
+        reinterpret_cast<IndexIVF*>(index)->compute_distance_to_codes_for_list(
+		list_no, x, n, codes, dists);
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
