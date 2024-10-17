@@ -435,6 +435,29 @@ struct IndexIVF : Index, IndexIVFInterface {
     size_t sa_code_size() const override;
     void sa_encode(idx_t n, const float* x, uint8_t* bytes) const override;
 
+
+    /** Given a query vector x, compute distance to provided codes
+     * for the input list_no. This is a special purpose method
+     * to be used as a flat distance computer for an inverted
+     * list where codes are provided externally. This allows to
+     * use the quantizer independently while computing distance
+     * for the quantized codes.
+     *
+     * @param list_no list number for inverted list
+     * @param x - input query vector
+     * @param n - number of codes
+     * @param codes - input codes
+     * @param dists - output computed distances
+     */
+
+    virtual void compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) const {};
+
+
     IndexIVF();
 };
 
