@@ -445,7 +445,8 @@ static void read_direct_map(DirectMap* dm, IOReader* f) {
     char maintain_direct_map;
     READ1(maintain_direct_map);
     dm->type = (DirectMap::Type)maintain_direct_map;
-    READVECTOR(dm->array);
+    // READVECTOR(dm->array);
+    X_READVECTOR(dm->array);
     if (dm->type == DirectMap::Hashtable) {
         std::vector<std::pair<idx_t, idx_t>> v;
         READVECTOR(v);

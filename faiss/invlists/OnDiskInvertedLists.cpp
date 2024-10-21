@@ -711,7 +711,8 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     READ1(od->nlist);
     READ1(od->code_size);
     // this is a POD object
-    READVECTOR(od->lists);
+    // READVECTOR(od->lists);
+    X_READVECTOR(od->lists);
     {
         std::vector<OnDiskInvertedLists::Slot> v;
         READVECTOR(v);

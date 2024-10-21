@@ -84,6 +84,12 @@ BufIOReader::~BufIOReader() {
     buf = NULL;
 }
 
+uint8_t* BufIOReader::readPointer(size_t size) {
+    uint8_t* res = (uint8_t*) &buf[rp];
+    rp += size; // TODO: Need bounds checking?
+    return res;
+}
+
 /***********************************************************************
  * IO File
  ***********************************************************************/
