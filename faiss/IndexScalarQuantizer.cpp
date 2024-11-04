@@ -289,8 +289,9 @@ void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists) const {
 
-    ScalarQuantizer::SQDistanceComputer* dc =
-            sq.get_distance_computer(metric_type);
+    std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
+        sq.get_distance_computer(metric_type));
+
     dc->code_size = sq.code_size;
 
     if (by_residual) {
