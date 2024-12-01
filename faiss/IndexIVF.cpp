@@ -1006,7 +1006,7 @@ void IndexIVF::search_and_reconstruct(
             labels,
             true /* store_pairs */,
             params);
-#pragma omp parallel for if (n * k > 1000)
+#pragma omp parallel for if (n * k > 1000) num_threads(num_omp_threads)
     for (idx_t ij = 0; ij < n * k; ij++) {
         idx_t key = labels[ij];
         float* reconstructed = recons + ij * d;
@@ -1068,7 +1068,7 @@ void IndexIVF::search_and_return_codes(
         code_size_1 += coarse_code_size();
     }
 
-#pragma omp parallel for if (n * k > 1000)
+#pragma omp parallel for if (n * k > 1000) num_threads(num_omp_threads)
     for (idx_t ij = 0; ij < n * k; ij++) {
         idx_t key = labels[ij];
         uint8_t* code1 = codes + ij * code_size_1;

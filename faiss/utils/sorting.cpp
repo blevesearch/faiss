@@ -61,7 +61,7 @@ void parallel_merge(
     s2s[nt - 1].i1 = s2.i1;
 
     // not sure parallel actually helps here
-#pragma omp parallel for num_threads(nt)
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int t = 0; t < nt; t++) {
         s1s[t].i0 = s1.i0 + s1.len() * t / nt;
         s1s[t].i1 = s1.i0 + s1.len() * (t + 1) / nt;
@@ -93,7 +93,7 @@ void parallel_merge(
     assert(sws[nt - 1].i1 == s1.i1);
 
     // do the actual merging
-#pragma omp parallel for num_threads(nt)
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int t = 0; t < nt; t++) {
         SegmentS sw = sws[t];
         SegmentS s1t = s1s[t];
@@ -176,7 +176,7 @@ void fvec_argsort_parallel(size_t n, const float* vals, size_t* perm) {
         int sub_nt = nseg % 2 == 0 ? nt : nt - 1;
         int sub_nseg1 = nseg / 2;
 
-#pragma omp parallel for num_threads(nseg1)
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int s = 0; s < nseg; s += 2) {
             if (s + 1 == nseg) { // otherwise isolated segment
                 memcpy(permB + segs[s].i0,
@@ -257,7 +257,7 @@ void bucket_sort_parallel(
         int64_t* perm,
         int nt_in) {
     memset(lims, 0, sizeof(*lims) * (vmax + 1));
-#pragma omp parallel num_threads(nt_in)
+#pragma omp parallel num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads(); // might be different from nt_in
         int rank = omp_get_thread_num();
@@ -483,7 +483,7 @@ void bucket_sort_inplace_parallel(
             nbucket); // DON'T use std::vector<bool> that cannot be accessed
                       // safely from multiple threads!!!
 
-#pragma omp parallel num_threads(nt_in)
+#pragma omp parallel num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads(); // might be different from nt_in (?)
         int rank = omp_get_thread_num();
@@ -709,7 +709,7 @@ inline int64_t hash_function(int64_t x) {
 
 void hashtable_int64_to_int64_init(int log2_capacity, int64_t* tab) {
     size_t capacity = (size_t)1 << log2_capacity;
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < capacity; i++) {
         tab[2 * i] = -1;
         tab[2 * i + 1] = -1;
@@ -728,8 +728,7 @@ void hashtable_int64_to_int64_add(
     int64_t mask = capacity - 1;
     int log2_nbucket = log2_capacity_to_log2_nbucket(log2_capacity);
     size_t nbucket = (size_t)1 << log2_nbucket;
-
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         hk[i] = hash_function(keys[i]) & mask;
         bucket_no[i] = hk[i] >> (log2_capacity - log2_nbucket);
@@ -744,9 +743,8 @@ void hashtable_int64_to_int64_add(
             lims.data(),
             perm.data(),
             omp_get_max_threads());
-
     int num_errors = 0;
-#pragma omp parallel for reduction(+ : num_errors)
+#pragma omp parallel for reduction(+ : num_errors) num_threads(num_omp_threads)
     for (int64_t bucket = 0; bucket < nbucket; bucket++) {
         size_t k0 = bucket << (log2_capacity - log2_nbucket);
         size_t k1 = (bucket + 1) << (log2_capacity - log2_nbucket);
@@ -792,8 +790,7 @@ void hashtable_int64_to_int64_lookup(
     std::vector<int64_t> hk(n), bucket_no(n);
     int64_t mask = capacity - 1;
     int log2_nbucket = log2_capacity_to_log2_nbucket(log2_capacity);
-
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         int64_t k = keys[i];
         int64_t hk = hash_function(k) & mask;

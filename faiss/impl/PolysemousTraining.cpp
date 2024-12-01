@@ -779,7 +779,7 @@ void PolysemousTraining::optimize_reproduce_distances(
                 nt);
     }
 
-#pragma omp parallel for num_threads(nt)
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int m = 0; m < pq.M; m++) {
         std::vector<double> dis_table;
 
