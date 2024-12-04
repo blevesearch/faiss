@@ -710,8 +710,7 @@ void pack_bitstrings(
         totbit += nbit[j];
     }
     FAISS_THROW_IF_NOT(code_size >= (totbit + 7) / 8);
-    //RAHUL
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* in = unpacked + i * M;
         uint8_t* out = packed + i * code_size;
