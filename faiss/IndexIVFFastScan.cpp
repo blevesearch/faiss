@@ -640,7 +640,7 @@ void IndexIVFFastScan::range_search_dispatch_implem(
     } else {
         // explicitly slice over threads
         int nslice = compute_search_nslice(this, n, cq.nprobe);
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             RangeSearchPartialResult pres(&rres);
 

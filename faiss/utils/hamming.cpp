@@ -293,7 +293,7 @@ void hamming_range_search(
         int radius,
         size_t code_size,
         RangeSearchResult* res) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(res);
 
@@ -687,7 +687,7 @@ void pack_bitstrings(
         uint8_t* packed,
         size_t code_size) {
     FAISS_THROW_IF_NOT(code_size >= (M * nbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* in = unpacked + i * M;
         uint8_t* out = packed + i * code_size;
@@ -710,7 +710,7 @@ void pack_bitstrings(
         totbit += nbit[j];
     }
     FAISS_THROW_IF_NOT(code_size >= (totbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* in = unpacked + i * M;
         uint8_t* out = packed + i * code_size;
@@ -729,7 +729,7 @@ void unpack_bitstrings(
         size_t code_size,
         int32_t* unpacked) {
     FAISS_THROW_IF_NOT(code_size >= (M * nbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const uint8_t* in = packed + i * code_size;
         int32_t* out = unpacked + i * M;
@@ -752,7 +752,7 @@ void unpack_bitstrings(
         totbit += nbit[j];
     }
     FAISS_THROW_IF_NOT(code_size >= (totbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const uint8_t* in = packed + i * code_size;
         int32_t* out = unpacked + i * M;

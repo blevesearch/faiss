@@ -146,7 +146,7 @@ void exhaustive_inner_product_seq(
 
     FAISS_ASSERT(use_sel == (sel != nullptr));
 
-#pragma omp parallel num_threads(nt)
+#pragma omp parallel num_threads(num_omp_threads)
     {
         SingleResultHandler resi(res);
 #pragma omp for
@@ -183,7 +183,7 @@ void exhaustive_L2sqr_seq(
 
     FAISS_ASSERT(use_sel == (sel != nullptr));
 
-#pragma omp parallel num_threads(nt)
+#pragma omp parallel num_threads(num_omp_threads)
     {
         SingleResultHandler resi(res);
 #pragma omp for
