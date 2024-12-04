@@ -728,6 +728,7 @@ void hashtable_int64_to_int64_add(
     int64_t mask = capacity - 1;
     int log2_nbucket = log2_capacity_to_log2_nbucket(log2_capacity);
     size_t nbucket = (size_t)1 << log2_nbucket;
+
 #pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         hk[i] = hash_function(keys[i]) & mask;
@@ -743,6 +744,7 @@ void hashtable_int64_to_int64_add(
             lims.data(),
             perm.data(),
             omp_get_max_threads());
+
     int num_errors = 0;
 #pragma omp parallel for reduction(+ : num_errors) num_threads(num_omp_threads)
     for (int64_t bucket = 0; bucket < nbucket; bucket++) {
