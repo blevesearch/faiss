@@ -13,6 +13,8 @@
 #include <faiss/invlists/InvertedLists.h>
 #include <unordered_map>
 
+#include <faiss/XBufVector.h>
+
 namespace faiss {
 
 struct IDSelector;
@@ -44,7 +46,9 @@ struct DirectMap {
     Type type;
 
     /// map for direct access to the elements. Map ids to LO-encoded entries.
-    std::vector<idx_t> array;
+    // std::vector<idx_t> array;
+    XBufVector<idx_t> array;
+
     std::unordered_map<idx_t, idx_t> hashtable;
 
     DirectMap();

@@ -18,6 +18,8 @@
 #include <faiss/index_io.h>
 #include <faiss/invlists/InvertedListsIOHook.h>
 
+#include <faiss/XBufVector.h>
+
 namespace faiss {
 
 struct LockLevels;
@@ -61,7 +63,8 @@ struct OnDiskInvertedLists : InvertedLists {
     using List = OnDiskOneList;
 
     // size nlist
-    std::vector<List> lists;
+    // std::vector<List> lists;
+    XBufVector<List> lists;
 
     struct Slot {
         size_t offset;   // bytes
