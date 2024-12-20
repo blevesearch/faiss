@@ -139,6 +139,14 @@ struct IndexIVFPQ : IndexIVF {
     /// build precomputed table
     void precompute_table();
 
+    void compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) const override;
+
+
     IndexIVFPQ();
 };
 

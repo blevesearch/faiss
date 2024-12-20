@@ -1387,4 +1387,56 @@ size_t IndexIVFPQ::find_duplicates(idx_t* dup_ids, size_t* lims) const {
     return ngroup;
 }
 
+void IndexIVFPQ::compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) const {
+
+    std::unique_ptr<InvertedListScanner> scanner(
+        get_InvertedListScanner(true, nullptr));
+
+    scanner->set_query(x);
+
+    //init dist values as per metric
+    std::vector<float> dist_out(n);
+    float default_dis = metric_type == METRIC_L2 ? HUGE_VAL : -HUGE_VAL;
+    for (int j = 0; j < n; j++) {
+	dist_out[j] = default_dis;
+    }
+
+    //find the centroid corresponding to the input list_no
+    //and compute its distance from the query vector
+    std::vector<float> centroid(d);
+    quantizer->reconstruct(list_no, centroid.data());
+
+    float coarse_dis = quantizer->metric_type == faiss::METRIC_L2
+                         ? faiss::fvec_L2sqr(x, centroid.data(), d)
+                         : faiss::fvec_inner_product(x, centroid.data(), d);
+
+    scanner->set_list(list_no, coarse_dis);
+
+    std::vector<idx_t> ids_in(n);
+    std::vector<idx_t> ids_out(n);
+
+    //init ids_in as sequential numbers to allow mapping with output distances.
+    //ids_out will contain the order of distances in dist_out after scan_codes returns.
+    for (int j = 0; j < n; j++) {
+	ids_in[j] = j;
+	ids_out[j] = 0;
+    }
+
+    scanner->scan_codes(n, codes, ids_in.data(), dist_out.data(), ids_out.data(), n);
+
+    //reorder the returned distances in dist_out based on ids_out.
+    //This function needs to return the distances in the same order as input codes.
+    for (int j = 0; j < n; j++) {
+	int k = ids_out[j];
+	dists[k] = dist_out[j];
+    }
+    return;
+}
+
+
 } // namespace faiss
