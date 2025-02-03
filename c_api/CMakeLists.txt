@@ -28,6 +28,7 @@ set(FAISS_C_SRC
   MetaIndexes_c.cpp
   clone_index_c.cpp
   error_impl.cpp
+  jemalloc_override_c.cpp
   index_factory_c.cpp
   index_io_c.cpp
   index_io_c_ex.cpp
@@ -42,6 +43,13 @@ elseif(FAISS_OPT_LEVEL STREQUAL "avx2")
 elseif(FAISS_OPT_LEVEL STREQUAL "avx512")
   target_link_libraries(faiss_c PRIVATE faiss_avx512)
 endif()
+
+if(FAISS_USE_JEMALLOC)
+  find_package(Jemalloc REQUIRED)
+  target_link_libraries(faiss_c PRIVATE ${JEMALLOC_LIBRARIES})
+  target_include_directories(faiss_c PRIVATE ${JEMALLOC_INCLUDE_DIRS})
+endif()
+
 install(TARGETS faiss_c
   EXPORT faiss-targets
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

@@ -56,6 +56,7 @@ option(FAISS_ENABLE_GPU "Enable support for GPU indexes." ON)
 option(FAISS_ENABLE_RAFT "Enable RAFT for GPU indexes." OFF)
 option(FAISS_ENABLE_PYTHON "Build Python extension." ON)
 option(FAISS_ENABLE_C_API "Build C API." OFF)
+option(FAISS_USE_JEMALLOC "Use jemalloc for memory allocation." OFF)
 
 # Force FAISS_OPT_LEVEL to "generic" if not building on x86_64.
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
