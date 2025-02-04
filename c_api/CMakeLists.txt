@@ -46,6 +46,7 @@ endif()
 
 if(FAISS_USE_JEMALLOC)
   find_package(Jemalloc REQUIRED)
+  add_definitions(-DUSE_JEMALLOC)
   target_link_libraries(faiss_c PRIVATE ${JEMALLOC_LIBRARIES})
   target_include_directories(faiss_c PRIVATE ${JEMALLOC_INCLUDE_DIRS})
 endif()

@@ -1,4 +1,4 @@
-#ifdef FAISS_USE_JEMALLOC
+#ifdef USE_JEMALLOC
 // ----------------------------------------------------------------------------
 // This header provides convenient overrides for the new and
 // delete operations in C++.
@@ -132,4 +132,4 @@ void operator delete[](void* ptr, const std::nothrow_t& tag) noexcept {
     free(ptr);
 }
 
-#endif // FAISS_USE_JEMALLOC
+#endif // USE_JEMALLOC
