@@ -336,13 +336,9 @@ endif()
 if(FAISS_USE_JEMALLOC)
   find_package(Jemalloc REQUIRED)
   add_definitions(-DUSE_JEMALLOC)
-  target_link_libraries(faiss PRIVATE ${JEMALLOC_LIBRARIES})
-  target_link_libraries(faiss_avx2 PRIVATE ${JEMALLOC_LIBRARIES})
-  target_link_libraries(faiss_avx512 PRIVATE ${JEMALLOC_LIBRARIES})
-
-  target_include_directories(faiss PRIVATE ${JEMALLOC_INCLUDE_DIRS})
-  target_include_directories(faiss_avx2 PRIVATE ${JEMALLOC_INCLUDE_DIRS})
-  target_include_directories(faiss_avx512 PRIVATE ${JEMALLOC_INCLUDE_DIRS})
+  target_link_libraries(faiss PRIVATE Jemalloc::jemalloc)
+  target_link_libraries(faiss_avx2 PRIVATE Jemalloc::jemalloc)
+  target_link_libraries(faiss_avx512 PRIVATE Jemalloc::jemalloc)
 endif()
 
 
