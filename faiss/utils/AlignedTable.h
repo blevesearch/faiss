@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include <faiss/impl/platform_macros.h>
+#include <faiss/jemalloc_override.h>
 
 namespace faiss {
 

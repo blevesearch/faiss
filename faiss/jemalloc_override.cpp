@@ -1,3 +1,9 @@
+/**
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #ifdef USE_JEMALLOC
 // ----------------------------------------------------------------------------
 // This header provides convenient overrides for the new and
@@ -7,8 +13,7 @@
 // 
 // See <https://en.cppreference.com/w/cpp/memory/new/operator_new>
 // ---------------------------------------------------------------------------
-#define JEMALLOC_MANGLE
-#include <jemalloc/jemalloc.h>
+#include "jemalloc_override.h"
 #include <new>
 
 #if __cplusplus > 202002L

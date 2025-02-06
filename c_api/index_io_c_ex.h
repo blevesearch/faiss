@@ -17,13 +17,6 @@
 #include "Index_c.h"
 #include "faiss_c.h"
 
-#ifdef USE_JEMALLOC
-
-#define JEMALLOC_MANGLE
-#include <jemalloc/jemalloc.h>
-
-#endif 
-
 #ifdef __cplusplus
 extern "C" {
 #endif

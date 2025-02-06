@@ -5,11 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// Copyright 2004-present Facebook. All Rights Reserved.
 // -*- c++ -*-
+
+#ifndef JEMALLOC_OVERRIDE_H
+#define JEMALLOC_OVERRIDE_H
 
 #ifdef USE_JEMALLOC
 
-#include <faiss/jemalloc_override.cpp>
+#define JEMALLOC_MANGLE
+#include <jemalloc/jemalloc.h>
 
 #endif /* USE_JEMALLOC */
+
+#endif /* JEMALLOC_OVERRIDE_H */

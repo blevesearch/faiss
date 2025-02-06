@@ -12,6 +12,7 @@
 /autom4te.cache/
 /makefile.inc
 /bin/
+/build/
 /c_api/bin/
 /c_api/gpu/bin/
 /tests/test

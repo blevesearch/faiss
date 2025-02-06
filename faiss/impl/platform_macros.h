@@ -12,11 +12,6 @@
 #include <cstdio>
 #include <faiss/OMPConfig.h>
 
-#ifdef USE_JEMALLOC
-#define JEMALLOC_MANGLE
-#include <jemalloc/jemalloc.h>
-#endif
-
 #ifdef _MSC_VER
 
 /*******************************************************
@@ -45,6 +40,9 @@
 #else 
 // je_posix_memalign is available on jemalloc
 // posix_memalign_free is defined as je_free 
+// it MUST be ensured that the jemalloc_override.h file is imported
+// AFTER whichever file imported the platform_macros.h file 
+// (which is where posix_memalign_free -> free -> je_free is defined)
 #define posix_memalign_free free
 #endif
 

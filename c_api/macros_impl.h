@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include "error_impl.h"
 #include "faiss_c.h"
+#include <faiss/jemalloc_override.h>
 
 #ifdef NDEBUG
 #define CATCH_AND_HANDLE                                                      \

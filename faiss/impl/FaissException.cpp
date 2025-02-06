@@ -14,6 +14,7 @@
 #include <cxxabi.h>
 #endif
 
+#include <faiss/jemalloc_override.h>
 namespace faiss {
 
 FaissException::FaissException(const std::string& m) : msg(m) {}
