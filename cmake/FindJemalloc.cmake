@@ -37,6 +37,11 @@ if (NOT FindJemalloc_included)
     endif()
   endif()
 
+  # If still not found, report an error
+  if(NOT _jemalloc_found)
+    message(FATAL_ERROR "Could not find Jemalloc. Install Jemalloc or provide -DJemalloc_ROOT=<path>.")
+  endif()
+
   # Determine the version of the found jemalloc.
   get_target_property(_jemalloc_include_dirs Jemalloc::jemalloc INTERFACE_INCLUDE_DIRECTORIES)
   list (GET _jemalloc_include_dirs 0 _jemalloc_include_dir)

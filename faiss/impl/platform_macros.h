@@ -12,6 +12,11 @@
 #include <cstdio>
 #include <faiss/OMPConfig.h>
 
+#ifdef USE_JEMALLOC
+#define JEMALLOC_MANGLE
+#include <jemalloc/jemalloc.h>
+#endif
+
 #ifdef _MSC_VER
 
 /*******************************************************
@@ -30,9 +35,18 @@
 
 #define __PRETTY_FUNCTION__ __FUNCSIG__
 
+#ifndef USE_JEMALLOC
+// no jemalloc on windows, and windows does not have posix_memalign 
+// _aligned_malloc is the equivalent
 #define posix_memalign(p, a, s) \
     (((*(p)) = _aligned_malloc((s), (a))), *(p) ? 0 : errno)
+// _aligned_free is the equivalent of free for _aligned_malloc
 #define posix_memalign_free _aligned_free
+#else 
+// je_posix_memalign is available on jemalloc
+// posix_memalign_free is defined as je_free 
+#define posix_memalign_free free
+#endif
 
 // aligned should be in front of the declaration
 #define ALIGNED(x) __declspec(align(x))
