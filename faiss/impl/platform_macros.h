@@ -30,9 +30,21 @@
 
 #define __PRETTY_FUNCTION__ __FUNCSIG__
 
+#ifndef USE_JEMALLOC
+// no jemalloc on windows, and windows does not have posix_memalign 
+// _aligned_malloc is the equivalent
 #define posix_memalign(p, a, s) \
     (((*(p)) = _aligned_malloc((s), (a))), *(p) ? 0 : errno)
+// _aligned_free is the equivalent of free for _aligned_malloc
 #define posix_memalign_free _aligned_free
+#else 
+// je_posix_memalign is available on jemalloc
+// posix_memalign_free is defined as je_free 
+// it MUST be ensured that the jemalloc_override.h file is imported
+// AFTER whichever file imported the platform_macros.h file 
+// (which is where posix_memalign_free -> free -> je_free is defined)
+#define posix_memalign_free free
+#endif
 
 // aligned should be in front of the declaration
 #define ALIGNED(x) __declspec(align(x))

@@ -20,6 +20,7 @@
 #include "impl/AuxIndexStructures_c.h"
 #include "index_factory_c.h"
 #include "index_io_c.h"
+#include "macros_impl.h"
 
 #define FAISS_TRY(C)                                       \
     {                                                      \

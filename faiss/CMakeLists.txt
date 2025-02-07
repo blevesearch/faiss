@@ -46,6 +46,7 @@ set(FAISS_SRC
   IndexScalarQuantizer.cpp
   IndexShards.cpp
   IndexShardsIVF.cpp
+  jemalloc_override.cpp
   MatrixStats.cpp
   MetaIndexes.cpp
   OMPConfig.cpp
@@ -330,6 +331,14 @@ else()
   target_link_libraries(faiss PRIVATE ${LAPACK_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${LAPACK_LIBRARIES})
   target_link_libraries(faiss_avx512 PRIVATE ${LAPACK_LIBRARIES})
+endif()
+
+if(FAISS_USE_JEMALLOC)
+  find_package(Jemalloc REQUIRED)
+  add_definitions(-DUSE_JEMALLOC)
+  target_link_libraries(faiss PRIVATE Jemalloc::jemalloc)
+  target_link_libraries(faiss_avx2 PRIVATE Jemalloc::jemalloc)
+  target_link_libraries(faiss_avx512 PRIVATE Jemalloc::jemalloc)
 endif()
 
 
