@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -20,11 +20,11 @@ namespace faiss {
  * IO functions
  ***********************************************************************/
 
-int IOReader::fileno() {
+int IOReader::filedescriptor() {
     FAISS_THROW_MSG("IOReader does not support memory mapping");
 }
 
-int IOWriter::fileno() {
+int IOWriter::filedescriptor() {
     FAISS_THROW_MSG("IOWriter does not support memory mapping");
 }
 
@@ -114,8 +114,12 @@ size_t FileIOReader::operator()(void* ptr, size_t size, size_t nitems) {
     return fread(ptr, size, nitems, f);
 }
 
-int FileIOReader::fileno() {
+int FileIOReader::filedescriptor() {
+#ifdef _AIX
+    return fileno(f);
+#else
     return ::fileno(f);
+#endif
 }
 
 FileIOWriter::FileIOWriter(FILE* wf) : f(wf) {}
@@ -145,8 +149,12 @@ size_t FileIOWriter::operator()(const void* ptr, size_t size, size_t nitems) {
     return fwrite(ptr, size, nitems, f);
 }
 
-int FileIOWriter::fileno() {
+int FileIOWriter::filedescriptor() {
+#ifdef _AIX
+    return fileno(f);
+#else
     return ::fileno(f);
+#endif
 }
 
 /***********************************************************************
@@ -288,7 +296,7 @@ std::string fourcc_inv_printable(uint32_t x) {
             str += c;
         } else {
             char buf[10];
-            sprintf(buf, "\\x%02x", c);
+            snprintf(buf, sizeof(buf), "\\x%02x", c);
             str += buf;
         }
     }

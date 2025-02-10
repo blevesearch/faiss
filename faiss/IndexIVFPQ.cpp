@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -22,7 +22,6 @@
 #include <faiss/utils/utils.h>
 
 #include <faiss/Clustering.h>
-#include <faiss/IndexFlat.h>
 
 #include <faiss/utils/hamming.h>
 
@@ -318,16 +317,14 @@ void IndexIVFPQ::reconstruct_from_offset(
         float* recons) const {
     const uint8_t* code = invlists->get_single_code(list_no, offset);
 
+    pq.decode(code, recons);
     if (by_residual) {
         std::vector<float> centroid(d);
         quantizer->reconstruct(list_no, centroid.data());
 
-        pq.decode(code, recons);
         for (int i = 0; i < d; ++i) {
             recons[i] += centroid[i];
         }
-    } else {
-        pq.decode(code, recons);
     }
 }
 

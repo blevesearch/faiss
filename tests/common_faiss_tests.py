@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -49,7 +49,6 @@ class Randu10k:
         for rank in 1, 10, 100:
             e[rank] = ((I[:, :rank] == self.gt.reshape(-1, 1)).sum() /
                        float(self.nq))
-        # print("1-recalls: %s" % e)
         return e
 
 

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -258,7 +258,8 @@ struct IndexIVF : Index, IndexIVFInterface {
      * @param codes  codes to add size n * sa_code_size()
      * @param xids   corresponding ids, size n
      */
-    void add_sa_codes(idx_t n, const uint8_t* codes, const idx_t* xids);
+    void add_sa_codes(idx_t n, const uint8_t* codes, const idx_t* xids)
+            override;
 
     /** Train the encoder for the vectors.
      *
@@ -433,6 +434,14 @@ struct IndexIVF : Index, IndexIVFInterface {
 
     /* The standalone codec interface (except sa_decode that is specific) */
     size_t sa_code_size() const override;
+
+    /** encode a set of vectors
+     * sa_encode will call encode_vectors with include_listno=true
+     * @param n      nb of vectors to encode
+     * @param x      the vectors to encode
+     * @param bytes  output array for the codes
+     * @return nb of bytes written to codes
+     */
     void sa_encode(idx_t n, const float* x, uint8_t* bytes) const override;
 
 
@@ -494,7 +503,7 @@ struct InvertedListScanner {
     virtual float distance_to_code(const uint8_t* code) const = 0;
 
     /** scan a set of codes, compute distances to current query and
-     * update heap of results if necessary. Default implemetation
+     * update heap of results if necessary. Default implementation
      * calls distance_to_code.
      *
      * @param n      number of codes to scan

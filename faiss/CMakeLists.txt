@@ -1,7 +1,6 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
-# This source code is licensed under the BSD-style license found in the
+# This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
 set(FAISS_SRC
@@ -46,6 +45,7 @@ set(FAISS_SRC
   IndexScalarQuantizer.cpp
   IndexShards.cpp
   IndexShardsIVF.cpp
+  IndexNeuralNetCodec.cpp
   MatrixStats.cpp
   MetaIndexes.cpp
   OMPConfig.cpp
@@ -82,6 +82,7 @@ set(FAISS_SRC
   invlists/InvertedLists.cpp
   invlists/InvertedListsIOHook.cpp
   utils/Heap.cpp
+  utils/NeuralNet.cpp
   utils/WorkerThread.cpp
   utils/distances.cpp
   utils/distances_simd.cpp
@@ -125,6 +126,7 @@ set(FAISS_HEADERS
   IndexIVFPQR.h
   IndexIVFSpectralHash.h
   IndexLSH.h
+  IndexNeuralNetCodec.h
   IndexLattice.h
   IndexNNDescent.h
   IndexNSG.h
@@ -169,6 +171,7 @@ set(FAISS_HEADERS
   impl/ScalarQuantizer.h
   impl/ThreadedIndex-inl.h
   impl/ThreadedIndex.h
+  impl/index_read_utils.h
   impl/io.h
   impl/io_macros.h
   impl/kmeans1d.h
@@ -180,12 +183,17 @@ set(FAISS_HEADERS
   impl/code_distance/code_distance.h
   impl/code_distance/code_distance-generic.h
   impl/code_distance/code_distance-avx2.h
+  impl/code_distance/code_distance-avx512.h
+  impl/code_distance/code_distance-sve.h
   invlists/BlockInvertedLists.h
   invlists/DirectMap.h
   invlists/InvertedLists.h
   invlists/InvertedListsIOHook.h
+  invlists/OnDiskInvertedLists.h
   utils/AlignedTable.h
+  utils/bf16.h
   utils/Heap.h
+  utils/NeuralNet.h
   utils/WorkerThread.h
   utils/distances.h
   utils/extra_distances-inl.h
@@ -204,8 +212,10 @@ set(FAISS_HEADERS
   utils/sorting.h
   utils/simdlib.h
   utils/simdlib_avx2.h
+  utils/simdlib_avx512.h
   utils/simdlib_emulated.h
   utils/simdlib_neon.h
+  utils/simdlib_ppc64.h
   utils/utils.h
   utils/distances_fused/avx512.h
   utils/distances_fused/distances_fused.h
@@ -216,11 +226,13 @@ set(FAISS_HEADERS
   utils/approx_topk/mode.h
   utils/approx_topk_hamming/approx_topk_hamming.h
   utils/transpose/transpose-avx2-inl.h
+  utils/transpose/transpose-avx512-inl.h
   utils/hamming_distance/common.h
   utils/hamming_distance/generic-inl.h
   utils/hamming_distance/hamdis-inl.h
   utils/hamming_distance/neon-inl.h
   utils/hamming_distance/avx2-inl.h
+  utils/hamming_distance/avx512-inl.h
 )
 
 if(NOT WIN32)
@@ -248,7 +260,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 add_library(faiss_avx2 ${FAISS_SRC})
-if(NOT FAISS_OPT_LEVEL STREQUAL "avx2" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512")
+if(NOT FAISS_OPT_LEVEL STREQUAL "avx2" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512_spr")
   set_target_properties(faiss_avx2 PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 if(NOT WIN32)
@@ -277,6 +289,45 @@ else()
   add_compile_options(/bigobj)
 endif()
 
+add_library(faiss_avx512_spr ${FAISS_SRC})
+if(NOT FAISS_OPT_LEVEL STREQUAL "avx512_spr")
+  set_target_properties(faiss_avx512_spr PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+if(NOT WIN32)
+  # Architecture mode to support AVX512 extensions available since Intel(R) Sapphire Rapids.
+  # Ref: https://networkbuilders.intel.com/solutionslibrary/intel-avx-512-fp16-instruction-set-for-intel-xeon-processor-based-products-technology-guide
+  target_compile_options(faiss_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-march=sapphirerapids -mtune=sapphirerapids>)
+else()
+  target_compile_options(faiss_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)
+  # we need bigobj for the swig wrapper
+  add_compile_options(/bigobj)
+endif()
+
+add_library(faiss_sve ${FAISS_SRC})
+if(NOT FAISS_OPT_LEVEL STREQUAL "sve")
+  set_target_properties(faiss_sve PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+if(NOT WIN32)
+  if("${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} " MATCHES "(^| )-march=native")
+    # Do nothing, expect SVE to be enabled by -march=native
+  elseif("${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} " MATCHES "(^| )(-march=armv[0-9]+(\\.[1-9]+)?-[^+ ](\\+[^+$ ]+)*)")
+    # Add +sve
+    target_compile_options(faiss_sve PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:DEBUG>>:${CMAKE_MATCH_2}+sve>)
+  elseif(NOT "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} " MATCHES "(^| )-march=armv")
+    # No valid -march, so specify -march=armv8-a+sve as the default
+    target_compile_options(faiss_sve PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:DEBUG>>:-march=armv8-a+sve>)
+  endif()
+  if("${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} " MATCHES "(^| )-march=native")
+    # Do nothing, expect SVE to be enabled by -march=native
+  elseif("${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} " MATCHES "(^| )(-march=armv[0-9]+(\\.[1-9]+)?-[^+ ](\\+[^+$ ]+)*)")
+    # Add +sve
+    target_compile_options(faiss_sve PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:RELEASE>>:${CMAKE_MATCH_2}+sve>)
+  elseif(NOT "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} " MATCHES "(^| )-march=armv")
+    # No valid -march, so specify -march=armv8-a+sve as the default
+    target_compile_options(faiss_sve PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:RELEASE>>:-march=armv8-a+sve>)
+  endif()
+endif()
+
 # Handle `#include <faiss/foo.h>`.
 target_include_directories(faiss PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
@@ -286,16 +337,14 @@ target_include_directories(faiss_avx2 PUBLIC
 # Handle `#include <faiss/foo.h>`.
 target_include_directories(faiss_avx512 PUBLIC
   $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
+# Handle `#include <faiss/foo.h>`.
+target_include_directories(faiss_avx512_spr PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
+# Handle `#include <faiss/foo.h>`.
+target_include_directories(faiss_sve PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>)
 
-set_target_properties(faiss PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-  WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-set_target_properties(faiss_avx2 PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-  WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-set_target_properties(faiss_avx512 PROPERTIES
+set_target_properties(faiss faiss_avx2 faiss_avx512 faiss_avx512_spr faiss_sve PROPERTIES
   POSITION_INDEPENDENT_CODE ON
   WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
@@ -304,32 +353,63 @@ if(WIN32)
   target_compile_definitions(faiss PRIVATE FAISS_MAIN_LIB)
   target_compile_definitions(faiss_avx2 PRIVATE FAISS_MAIN_LIB)
   target_compile_definitions(faiss_avx512 PRIVATE FAISS_MAIN_LIB)
+  target_compile_definitions(faiss_avx512_spr PRIVATE FAISS_MAIN_LIB)
+  target_compile_definitions(faiss_sve PRIVATE FAISS_MAIN_LIB)
 endif()
 
-target_compile_definitions(faiss PRIVATE FINTEGER=int)
+string(FIND "${CMAKE_CXX_FLAGS}" "FINTEGER" finteger_idx)
+if (${finteger_idx} EQUAL -1)
+  target_compile_definitions(faiss PRIVATE FINTEGER=int)
+endif()
 target_compile_definitions(faiss_avx2 PRIVATE FINTEGER=int)
 target_compile_definitions(faiss_avx512 PRIVATE FINTEGER=int)
+target_compile_definitions(faiss_avx512_spr PRIVATE FINTEGER=int)
+target_compile_definitions(faiss_sve PRIVATE FINTEGER=int)
+
+if(FAISS_USE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+
+  if (ipo_supported)
+    message(STATUS "LTO enabled")
+    set_property(TARGET faiss PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set_property(TARGET faiss_avx2 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set_property(TARGET faiss_avx512 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    set_property(TARGET faiss_avx512_spr PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+  else()
+    message(STATUS "LTO not supported: <${ipo_error}>")
+  endif()
+endif()
 
 find_package(OpenMP REQUIRED)
 target_link_libraries(faiss PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(faiss_avx2 PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(faiss_avx512 PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_avx512_spr PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_sve PRIVATE OpenMP::OpenMP_CXX)
 
-find_package(MKL)
+if(FAISS_ENABLE_MKL)
+  find_package(MKL)
+endif()
 if(MKL_FOUND)
   target_link_libraries(faiss PRIVATE ${MKL_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${MKL_LIBRARIES})
   target_link_libraries(faiss_avx512 PRIVATE ${MKL_LIBRARIES})
+  target_link_libraries(faiss_avx512_spr PRIVATE ${MKL_LIBRARIES})
 else()
   find_package(BLAS REQUIRED)
   target_link_libraries(faiss PRIVATE ${BLAS_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${BLAS_LIBRARIES})
   target_link_libraries(faiss_avx512 PRIVATE ${BLAS_LIBRARIES})
+  target_link_libraries(faiss_avx512_spr PRIVATE ${BLAS_LIBRARIES})
+  target_link_libraries(faiss_sve PRIVATE ${BLAS_LIBRARIES})
 
   find_package(LAPACK REQUIRED)
   target_link_libraries(faiss PRIVATE ${LAPACK_LIBRARIES})
   target_link_libraries(faiss_avx2 PRIVATE ${LAPACK_LIBRARIES})
   target_link_libraries(faiss_avx512 PRIVATE ${LAPACK_LIBRARIES})
+  target_link_libraries(faiss_avx512_spr PRIVATE ${LAPACK_LIBRARIES})
+  target_link_libraries(faiss_sve PRIVATE ${LAPACK_LIBRARIES})
 endif()
 
 
@@ -354,6 +434,20 @@ if(FAISS_OPT_LEVEL STREQUAL "avx512")
   install(TARGETS faiss_avx2 faiss_avx512
     EXPORT faiss-targets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
+endif()
+if(FAISS_OPT_LEVEL STREQUAL "avx512_spr")
+  install(TARGETS faiss_avx2 faiss_avx512 faiss_avx512_spr
+    EXPORT faiss-targets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
+endif()
+if(FAISS_OPT_LEVEL STREQUAL "sve")
+  install(TARGETS faiss_sve
+    EXPORT faiss-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )

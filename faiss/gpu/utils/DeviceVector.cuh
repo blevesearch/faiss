@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -169,6 +169,8 @@ class DeviceVector {
         T out;
         CUDA_VERIFY(cudaMemcpyAsync(
                 &out, data() + idx, sizeof(T), cudaMemcpyDeviceToHost, stream));
+
+        return out;
     }
 
     // Clean up after oversized allocations, while leaving some space to

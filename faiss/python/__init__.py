@@ -9,6 +9,7 @@
 # causes a ton of useless warnings.
 
 import numpy as np
+import logging
 import sys
 import inspect
 
@@ -30,6 +31,8 @@ __version__ = "%d.%d.%d" % (FAISS_VERSION_MAJOR,
                             FAISS_VERSION_MINOR,
                             FAISS_VERSION_PATCH)
 
+logger = logging.getLogger(__name__)
+
 class_wrappers.handle_Clustering(Clustering)
 class_wrappers.handle_Clustering1D(Clustering1D)
 class_wrappers.handle_MatrixStats(MatrixStats)
@@ -43,6 +46,14 @@ class_wrappers.handle_IDSelectorSubset(IDSelectorBatch, class_owns=True)
 class_wrappers.handle_IDSelectorSubset(IDSelectorArray, class_owns=False)
 class_wrappers.handle_IDSelectorSubset(IDSelectorBitmap, class_owns=False, force_int64=False)
 class_wrappers.handle_CodeSet(CodeSet)
+
+class_wrappers.handle_Tensor2D(Tensor2D)
+class_wrappers.handle_Tensor2D(Int32Tensor2D)
+class_wrappers.handle_Embedding(Embedding)
+class_wrappers.handle_Linear(Linear)
+class_wrappers.handle_QINCo(QINCo)
+class_wrappers.handle_QINCoStep(QINCoStep)
+
 
 this_module = sys.modules[__name__]
 
@@ -151,6 +162,15 @@ def add_ref_in_function(function_name, parameter_no):
         return result
     setattr(this_module, function_name, replacement_function)
 
+
+try:
+    add_ref_in_constructor(GpuIndexIVFFlat, 1)
+    add_ref_in_constructor(GpuIndexBinaryFlat, 1)
+    add_ref_in_constructor(GpuIndexFlat, 1)
+    add_ref_in_constructor(GpuIndexIVFPQ, 1)
+    add_ref_in_constructor(GpuIndexIVFScalarQuantizer, 1)
+except NameError as e:
+    logger.info("Failed to load GPU Faiss: %s. Will not load constructor refs for GPU indexes." % e.args[0])
 
 add_ref_in_constructor(IndexIVFFlat, 0)
 add_ref_in_constructor(IndexIVFFlatDedup, 0)
@@ -292,10 +312,10 @@ IVFSearchParameters = SearchParametersIVF
 ###########################################
 
 
-def serialize_index(index):
+def serialize_index(index, io_flags=0):
     """ convert an index to a numpy uint8 array  """
     writer = VectorIOWriter()
-    write_index(index, writer)
+    write_index(index, writer, io_flags)
     return vector_to_array(writer.data)
 
 
@@ -316,3 +336,14 @@ def deserialize_index_binary(data):
     reader = VectorIOReader()
     copy_array_to_vector(data, reader.data)
     return read_index_binary(reader)
+
+
+class TimeoutGuard:
+    def __init__(self, timeout_in_seconds: float):
+        self.timeout = timeout_in_seconds
+
+    def __enter__(self):
+        TimeoutCallback.reset(self.timeout)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        PythonInterruptCallback.reset()

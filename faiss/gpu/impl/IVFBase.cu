@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -338,6 +338,10 @@ void IVFBase::copyInvertedListsTo(InvertedLists* ivf) {
         ivf->add_entries(
                 i, listIndices.size(), listIndices.data(), listData.data());
     }
+}
+
+void IVFBase::reconstruct_n(idx_t i0, idx_t n, float* out) {
+    FAISS_THROW_MSG("not implemented");
 }
 
 void IVFBase::addEncodedVectorsToList_(

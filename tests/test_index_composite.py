@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -167,8 +167,6 @@ class TestRemove(unittest.TestCase):
         index.add_with_ids(X[:5, :], idx[:5])
         index.remove_ids(remove_set)
         index.add_with_ids(X[5:, :], idx[5:])
-
-        print (index.search(X, 1))
 
         for i in range(10):
             _, searchres = index.search(X[i:i + 1, :], 1)
@@ -954,7 +952,6 @@ class TestSearchAndGetCodes(unittest.TestCase):
         index.nprobe = 10
         Dref, Iref = index.search(ds.get_queries(), 10)
 
-        #print(index.search_and_return_codes)
         D, I, codes = index.search_and_return_codes(
             ds.get_queries(), 10, include_listnos=True)
 

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -23,7 +23,7 @@ struct SearchParametersPreTransform : SearchParameters {
 /** Index that applies a LinearTransform transform on vectors before
  *  handing them over to a sub-index */
 struct IndexPreTransform : Index {
-    std::vector<VectorTransform*> chain; ///! chain of tranforms
+    std::vector<VectorTransform*> chain; ///! chain of transforms
     Index* index;                        ///! the sub-index
 
     bool own_fields; ///! whether pointers are deleted in destructor

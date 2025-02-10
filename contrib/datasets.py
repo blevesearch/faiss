@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -6,6 +6,8 @@
 import os
 import numpy as np
 import faiss
+import getpass
+
 
 from .vecs_io import fvecs_read, ivecs_read, bvecs_mmap, fvecs_mmap
 from .exhaustive_search import knn
@@ -115,15 +117,22 @@ class SyntheticDataset(Dataset):
 # that directory is
 ############################################################################
 
+username = getpass.getuser()
 
 for dataset_basedir in (
         '/datasets01/simsearch/041218/',
-        '/mnt/vol/gfsai-flash3-east/ai-group/datasets/simsearch/'):
+        '/mnt/vol/gfsai-flash3-east/ai-group/datasets/simsearch/',
+        f'/home/{username}/simsearch/data/'):
     if os.path.exists(dataset_basedir):
         break
 else:
     # users can link their data directory to `./data`
     dataset_basedir = 'data/'
+
+
+def set_dataset_basedir(path):
+    global dataset_basedir
+    dataset_basedir = path
 
 
 class DatasetSIFT1M(Dataset):

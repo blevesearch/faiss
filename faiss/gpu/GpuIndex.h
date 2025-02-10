@@ -1,3 +1,4 @@
+// @lint-ignore-every LICENSELINT
 /**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
@@ -5,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,17 +38,17 @@ struct GpuIndexConfig {
     /// more memory than is available on the GPU.
     MemorySpace memorySpace = MemorySpace::Device;
 
-    /// Should the index dispatch down to RAFT?
-#if defined USE_NVIDIA_RAFT
-    bool use_raft = true;
+    /// Should the index dispatch down to cuVS?
+#if defined USE_NVIDIA_CUVS
+    bool use_cuvs = true;
 #else
-    bool use_raft = false;
+    bool use_cuvs = false;
 #endif
 };
 
-/// A centralized function that determines whether RAFT should
+/// A centralized function that determines whether cuVS should
 /// be used based on various conditions (such as unsupported architecture)
-bool should_use_raft(GpuIndexConfig config_);
+bool should_use_cuvs(GpuIndexConfig config_);
 
 class GpuIndex : public faiss::Index {
    public:
@@ -84,19 +85,14 @@ class GpuIndex : public faiss::Index {
 
     /// `x` and `labels` can be resident on the CPU or any GPU; copies are
     /// performed as needed
-    void assign(
-            idx_t n,
-            const float* x,
-            idx_t* labels,
-            // faiss::Index has idx_t for k
-            idx_t k = 1) const override;
+    void assign(idx_t n, const float* x, idx_t* labels, idx_t k = 1)
+            const override;
 
     /// `x`, `distances` and `labels` can be resident on the CPU or any
     /// GPU; copies are performed as needed
     void search(
             idx_t n,
             const float* x,
-            // faiss::Index has idx_t for k
             idx_t k,
             float* distances,
             idx_t* labels,
@@ -107,7 +103,6 @@ class GpuIndex : public faiss::Index {
     void search_and_reconstruct(
             idx_t n,
             const float* x,
-            // faiss::Index has idx_t for k
             idx_t k,
             float* distances,
             idx_t* labels,

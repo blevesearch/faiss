@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -234,6 +234,31 @@ size_t InterruptCallback::get_period_hint(size_t flops) {
     }
     // for 10M flops, it is reasonable to check once every 10 iterations
     return std::max((size_t)10 * 10 * 1000 * 1000 / (flops + 1), (size_t)1);
+}
+
+void TimeoutCallback::set_timeout(double timeout_in_seconds) {
+    timeout = timeout_in_seconds;
+    start = std::chrono::steady_clock::now();
+}
+
+bool TimeoutCallback::want_interrupt() {
+    if (timeout == 0) {
+        return false;
+    }
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<float, std::milli> duration = end - start;
+    float elapsed_in_seconds = duration.count() / 1000.0;
+    if (elapsed_in_seconds > timeout) {
+        timeout = 0;
+        return true;
+    }
+    return false;
+}
+
+void TimeoutCallback::reset(double timeout_in_seconds) {
+    auto tc(new faiss::TimeoutCallback());
+    faiss::InterruptCallback::instance.reset(tc);
+    tc->set_timeout(timeout_in_seconds);
 }
 
 } // namespace faiss

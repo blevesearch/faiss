@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,6 @@
 #include <faiss/impl/ResultHandler.h>
 #include <faiss/utils/distances.h>
 #include <faiss/utils/extra_distances.h>
-#include <faiss/utils/utils.h>
 
 namespace faiss {
 
@@ -116,6 +115,21 @@ void IndexIVFAdditiveQuantizer::sa_decode(
     }
 }
 
+void IndexIVFAdditiveQuantizer::reconstruct_from_offset(
+        int64_t list_no,
+        int64_t offset,
+        float* recons) const {
+    const uint8_t* code = invlists->get_single_code(list_no, offset);
+    aq->decode(code, recons, 1);
+    if (by_residual) {
+        std::vector<float> centroid(d);
+        quantizer->reconstruct(list_no, centroid.data());
+        for (int i = 0; i < d; ++i) {
+            recons[i] += centroid[i];
+        }
+    }
+}
+
 IndexIVFAdditiveQuantizer::~IndexIVFAdditiveQuantizer() = default;
 
 /*********************************************
@@ -171,10 +185,10 @@ struct AQInvertedListScannerDecompress : AQInvertedListScanner {
     float coarse_dis = 0;
 
     /// following codes come from this inverted list
-    void set_list(idx_t list_no, float coarse_dis) override {
-        AQInvertedListScanner::set_list(list_no, coarse_dis);
+    void set_list(idx_t list_no, float coarse_dis_2) override {
+        AQInvertedListScanner::set_list(list_no, coarse_dis_2);
         if (ia.by_residual) {
-            this->coarse_dis = coarse_dis;
+            this->coarse_dis = coarse_dis_2;
         }
     }
 
@@ -260,7 +274,7 @@ InvertedListScanner* IndexIVFAdditiveQuantizer::get_InvertedListScanner(
         return new AQInvertedListScannerLUT<false, AdditiveQuantizer::st>( \
                 *this, store_pairs);
                 A(ST_LUT_nonorm)
-                // A(ST_norm_from_LUT)
+                A(ST_norm_from_LUT)
                 A(ST_norm_float)
                 A(ST_norm_qint8)
                 A(ST_norm_qint4)

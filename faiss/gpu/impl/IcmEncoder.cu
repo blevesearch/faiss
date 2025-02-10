@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -313,9 +313,10 @@ void IcmEncoderImpl::encode(
             res.get(), makeTempAlloc(AllocType::Other, stream), {n});
 
     // compute how much shared memory we need
-    const int evaluateSmem = sizeof(float) * (dims + kWarpSize - 1) / kWarpSize;
+    int warpSize = getWarpSizeCurrentDevice();
+    const int evaluateSmem = sizeof(float) * (dims + warpSize - 1) / warpSize;
     const int encodeSmem =
-            sizeof(Pair<float, int>) * (K + kWarpSize - 1) / kWarpSize;
+            sizeof(Pair<float, int>) * (K + warpSize - 1) / warpSize;
 
     // compute the reconstruction error for each vector
     runEvaluation<<<n, dims, evaluateSmem, stream>>>(

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -21,7 +21,7 @@ namespace faiss {
 struct IndexBinaryHNSW : IndexBinary {
     typedef HNSW::storage_idx_t storage_idx_t;
 
-    // the link strcuture
+    // the link structure
     HNSW hnsw;
 
     // the sequential storage

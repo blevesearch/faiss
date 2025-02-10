@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -61,6 +61,7 @@ void ProductQuantizer::set_derived_values() {
             "The dimension of the vector (d) should be a multiple of the number of subquantizers (M)");
     dsub = d / M;
     code_size = (nbits * M + 7) / 8;
+    FAISS_THROW_IF_MSG(nbits > 24, "nbits larger than 24 is not practical.");
     ksub = 1 << nbits;
     centroids.resize(d * ksub);
     verbose = false;

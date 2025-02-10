@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -13,8 +13,6 @@
 #include <set>
 
 #include <omp.h>
-
-
 #include <memory>
 
 #include <faiss/IndexIVFPQ.h>
@@ -24,7 +22,6 @@
 #include <faiss/impl/pq4_fast_scan.h>
 #include <faiss/impl/simd_result_handlers.h>
 #include <faiss/invlists/BlockInvertedLists.h>
-#include <faiss/utils/distances.h>
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/quantize_lut.h>
 #include <faiss/utils/utils.h>
@@ -57,20 +54,24 @@ IndexIVFFastScan::IndexIVFFastScan() {
 }
 
 void IndexIVFFastScan::init_fastscan(
+        Quantizer* fine_quantizer,
         size_t M,
-        size_t nbits,
+        size_t nbits_init,
         size_t nlist,
         MetricType /* metric */,
-        int bbs) {
-    FAISS_THROW_IF_NOT(bbs % 32 == 0);
-    FAISS_THROW_IF_NOT(nbits == 4);
+        int bbs_2) {
+    FAISS_THROW_IF_NOT(bbs_2 % 32 == 0);
+    FAISS_THROW_IF_NOT(nbits_init == 4);
+    FAISS_THROW_IF_NOT(fine_quantizer->d == d);
 
+    this->fine_quantizer = fine_quantizer;
     this->M = M;
-    this->nbits = nbits;
-    this->bbs = bbs;
-    ksub = (1 << nbits);
+    this->nbits = nbits_init;
+    this->bbs = bbs_2;
+    ksub = (1 << nbits_init);
     M2 = roundup(M, 2);
     code_size = M2 / 2;
+    FAISS_THROW_IF_NOT(code_size == fine_quantizer->code_size);
 
     is_trained = false;
     replace_invlists(new BlockInvertedLists(nlist, get_CodePacker()), true);
@@ -212,7 +213,7 @@ void estimators_from_tables_generic(
         int64_t* heap_ids,
         const NormTableScaler* scaler) {
     using accu_t = typename C::T;
-    int nscale = scaler ? scaler->nscale : 0;
+    size_t nscale = scaler ? scaler->nscale : 0;
     for (size_t j = 0; j < ncodes; ++j) {
         BitstringReader bsr(codes + j * index.code_size, index.code_size);
         accu_t dis = bias;
@@ -271,6 +272,7 @@ void IndexIVFFastScan::compute_LUT_uint8(
         biases.resize(n * nprobe);
     }
 
+    // OMP for MSVC requires i to have signed integral type
 #pragma omp parallel for if (n > 100) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const float* t_in = dis_tables_float.get() + i * dim123;
@@ -307,11 +309,16 @@ void IndexIVFFastScan::search(
         idx_t k,
         float* distances,
         idx_t* labels,
-        const SearchParameters* params) const {
-    auto paramsi = dynamic_cast<const SearchParametersIVF*>(params);
-    FAISS_THROW_IF_NOT_MSG(!params || paramsi, "need IVFSearchParameters");
+        const SearchParameters* params_in) const {
+    const IVFSearchParameters* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const IVFSearchParameters*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(
+                params, "IndexIVFFastScan params have incorrect type");
+    }
+
     search_preassigned(
-            n, x, k, nullptr, nullptr, distances, labels, false, paramsi);
+            n, x, k, nullptr, nullptr, distances, labels, false, params);
 }
 
 void IndexIVFFastScan::search_preassigned(
@@ -327,18 +334,17 @@ void IndexIVFFastScan::search_preassigned(
         IndexIVFStats* stats) const {
     size_t nprobe = this->nprobe;
     if (params) {
-        FAISS_THROW_IF_NOT_MSG(
-                !params->quantizer_params, "quantizer params not supported");
         FAISS_THROW_IF_NOT(params->max_codes == 0);
         nprobe = params->nprobe;
     }
+
     FAISS_THROW_IF_NOT_MSG(
             !store_pairs, "store_pairs not supported for this index");
     FAISS_THROW_IF_NOT_MSG(!stats, "stats not supported for this index");
     FAISS_THROW_IF_NOT(k > 0);
 
     const CoarseQuantized cq = {nprobe, centroid_dis, assign};
-    search_dispatch_implem(n, x, k, distances, labels, cq, nullptr);
+    search_dispatch_implem(n, x, k, distances, labels, cq, nullptr, params);
 }
 
 void IndexIVFFastScan::range_search(
@@ -346,10 +352,18 @@ void IndexIVFFastScan::range_search(
         const float* x,
         float radius,
         RangeSearchResult* result,
-        const SearchParameters* params) const {
-    FAISS_THROW_IF_NOT(!params);
+        const SearchParameters* params_in) const {
+    size_t nprobe = this->nprobe;
+    const IVFSearchParameters* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const IVFSearchParameters*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(
+                params, "IndexIVFFastScan params have incorrect type");
+        nprobe = params->nprobe;
+    }
+
     const CoarseQuantized cq = {nprobe, nullptr, nullptr};
-    range_search_dispatch_implem(n, x, radius, *result, cq, nullptr);
+    range_search_dispatch_implem(n, x, radius, *result, cq, nullptr, params);
 }
 
 namespace {
@@ -360,17 +374,18 @@ ResultHandlerCompare<C, true>* make_knn_handler_fixC(
         idx_t n,
         idx_t k,
         float* distances,
-        idx_t* labels) {
+        idx_t* labels,
+        const IDSelector* sel) {
     using HeapHC = HeapHandler<C, true>;
     using ReservoirHC = ReservoirHandler<C, true>;
     using SingleResultHC = SingleResultHandler<C, true>;
 
     if (k == 1) {
-        return new SingleResultHC(n, 0, distances, labels);
+        return new SingleResultHC(n, 0, distances, labels, sel);
     } else if (impl % 2 == 0) {
-        return new HeapHC(n, 0, k, distances, labels);
+        return new HeapHC(n, 0, k, distances, labels, sel);
     } else /* if (impl % 2 == 1) */ {
-        return new ReservoirHC(n, 0, k, 2 * k, distances, labels);
+        return new ReservoirHC(n, 0, k, 2 * k, distances, labels, sel);
     }
 }
 
@@ -380,13 +395,14 @@ SIMDResultHandlerToFloat* make_knn_handler(
         idx_t n,
         idx_t k,
         float* distances,
-        idx_t* labels) {
+        idx_t* labels,
+        const IDSelector* sel) {
     if (is_max) {
         return make_knn_handler_fixC<CMax<uint16_t, int64_t>>(
-                impl, n, k, distances, labels);
+                impl, n, k, distances, labels, sel);
     } else {
         return make_knn_handler_fixC<CMin<uint16_t, int64_t>>(
-                impl, n, k, distances, labels);
+                impl, n, k, distances, labels, sel);
     }
 }
 
@@ -403,10 +419,20 @@ struct CoarseQuantizedWithBuffer : CoarseQuantized {
     std::vector<idx_t> ids_buffer;
     std::vector<float> dis_buffer;
 
-    void quantize(const Index* quantizer, idx_t n, const float* x) {
+    void quantize(
+            const Index* quantizer,
+            idx_t n,
+            const float* x,
+            const SearchParameters* quantizer_params) {
         dis_buffer.resize(nprobe * n);
         ids_buffer.resize(nprobe * n);
-        quantizer->search(n, x, nprobe, dis_buffer.data(), ids_buffer.data());
+        quantizer->search(
+                n,
+                x,
+                nprobe,
+                dis_buffer.data(),
+                ids_buffer.data(),
+                quantizer_params);
         dis = dis_buffer.data();
         ids = ids_buffer.data();
     }
@@ -422,8 +448,11 @@ struct CoarseQuantizedSlice : CoarseQuantizedWithBuffer {
         }
     }
 
-    void quantize_slice(const Index* quantizer, const float* x) {
-        quantize(quantizer, i1 - i0, x + quantizer->d * i0);
+    void quantize_slice(
+            const Index* quantizer,
+            const float* x,
+            const SearchParameters* quantizer_params) {
+        quantize(quantizer, i1 - i0, x + quantizer->d * i0, quantizer_params);
     }
 };
 
@@ -460,7 +489,13 @@ void IndexIVFFastScan::search_dispatch_implem(
         float* distances,
         idx_t* labels,
         const CoarseQuantized& cq_in,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
+    const idx_t nprobe = params ? params->nprobe : this->nprobe;
+    const IDSelector* sel = (params) ? params->sel : nullptr;
+    const SearchParameters* quantizer_params =
+            params ? params->quantizer_params : nullptr;
+
     bool is_max = !is_similarity_metric(metric_type);
     using RH = SIMDResultHandlerToFloat;
 
@@ -490,52 +525,70 @@ void IndexIVFFastScan::search_dispatch_implem(
     }
 
     CoarseQuantizedWithBuffer cq(cq_in);
+    cq.nprobe = nprobe;
 
     if (!cq.done() && !multiple_threads) {
         // we do the coarse quantization here execpt when search is
         // sliced over threads (then it is more efficient to have each thread do
         // its own coarse quantization)
-        cq.quantize(quantizer, n, x);
+        cq.quantize(quantizer, n, x, quantizer_params);
+        invlists->prefetch_lists(cq.ids, n * cq.nprobe);
     }
 
     if (impl == 1) {
         if (is_max) {
             search_implem_1<CMax<float, int64_t>>(
-                    n, x, k, distances, labels, cq, scaler);
+                    n, x, k, distances, labels, cq, scaler, params);
         } else {
             search_implem_1<CMin<float, int64_t>>(
-                    n, x, k, distances, labels, cq, scaler);
+                    n, x, k, distances, labels, cq, scaler, params);
         }
     } else if (impl == 2) {
         if (is_max) {
             search_implem_2<CMax<uint16_t, int64_t>>(
-                    n, x, k, distances, labels, cq, scaler);
+                    n, x, k, distances, labels, cq, scaler, params);
         } else {
             search_implem_2<CMin<uint16_t, int64_t>>(
-                    n, x, k, distances, labels, cq, scaler);
+                    n, x, k, distances, labels, cq, scaler, params);
         }
-
     } else if (impl >= 10 && impl <= 15) {
         size_t ndis = 0, nlist_visited = 0;
 
         if (!multiple_threads) {
             // clang-format off
             if (impl == 12 || impl == 13) {
-                std::unique_ptr<RH> handler(make_knn_handler(is_max, impl, n, k, distances, labels));
+                std::unique_ptr<RH> handler(
+                    make_knn_handler(
+                        is_max, 
+                        impl, 
+                        n, 
+                        k, 
+                        distances, 
+                        labels, sel
+                    )
+                );
                 search_implem_12(
                         n, x, *handler.get(),
-                        cq, &ndis, &nlist_visited, scaler);
-
+                        cq, &ndis, &nlist_visited, scaler, params);
             } else if (impl == 14 || impl == 15) {
-
                 search_implem_14(
                         n, x, k, distances, labels,
-                        cq, impl, scaler);
+                        cq, impl, scaler, params);
             } else {
-                std::unique_ptr<RH> handler(make_knn_handler(is_max, impl, n, k, distances, labels));
+                std::unique_ptr<RH> handler(
+                    make_knn_handler(
+                        is_max, 
+                        impl, 
+                        n, 
+                        k, 
+                        distances, 
+                        labels,
+                        sel
+                    )
+                );
                 search_implem_10(
                         n, x, *handler.get(), cq,
-                        &ndis, &nlist_visited, scaler);
+                        &ndis, &nlist_visited, scaler, params);
             }
             // clang-format on
         } else {
@@ -544,7 +597,8 @@ void IndexIVFFastScan::search_dispatch_implem(
             if (impl == 14 || impl == 15) {
                 // this might require slicing if there are too
                 // many queries (for now we keep this simple)
-                search_implem_14(n, x, k, distances, labels, cq, impl, scaler);
+                search_implem_14(
+                        n, x, k, distances, labels, cq, impl, scaler, params);
             } else {
 #pragma omp parallel for reduction(+ : ndis, nlist_visited) num_threads(num_omp_threads)
                 for (int slice = 0; slice < nslice; slice++) {
@@ -554,19 +608,19 @@ void IndexIVFFastScan::search_dispatch_implem(
                     idx_t* lab_i = labels + i0 * k;
                     CoarseQuantizedSlice cq_i(cq, i0, i1);
                     if (!cq_i.done()) {
-                        cq_i.quantize_slice(quantizer, x);
+                        cq_i.quantize_slice(quantizer, x, quantizer_params);
                     }
                     std::unique_ptr<RH> handler(make_knn_handler(
-                            is_max, impl, i1 - i0, k, dis_i, lab_i));
+                            is_max, impl, i1 - i0, k, dis_i, lab_i, sel));
                     // clang-format off
                     if (impl == 12 || impl == 13) {
                         search_implem_12(
                                 i1 - i0, x + i0 * d, *handler.get(),
-                                cq_i, &ndis, &nlist_visited, scaler);
+                                cq_i, &ndis, &nlist_visited, scaler, params);
                     } else {
                         search_implem_10(
                                 i1 - i0, x + i0 * d, *handler.get(),
-                                cq_i, &ndis, &nlist_visited, scaler);
+                                cq_i, &ndis, &nlist_visited, scaler, params);
                     }
                     // clang-format on
                 }
@@ -586,7 +640,13 @@ void IndexIVFFastScan::range_search_dispatch_implem(
         float radius,
         RangeSearchResult& rres,
         const CoarseQuantized& cq_in,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
+    // const idx_t nprobe = params ? params->nprobe : this->nprobe;
+    const IDSelector* sel = (params) ? params->sel : nullptr;
+    const SearchParameters* quantizer_params =
+            params ? params->quantizer_params : nullptr;
+
     bool is_max = !is_similarity_metric(metric_type);
 
     if (n == 0) {
@@ -614,7 +674,8 @@ void IndexIVFFastScan::range_search_dispatch_implem(
     }
 
     if (!multiple_threads && !cq.done()) {
-        cq.quantize(quantizer, n, x);
+        cq.quantize(quantizer, n, x, quantizer_params);
+        invlists->prefetch_lists(cq.ids, n * cq.nprobe);
     }
 
     size_t ndis = 0, nlist_visited = 0;
@@ -623,10 +684,10 @@ void IndexIVFFastScan::range_search_dispatch_implem(
         std::unique_ptr<SIMDResultHandlerToFloat> handler;
         if (is_max) {
             handler.reset(new RangeHandler<CMax<uint16_t, int64_t>, true>(
-                    rres, radius, 0));
+                    rres, radius, 0, sel));
         } else {
             handler.reset(new RangeHandler<CMin<uint16_t, int64_t>, true>(
-                    rres, radius, 0));
+                    rres, radius, 0, sel));
         }
         if (impl == 12) {
             search_implem_12(
@@ -635,7 +696,7 @@ void IndexIVFFastScan::range_search_dispatch_implem(
             search_implem_10(
                     n, x, *handler.get(), cq, &ndis, &nlist_visited, scaler);
         } else {
-            FAISS_THROW_FMT("Range search implem %d not impemented", impl);
+            FAISS_THROW_FMT("Range search implem %d not implemented", impl);
         }
     } else {
         // explicitly slice over threads
@@ -650,17 +711,17 @@ void IndexIVFFastScan::range_search_dispatch_implem(
                 idx_t i1 = n * (slice + 1) / nslice;
                 CoarseQuantizedSlice cq_i(cq, i0, i1);
                 if (!cq_i.done()) {
-                    cq_i.quantize_slice(quantizer, x);
+                    cq_i.quantize_slice(quantizer, x, quantizer_params);
                 }
                 std::unique_ptr<SIMDResultHandlerToFloat> handler;
                 if (is_max) {
                     handler.reset(new PartialRangeHandler<
                                   CMax<uint16_t, int64_t>,
-                                  true>(pres, radius, 0, i0, i1));
+                                  true>(pres, radius, 0, i0, i1, sel));
                 } else {
                     handler.reset(new PartialRangeHandler<
                                   CMin<uint16_t, int64_t>,
-                                  true>(pres, radius, 0, i0, i1));
+                                  true>(pres, radius, 0, i0, i1, sel));
                 }
 
                 if (impl == 12 || impl == 13) {
@@ -671,7 +732,8 @@ void IndexIVFFastScan::range_search_dispatch_implem(
                             cq_i,
                             &ndis,
                             &nlist_visited,
-                            scaler);
+                            scaler,
+                            params);
                 } else {
                     search_implem_10(
                             i1 - i0,
@@ -680,7 +742,8 @@ void IndexIVFFastScan::range_search_dispatch_implem(
                             cq_i,
                             &ndis,
                             &nlist_visited,
-                            scaler);
+                            scaler,
+                            params);
                 }
             }
             pres.finalize();
@@ -700,7 +763,8 @@ void IndexIVFFastScan::search_implem_1(
         float* distances,
         idx_t* labels,
         const CoarseQuantized& cq,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
     FAISS_THROW_IF_NOT(orig_invlists);
 
     size_t dim12 = ksub * M;
@@ -769,7 +833,8 @@ void IndexIVFFastScan::search_implem_2(
         float* distances,
         idx_t* labels,
         const CoarseQuantized& cq,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
     FAISS_THROW_IF_NOT(orig_invlists);
 
     size_t dim12 = ksub * M2;
@@ -851,7 +916,8 @@ void IndexIVFFastScan::search_implem_10(
         const CoarseQuantized& cq,
         size_t* ndis_out,
         size_t* nlist_out,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
     size_t dim12 = ksub * M2;
     AlignedTable<uint8_t> dis_tables;
     AlignedTable<uint16_t> biases;
@@ -912,6 +978,7 @@ void IndexIVFFastScan::search_implem_10(
             ndis++;
         }
     }
+
     handler.end();
     *ndis_out = ndis;
     *nlist_out = nlist;
@@ -924,7 +991,8 @@ void IndexIVFFastScan::search_implem_12(
         const CoarseQuantized& cq,
         size_t* ndis_out,
         size_t* nlist_out,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
     if (n == 0) { // does not work well with reservoir
         return;
     }
@@ -936,6 +1004,7 @@ void IndexIVFFastScan::search_implem_12(
     std::unique_ptr<float[]> normalizers(new float[2 * n]);
 
     compute_LUT_uint8(n, x, cq, dis_tables, biases, normalizers.get());
+
     handler.begin(skip & 16 ? nullptr : normalizers.get());
 
     struct QC {
@@ -961,13 +1030,14 @@ void IndexIVFFastScan::search_implem_12(
             return a.list_no < b.list_no;
         });
     }
+
     // prepare the result handlers
 
-    int qbs2 = this->qbs2 ? this->qbs2 : 11;
+    int actual_qbs2 = this->qbs2 ? this->qbs2 : 11;
 
     std::vector<uint16_t> tmp_bias;
     if (biases.get()) {
-        tmp_bias.resize(qbs2);
+        tmp_bias.resize(actual_qbs2);
         handler.dbias = tmp_bias.data();
     }
 
@@ -980,7 +1050,7 @@ void IndexIVFFastScan::search_implem_12(
         int list_no = qcs[i0].list_no;
         size_t i1 = i0 + 1;
 
-        while (i1 < qcs.size() && i1 < i0 + qbs2) {
+        while (i1 < qcs.size() && i1 < i0 + actual_qbs2) {
             if (qcs[i1].list_no != list_no) {
                 break;
             }
@@ -1000,7 +1070,7 @@ void IndexIVFFastScan::search_implem_12(
         std::vector<int> q_map(nc), lut_entries(nc);
         AlignedTable<uint8_t> LUT(nc * dim12);
         memset(LUT.get(), -1, nc * dim12);
-        int qbs = pq4_preferred_qbs(nc);
+        int qbs_for_list = pq4_preferred_qbs(nc);
 
         for (size_t i = i0; i < i1; i++) {
             const QC& qc = qcs[i];
@@ -1012,7 +1082,11 @@ void IndexIVFFastScan::search_implem_12(
             }
         }
         pq4_pack_LUT_qbs_q_map(
-                qbs, M2, dis_tables.get(), lut_entries.data(), LUT.get());
+                qbs_for_list,
+                M2,
+                dis_tables.get(),
+                lut_entries.data(),
+                LUT.get());
 
         // access the inverted list
 
@@ -1028,7 +1102,13 @@ void IndexIVFFastScan::search_implem_12(
         handler.id_map = ids.get();
 
         pq4_accumulate_loop_qbs(
-                qbs, list_size, M2, codes.get(), LUT.get(), handler, scaler);
+                qbs_for_list,
+                list_size,
+                M2,
+                codes.get(),
+                LUT.get(),
+                handler,
+                scaler);
         // prepare for next loop
         i0 = i1;
     }
@@ -1052,11 +1132,14 @@ void IndexIVFFastScan::search_implem_14(
         idx_t* labels,
         const CoarseQuantized& cq,
         int impl,
-        const NormTableScaler* scaler) const {
+        const NormTableScaler* scaler,
+        const IVFSearchParameters* params) const {
     if (n == 0) { // does not work well with reservoir
         return;
     }
     FAISS_THROW_IF_NOT(bbs == 32);
+
+    const IDSelector* sel = params ? params->sel : nullptr;
 
     size_t dim12 = ksub * M2;
     AlignedTable<uint8_t> dis_tables;
@@ -1160,16 +1243,17 @@ void IndexIVFFastScan::search_implem_14(
 
         // prepare the result handlers
         std::unique_ptr<SIMDResultHandlerToFloat> handler(make_knn_handler(
-                is_max, impl, n, k, local_dis.data(), local_idx.data()));
+                is_max, impl, n, k, local_dis.data(), local_idx.data(), sel));
         handler->begin(normalizers.get());
 
-        int qbs2 = this->qbs2 ? this->qbs2 : 11;
+        int actual_qbs2 = this->qbs2 ? this->qbs2 : 11;
 
         std::vector<uint16_t> tmp_bias;
         if (biases.get()) {
-            tmp_bias.resize(qbs2);
+            tmp_bias.resize(actual_qbs2);
             handler->dbias = tmp_bias.data();
         }
+
         std::set<int> q_set;
         uint64_t t_copy_pack = 0, t_scan = 0;
 #pragma omp for schedule(dynamic)
@@ -1186,7 +1270,7 @@ void IndexIVFFastScan::search_implem_14(
             std::vector<int> q_map(nc), lut_entries(nc);
             AlignedTable<uint8_t> LUT(nc * dim12);
             memset(LUT.get(), -1, nc * dim12);
-            int qbs = pq4_preferred_qbs(nc);
+            int qbs_for_list = pq4_preferred_qbs(nc);
 
             for (size_t i = i0; i < i1; i++) {
                 const QC& qc = qcs[i];
@@ -1199,7 +1283,11 @@ void IndexIVFFastScan::search_implem_14(
                 }
             }
             pq4_pack_LUT_qbs_q_map(
-                    qbs, M2, dis_tables.get(), lut_entries.data(), LUT.get());
+                    qbs_for_list,
+                    M2,
+                    dis_tables.get(),
+                    lut_entries.data(),
+                    LUT.get());
 
             // access the inverted list
 
@@ -1215,7 +1303,7 @@ void IndexIVFFastScan::search_implem_14(
             handler->id_map = ids.get();
 
             pq4_accumulate_loop_qbs(
-                    qbs,
+                    qbs_for_list,
                     list_size,
                     M2,
                     codes.get(),
@@ -1270,34 +1358,30 @@ void IndexIVFFastScan::reconstruct_from_offset(
         int64_t offset,
         float* recons) const {
     // unpack codes
+    size_t coarse_size = coarse_code_size();
+    std::vector<uint8_t> code(coarse_size + code_size, 0);
+    encode_listno(list_no, code.data());
     InvertedLists::ScopedCodes list_codes(invlists, list_no);
-    std::vector<uint8_t> code(code_size, 0);
-    BitstringWriter bsw(code.data(), code_size);
+    BitstringWriter bsw(code.data() + coarse_size, code_size);
+
     for (size_t m = 0; m < M; m++) {
         uint8_t c =
                 pq4_get_packed_element(list_codes.get(), bbs, M2, offset, m);
         bsw.write(c, nbits);
     }
-    sa_decode(1, code.data(), recons);
 
-    // add centroid to it
-    if (by_residual) {
-        std::vector<float> centroid(d);
-        quantizer->reconstruct(list_no, centroid.data());
-        for (int i = 0; i < d; ++i) {
-            recons[i] += centroid[i];
-        }
-    }
+    sa_decode(1, code.data(), recons);
 }
 
 void IndexIVFFastScan::reconstruct_orig_invlists() {
     FAISS_THROW_IF_NOT(orig_invlists != nullptr);
     FAISS_THROW_IF_NOT(orig_invlists->list_size(0) == 0);
 
-    for (size_t list_no = 0; list_no < nlist; list_no++) {
+#pragma omp parallel for if (nlist > 100)
+    for (idx_t list_no = 0; list_no < nlist; list_no++) {
         InvertedLists::ScopedCodes codes(invlists, list_no);
         InvertedLists::ScopedIds ids(invlists, list_no);
-        size_t list_size = orig_invlists->list_size(list_no);
+        size_t list_size = invlists->list_size(list_no);
         std::vector<uint8_t> code(code_size, 0);
 
         for (size_t offset = 0; offset < list_size; offset++) {
@@ -1313,6 +1397,30 @@ void IndexIVFFastScan::reconstruct_orig_invlists() {
             idx_t id = ids.get()[offset];
 
             orig_invlists->add_entry(list_no, id, code.data());
+        }
+    }
+}
+
+void IndexIVFFastScan::sa_decode(idx_t n, const uint8_t* codes, float* x)
+        const {
+    size_t coarse_size = coarse_code_size();
+
+#pragma omp parallel if (n > 1)
+    {
+        std::vector<float> residual(d);
+
+#pragma omp for
+        for (idx_t i = 0; i < n; i++) {
+            const uint8_t* code = codes + i * (code_size + coarse_size);
+            int64_t list_no = decode_listno(code);
+            float* xi = x + i * d;
+            fine_quantizer->decode(code + coarse_size, xi, 1);
+            if (by_residual) {
+                quantizer->reconstruct(list_no, residual.data());
+                for (size_t j = 0; j < d; j++) {
+                    xi[j] += residual[j];
+                }
+            }
         }
     }
 }

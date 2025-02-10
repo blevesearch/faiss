@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -13,6 +13,7 @@ import faiss
 from common_faiss_tests import get_dataset_2
 from faiss.contrib.datasets import SyntheticDataset
 from faiss.contrib.inspect_tools import get_additive_quantizer_codebooks
+
 
 class TestEncodeDecode(unittest.TestCase):
 
@@ -151,7 +152,6 @@ class TestAccuracy(unittest.TestCase):
             err = ((x - x2) ** 2).sum()
             errs.append(err)
 
-        print(errs)
         self.assertGreater(errs[0], errs[1])
 
         self.assertGreater(max_errs[0], errs[0])
@@ -173,6 +173,9 @@ class TestAccuracy(unittest.TestCase):
 
     def test_SQ3(self):
         self.compare_accuracy('SQ8', 'SQfp16')
+
+    def test_SQ4(self):
+        self.compare_accuracy('SQ8', 'SQbf16')
 
     def test_PQ(self):
         self.compare_accuracy('PQ6x8np', 'PQ8x8np')
@@ -214,7 +217,6 @@ class LatticeTest(unittest.TestCase):
             code = repeats.encode(swig_ptr(vec))
             vec2 = np.zeros(dim, dtype='float32')
             repeats.decode(code, swig_ptr(vec2))
-            # print(vec2)
             assert np.all(vec == vec2)
 
     def test_ZnSphereCodec_encode_centroid(self):
@@ -222,7 +224,6 @@ class LatticeTest(unittest.TestCase):
         r2 = 5
         ref_codec = faiss.ZnSphereCodec(dim, r2)
         codec = faiss.ZnSphereCodecRec(dim, r2)
-        # print(ref_codec.nv, codec.nv)
         assert ref_codec.nv == codec.nv
         s = set()
         for i in range(ref_codec.nv):
@@ -237,7 +238,6 @@ class LatticeTest(unittest.TestCase):
         dim = 16
         r2 = 6
         codec = faiss.ZnSphereCodecRec(dim, r2)
-        # print("nv=", codec.nv)
         for i in range(codec.nv):
             c = np.zeros(dim, dtype='float32')
             codec.decode(i, swig_ptr(c))
@@ -263,6 +263,19 @@ class LatticeTest(unittest.TestCase):
 
     def test_ZnSphereCodecAlt24(self):
         self.run_ZnSphereCodecAlt(24, 14)
+
+    def test_lattice_index(self):
+        index = faiss.index_factory(96, "ZnLattice3x10_4")
+        rs = np.random.RandomState(123)
+        xq = rs.randn(10, 96).astype('float32')
+        xb = rs.randn(20, 96).astype('float32')
+        index.train(xb)
+        index.add(xb)
+        D, I = index.search(xq, 5)
+        for i in range(10):
+            recons = index.reconstruct_batch(I[i, :])
+            ref_dis = ((recons - xq[i]) ** 2).sum(1)
+            np.testing.assert_allclose(D[i, :], ref_dis, atol=1e-4)
 
 
 class TestBitstring(unittest.TestCase):
@@ -300,15 +313,10 @@ class TestBitstring(unittest.TestCase):
         for i in range(nbyte):
             self.assertTrue(((bignum >> (i * 8)) & 255) == bs[i])
 
-        #for i in range(nbyte):
-        #    print(bin(bs[i] + 256)[3:], end=' ')
-        # print()
-
         br = faiss.BitstringReader(swig_ptr(bs), nbyte)
 
         for nbit, xref in ctrl:
             xnew = br.read(nbit)
-            # print('nbit %d xref %x xnew %x' % (nbit, xref, xnew))
             self.assertTrue(xnew == xref)
 
     def test_arrays(self):
@@ -350,6 +358,27 @@ class TestIVFTransfer(unittest.TestCase):
 
         np.testing.assert_array_equal(Iref, Inew)
         np.testing.assert_array_equal(Dref, Dnew)
+
+
+class TestIDMap(unittest.TestCase):
+    def test_idmap(self):
+        ds = SyntheticDataset(32, 2000, 200, 100)
+        ids = np.random.randint(10000, size=ds.nb, dtype='int64')
+        index = faiss.index_factory(ds.d, "IDMap2,PQ8x2")
+        index.train(ds.get_train())
+        index.add_with_ids(ds.get_database(), ids)
+        Dref, Iref = index.search(ds.get_queries(), 10)
+
+        index.reset()
+
+        index.train(ds.get_train())
+        codes = index.index.sa_encode(ds.get_database())
+        index.add_sa_codes(codes, ids)
+        Dnew, Inew = index.search(ds.get_queries(), 10)
+
+        np.testing.assert_array_equal(Iref, Inew)
+        np.testing.assert_array_equal(Dref, Dnew)
+        
 
 
 class TestRefine(unittest.TestCase):

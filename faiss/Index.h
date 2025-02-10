@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,8 +17,20 @@
 #include <typeinfo>
 
 #define FAISS_VERSION_MAJOR 1
-#define FAISS_VERSION_MINOR 8
+#define FAISS_VERSION_MINOR 10
 #define FAISS_VERSION_PATCH 0
+
+// Macro to combine the version components into a single string
+#ifndef FAISS_STRINGIFY
+#define FAISS_STRINGIFY(ARG) #ARG
+#endif
+#ifndef FAISS_TOSTRING
+#define FAISS_TOSTRING(ARG) FAISS_STRINGIFY(ARG)
+#endif
+#define VERSION_STRING                                          \
+    FAISS_TOSTRING(FAISS_VERSION_MAJOR)                         \
+    "." FAISS_TOSTRING(FAISS_VERSION_MINOR) "." FAISS_TOSTRING( \
+            FAISS_VERSION_PATCH)
 
 /**
  * @namespace faiss
@@ -38,8 +50,8 @@
 
 namespace faiss {
 
-/// Forward declarations see impl/AuxIndexStructures.h, impl/IDSelector.h and
-/// impl/DistanceComputer.h
+/// Forward declarations see impl/AuxIndexStructures.h, impl/IDSelector.h
+/// and impl/DistanceComputer.h
 struct IDSelector;
 struct RangeSearchResult;
 struct DistanceComputer;
@@ -56,7 +68,8 @@ struct SearchParameters {
     virtual ~SearchParameters() {}
 };
 
-/** Abstract structure for an index, supports adding vectors and searching them.
+/** Abstract structure for an index, supports adding vectors and searching
+ * them.
  *
  * All vectors provided at add or search time are 32-bit float arrays,
  * although the internal representation may vary.
@@ -154,7 +167,8 @@ struct Index {
 
     /** return the indexes of the k vectors closest to the query x.
      *
-     * This function is identical as search but only return labels of neighbors.
+     * This function is identical as search but only return labels of
+     * neighbors.
      * @param n           number of vectors
      * @param x           input vectors to search, size n * d
      * @param labels      output labels of the NNs, size n*k
@@ -179,7 +193,8 @@ struct Index {
      */
     virtual void reconstruct(idx_t key, float* recons) const;
 
-    /** Reconstruct several stored vectors (or an approximation if lossy coding)
+    /** Reconstruct several stored vectors (or an approximation if lossy
+     * coding)
      *
      * this function may not be defined for some indexes
      * @param n           number of vectors to reconstruct
@@ -292,6 +307,13 @@ struct Index {
      * trained in the same way and have the same
      * parameters). Otherwise throw. */
     virtual void check_compatible_for_merge(const Index& otherIndex) const;
+
+    /** Add vectors that are computed with the standalone codec
+     *
+     * @param codes  codes to add size n * sa_code_size()
+     * @param xids   corresponding ids, size n
+     */
+    virtual void add_sa_codes(idx_t n, const uint8_t* codes, const idx_t* xids);
 };
 
 } // namespace faiss

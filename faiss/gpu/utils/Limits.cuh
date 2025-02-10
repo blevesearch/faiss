@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -33,7 +33,7 @@ struct Limits<float> {
 };
 
 inline __device__ __host__ half kGetHalf(unsigned short v) {
-#if CUDA_VERSION >= 9000
+#if CUDA_VERSION >= 9000 || defined(USE_AMD_ROCM)
     __half_raw h;
     h.x = v;
     return __half(h);

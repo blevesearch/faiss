@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,6 +15,11 @@
 
 #include <faiss/impl/ProductQuantizer.h>
 #include <faiss/impl/code_distance/code_distance-generic.h>
+
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=78782
+#if defined(__GNUC__) && __GNUC__ < 9
+#define _mm_loadu_si64(x) (_mm_loadl_epi64((__m128i_u*)x))
+#endif
 
 namespace {
 

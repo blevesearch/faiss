@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -8,7 +8,11 @@
 #include <faiss/gpu/utils/DeviceUtils.h>
 #include <faiss/gpu/utils/StaticUtils.h>
 #include <faiss/impl/FaissAssert.h>
+#ifdef USE_AMD_ROCM
+#define CUDART_NAN_F __int_as_float(0x7fffffff)
+#else
 #include <math_constants.h> // in CUDA SDK, for CUDART_NAN_F
+#endif
 #include <faiss/gpu/impl/VectorResidual.cuh>
 #include <faiss/gpu/utils/ConversionOperators.cuh>
 #include <faiss/gpu/utils/Tensor.cuh>
@@ -110,10 +114,8 @@ __global__ void gatherReconstructByIds(
     auto vec = vecs[id];
     auto outVec = out[blockIdx.x];
 
-    Convert<T, float> conv;
-
     for (idx_t i = threadIdx.x; i < vecs.getSize(1); i += blockDim.x) {
-        outVec[i] = id == idx_t(-1) ? 0.0f : conv(vec[i]);
+        outVec[i] = id == idx_t(-1) ? 0.0f : ConvertTo<float>::to(vec[i]);
     }
 }
 
@@ -127,10 +129,8 @@ __global__ void gatherReconstructByRange(
     auto vec = vecs[id];
     auto outVec = out[blockIdx.x];
 
-    Convert<T, float> conv;
-
     for (idx_t i = threadIdx.x; i < vecs.getSize(1); i += blockDim.x) {
-        outVec[i] = id == idx_t(-1) ? 0.0f : conv(vec[i]);
+        outVec[i] = id == idx_t(-1) ? 0.0f : ConvertTo<float>::to(vec[i]);
     }
 }
 
