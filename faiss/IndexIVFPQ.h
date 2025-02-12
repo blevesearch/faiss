@@ -144,8 +144,12 @@ struct IndexIVFPQ : IndexIVF {
         const float* x,
         idx_t n,
         const uint8_t* codes,
-        float* dists) const override;
+        float* dists,
+        float* dist_table) const override;
 
+    void compute_distance_table(
+        const float* x,
+        float* dist_table) const override;
 
     IndexIVFPQ();
 };

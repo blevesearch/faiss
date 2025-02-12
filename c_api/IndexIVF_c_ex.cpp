@@ -88,10 +88,23 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const float* x,
         idx_t n,
         const uint8_t* codes,
-        float* dists) {
+        float* dists,
+        float* dist_table) {
     try {
         reinterpret_cast<IndexIVF*>(index)->compute_distance_to_codes_for_list(
-               list_no, x, n, codes, dists);
+               list_no, x, n, codes, dists, dist_table);
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVF_compute_distance_table(
+        FaissIndexIVF* index,
+        const float* x,
+        float* dist_table) {
+    try {
+        reinterpret_cast<IndexIVF*>(index)->compute_distance_table(
+               x, dist_table);
         return 0;
     }
     CATCH_AND_HANDLE

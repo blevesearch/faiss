@@ -81,6 +81,7 @@ int faiss_IndexIVF_search_preassigned_with_params(
     @param n - number of codes
     @param codes - input codes
     @param dists - output computed distances
+    @param dist_table - input precomputed distance table for PQ
 */
 
 int faiss_IndexIVF_compute_distance_to_codes_for_list(
@@ -89,7 +90,8 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const float* x,
         idx_t n,
         const uint8_t* codes,
-        float* dists);
+        float* dists,
+        float* dist_table);
 
 /*
     Given multiple vector IDs, retrieve the corresponding list (cluster) IDs  
@@ -107,6 +109,20 @@ int faiss_get_lists_for_keys(
         idx_t* keys,
         size_t n_keys,
         idx_t* lists);
+
+/*
+    Given a query vector x, compute distance table and
+    return to the caller.
+
+    @param x - input query vector
+    @param dist_table - output precomputed distance table for PQ
+
+*/
+
+int faiss_IndexIVF_compute_distance_table(
+        FaissIndexIVF* index,
+        const float* x,
+        float* dist_table);
 
 #ifdef __cplusplus
 }
