@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -19,7 +19,6 @@
 #include <cinttypes>
 #include <cstdio>
 #include <limits>
-#include <memory>
 
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
@@ -67,8 +66,8 @@ void Level1Quantizer::train_q1(
     } else if (quantizer_trains_alone == 1) {
         if (verbose)
             printf("IVF quantizer trains alone...\n");
-        quantizer->train(n, x);
         quantizer->verbose = verbose;
+        quantizer->train(n, x);
         FAISS_THROW_IF_NOT_MSG(
                 quantizer->ntotal == nlist,
                 "nlist not consistent with quantizer size");
@@ -445,7 +444,7 @@ void IndexIVF::search_preassigned(
         max_codes = unlimited_list_size;
     }
 
-    bool do_parallel = omp_get_max_threads() >= 2 &&
+    [[maybe_unused]] bool do_parallel = omp_get_max_threads() >= 2 &&
             (pmode == 0           ? false
                      : pmode == 3 ? n > 1
                      : pmode == 1 ? nprobe > 1
@@ -785,7 +784,7 @@ void IndexIVF::range_search_preassigned(
 
     int pmode = this->parallel_mode & ~PARALLEL_MODE_NO_HEAP_INIT;
     // don't start parallel section if single query
-    bool do_parallel = omp_get_max_threads() >= 2 &&
+    [[maybe_unused]] bool do_parallel = omp_get_max_threads() >= 2 &&
             (pmode == 3           ? false
                      : pmode == 0 ? nx > 1
                      : pmode == 1 ? nprobe > 1

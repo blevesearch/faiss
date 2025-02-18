@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -86,6 +86,8 @@ class GpuIndexIVFFlat : public GpuIndexIVF {
 
     /// Trains the coarse quantizer based on the given vector data
     void train(idx_t n, const float* x) override;
+
+    void reconstruct_n(idx_t i0, idx_t n, float* out) const override;
 
    protected:
     /// Initialize appropriate index

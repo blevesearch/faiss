@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -24,7 +24,6 @@
 #include <faiss/utils/hamming.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -364,7 +363,7 @@ void fvec2bitvec(const float* __restrict x, uint8_t* __restrict b, size_t d) {
 }
 
 /* Same but for n vectors.
-   Ensure that the ouptut b is byte-aligned (pad with 0s). */
+   Ensure that the output b is byte-aligned (pad with 0s). */
 void fvecs2bitvecs(
         const float* __restrict x,
         uint8_t* __restrict b,

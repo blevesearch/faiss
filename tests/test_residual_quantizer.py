@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -211,7 +211,6 @@ class TestResidualQuantizer(unittest.TestCase):
 
         # in practice RQ is often better than PQ but it does not the case here, so just check
         # that we are within some factor.
-        # print(err_pq, err_rq)
         self.assertLess(err_rq, err_pq * 1.2)
 
     def test_beam_size(self):
@@ -321,10 +320,8 @@ def retrain_AQ_codebook(index, xt):
 
     x_decoded = index.sa_decode(codes_packed)
     MSE = ((xt - x_decoded) ** 2).sum() / n
-    # print(f"Initial MSE on training set: {MSE:g}")
 
     codes = unpack_codes(index.rq, codes_packed)
-    # print("ref codes", codes[0])
     codebook_offsets = faiss.vector_to_array(rq.codebook_offsets)
 
     # build sparse code matrix (represented as a dense matrix)
@@ -343,7 +340,6 @@ def retrain_AQ_codebook(index, xt):
         B, residuals, rank, singvals = scipy.linalg.lstsq(C, xt, )
 
     MSE = ((C @ B - xt) ** 2).sum() / n
-    # print(f"MSE after retrainining: {MSE:g}")
 
     # replace codebook
     # faiss.copy_array_to_vector(B.astype('float32').ravel(), index.rq.codebooks)
@@ -461,6 +457,37 @@ class TestIndexResidualQuantizer(unittest.TestCase):
         # recalls are {1: 0.05, 10: 0.37, 100: 0.37}
         self.assertGreater(recalls[10], 0.35)
 
+    def do_exact_search_equiv(self, norm_type):
+        """ searching with this normalization should yield
+        exactly the same results as decompression (because the
+        norms are exact) """
+        ds = datasets.SyntheticDataset(32, 1000, 1000, 100)
+
+        # decompresses by default
+        ir = faiss.IndexResidualQuantizer(ds.d, 3, 6)
+        ir.rq.train_type = faiss.ResidualQuantizer.Train_default
+        ir.train(ds.get_train())
+        ir.add(ds.get_database())
+        Dref, Iref = ir.search(ds.get_queries(), 10)
+
+        ir2 = faiss.IndexResidualQuantizer(
+            ds.d, 3, 6, faiss.METRIC_L2, norm_type)
+
+        # assumes training is reproducible
+        ir2.rq.train_type = faiss.ResidualQuantizer.Train_default
+        ir2.train(ds.get_train())
+        ir2.add(ds.get_database())
+        D, I = ir2.search(ds.get_queries(), 10)
+
+        np.testing.assert_allclose(D, Dref, atol=1e-5)
+        np.testing.assert_array_equal(I, Iref)
+
+    def test_exact_equiv_norm_float(self):
+        self.do_exact_search_equiv(faiss.AdditiveQuantizer.ST_norm_float)
+
+    def test_exact_equiv_norm_from_LUT(self):
+        self.do_exact_search_equiv(faiss.AdditiveQuantizer.ST_norm_from_LUT)
+
     def test_reestimate_codebook(self):
         ds = datasets.SyntheticDataset(32, 1000, 1000, 100)
 
@@ -503,7 +530,6 @@ class TestIndexResidualQuantizer(unittest.TestCase):
         xt_decoded = ir.sa_decode(ir.sa_encode(xt))
         err_after_refined = ((xt - xt_decoded) ** 2).sum()
 
-        # print(err_before, err_after_refined)
         # ref run 7474.98 / 7006.1777
         self.assertGreater(err_before, err_after_refined * 1.06)
 
@@ -781,7 +807,6 @@ class TestIndexResidualQuantizerSearch(unittest.TestCase):
             else:
                 inter_2 = faiss.eval_intersection(I2, gt)
                 self.assertGreaterEqual(inter_ref, inter_2)
-                # print(st, inter_ref, inter_2)
 
 
 ###########################################################
@@ -814,7 +839,6 @@ class TestIVFResidualQuantizer(unittest.TestCase):
             index.nprobe = nprobe
             D, I = index.search(ds.get_queries(), 10)
             inter = faiss.eval_intersection(I, ds.get_groundtruth(10))
-            # print(st, "nprobe=", nprobe, "inter=", inter)
             inters.append(inter)
 
         # do a little I/O test
@@ -865,6 +889,9 @@ class TestIVFResidualQuantizer(unittest.TestCase):
         self.do_test_accuracy(True, faiss.AdditiveQuantizer.ST_norm_cqint8)
         self.do_test_accuracy(True, faiss.AdditiveQuantizer.ST_norm_cqint4)
 
+    def test_norm_from_LUT(self):
+        self.do_test_accuracy(True, faiss.AdditiveQuantizer.ST_norm_from_LUT)
+
     def test_factory(self):
         index = faiss.index_factory(12, "IVF1024,RQ8x8_Nfloat")
         self.assertEqual(index.nlist, 1024)
@@ -909,18 +936,13 @@ class TestIVFResidualQuantizer(unittest.TestCase):
             D, I = index.search(ds.get_queries(), 10)
             index.rq.search_type = faiss.AdditiveQuantizer.ST_LUT_nonorm
             D2, I2 = index.search(ds.get_queries(), 10)
-            # print(D[:5] - D2[:5])
-            # print(I[:5])
             np.testing.assert_array_almost_equal(D, D2, decimal=5)
             # there are many ties because the codes are so short
             self.assertLess((I != I2).sum(), I.size * 0.1)
 
             # D2, I2 = index2.search(ds.get_queries(), 10)
-            # print(D[:5])
-            # print(D2[:5])
 
             inter = faiss.eval_intersection(I, ds.get_groundtruth(10))
-            # print("nprobe=", nprobe, "inter=", inter)
             inters.append(inter)
         self.assertTrue(np.all(inters[1:4] >= inters[:3]))
 
@@ -978,8 +1000,6 @@ def beam_search_encode_step_tab(codes, L, distances, codebook_cross_prods_i,
         for i in range(n):
             for b in range(beam_size):
                 dotprods[i, b, :] += cb[codes[i, b, j]]
-
-    # print("dps", dotprods[:3, :2, :4])
 
     new_distances += 2 * dotprods
     cent_distances = new_distances
@@ -1119,7 +1139,7 @@ class TestCrossCodebookComputations(unittest.TestCase):
             ofs += kk * K
             np.testing.assert_allclose(py_table, cpp_table, atol=1e-5)
 
-        cent_norms = faiss.vector_to_array(rq.cent_norms)
+        cent_norms = faiss.vector_to_array(rq.centroid_norms)
         np.testing.assert_array_almost_equal(
             np.hstack(cent_norms_ref), cent_norms, decimal=5)
 
@@ -1166,7 +1186,6 @@ class TestProductResidualQuantizer(unittest.TestCase):
         pq.train(xt)
         err_pq = eval_codec(pq, xb)
 
-        # print(err_prq, err_pq)
         self.assertLess(err_prq, err_pq)
 
     def test_with_rq(self):
@@ -1187,7 +1206,6 @@ class TestProductResidualQuantizer(unittest.TestCase):
         rq.train(xt)
         err_rq = eval_codec(rq, xb)
 
-        # print(err_prq, err_rq)
         self.assertEqual(err_prq, err_rq)
 
 
@@ -1271,7 +1289,6 @@ class TestIndexIVFProductResidualQuantizer(unittest.TestCase):
         """check that the error is in the same ballpark as RQ."""
         inter1 = self.eval_index_accuracy("IVF100,PRQ2x2x5_Nqint8")
         inter2 = self.eval_index_accuracy("IVF100,RQ4x5_Nqint8")
-        # print(inter1, inter2)  # 392 vs 374
         self.assertGreaterEqual(inter1 * 1.1, inter2)
 
     def test_factory(self):

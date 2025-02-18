@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -18,11 +18,7 @@
 #include <faiss/impl/IDSelector.h>
 #include <faiss/impl/LookupTableScaler.h>
 #include <faiss/impl/ResultHandler.h>
-#include <faiss/utils/distances.h>
-#include <faiss/utils/extra_distances.h>
 #include <faiss/utils/hamming.h>
-#include <faiss/utils/random.h>
-#include <faiss/utils/utils.h>
 
 #include <faiss/impl/pq4_fast_scan.h>
 #include <faiss/impl/simd_result_handlers.h>
@@ -38,22 +34,22 @@ inline size_t roundup(size_t a, size_t b) {
 
 void IndexFastScan::init_fastscan(
         int d,
-        size_t M_2,
-        size_t nbits_2,
+        size_t M_init,
+        size_t nbits_init,
         MetricType metric,
         int bbs) {
-    FAISS_THROW_IF_NOT(nbits_2 == 4);
+    FAISS_THROW_IF_NOT(nbits_init == 4);
     FAISS_THROW_IF_NOT(bbs % 32 == 0);
     this->d = d;
-    this->M = M_2;
-    this->nbits = nbits_2;
+    this->M = M_init;
+    this->nbits = nbits_init;
     this->metric_type = metric;
     this->bbs = bbs;
-    ksub = (1 << nbits_2);
+    ksub = (1 << nbits_init);
 
-    code_size = (M_2 * nbits_2 + 7) / 8;
+    code_size = (M_init * nbits_init + 7) / 8;
     ntotal = ntotal2 = 0;
-    M2 = roundup(M_2, 2);
+    M2 = roundup(M_init, 2);
     is_trained = false;
 }
 
@@ -190,6 +186,7 @@ void estimators_from_tables_generic(
                 dt += index.ksub;
             }
         }
+
         if (C::cmp(heap_dis[0], dis)) {
             heap_pop<C>(k, heap_dis, heap_ids);
             heap_push<C>(k, heap_dis, heap_ids, dis, j);
@@ -204,17 +201,18 @@ ResultHandlerCompare<C, false>* make_knn_handler(
         idx_t k,
         size_t ntotal,
         float* distances,
-        idx_t* labels) {
+        idx_t* labels,
+        const IDSelector* sel = nullptr) {
     using HeapHC = HeapHandler<C, false>;
     using ReservoirHC = ReservoirHandler<C, false>;
     using SingleResultHC = SingleResultHandler<C, false>;
 
     if (k == 1) {
-        return new SingleResultHC(n, ntotal, distances, labels);
+        return new SingleResultHC(n, ntotal, distances, labels, sel);
     } else if (impl % 2 == 0) {
-        return new HeapHC(n, ntotal, k, distances, labels);
+        return new HeapHC(n, ntotal, k, distances, labels, sel);
     } else /* if (impl % 2 == 1) */ {
-        return new ReservoirHC(n, ntotal, k, 2 * k, distances, labels);
+        return new ReservoirHC(n, ntotal, k, 2 * k, distances, labels, sel);
     }
 }
 
@@ -547,6 +545,22 @@ void IndexFastScan::search_implem_14(
         handler->end();
     }
 }
+
+template void IndexFastScan::search_dispatch_implem<true>(
+        idx_t n,
+        const float* x,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const NormTableScaler* scaler) const;
+
+template void IndexFastScan::search_dispatch_implem<false>(
+        idx_t n,
+        const float* x,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const NormTableScaler* scaler) const;
 
 void IndexFastScan::reconstruct(idx_t key, float* recons) const {
     std::vector<uint8_t> code(code_size, 0);

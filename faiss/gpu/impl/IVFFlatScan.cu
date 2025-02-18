@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -211,8 +211,9 @@ void runIVFFlatScanTile(
     runCalcListOffsets(
             res, listIds, listLengths, prefixSumOffsets, thrustMem, stream);
 
+    int warpSize = getWarpSizeCurrentDevice();
     auto grid = dim3(listIds.getSize(1), listIds.getSize(0));
-    auto block = dim3(kWarpSize * kIVFFlatScanWarps);
+    auto block = dim3(warpSize * kIVFFlatScanWarps);
 
 #define RUN_IVF_FLAT                                                  \
     do {                                                              \

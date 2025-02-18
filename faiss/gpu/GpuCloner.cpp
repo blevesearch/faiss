@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,6 +14,9 @@
 
 #include <faiss/IndexBinaryFlat.h>
 #include <faiss/IndexFlat.h>
+#if defined USE_NVIDIA_CUVS
+#include <faiss/IndexHNSW.h>
+#endif
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexIVFFlat.h>
 #include <faiss/IndexIVFPQ.h>
@@ -24,6 +27,9 @@
 #include <faiss/MetaIndexes.h>
 #include <faiss/gpu/GpuIndex.h>
 #include <faiss/gpu/GpuIndexBinaryFlat.h>
+#if defined USE_NVIDIA_CUVS
+#include <faiss/gpu/GpuIndexCagra.h>
+#endif
 #include <faiss/gpu/GpuIndexFlat.h>
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>
@@ -85,7 +91,15 @@ Index* ToCPUCloner::clone_Index(const Index* index) {
         // objective is to make a single component out of them
         // (inverse op of ToGpuClonerMultiple)
 
-    } else if (auto ish = dynamic_cast<const IndexShards*>(index)) {
+    }
+#if defined USE_NVIDIA_CUVS
+    else if (auto icg = dynamic_cast<const GpuIndexCagra*>(index)) {
+        IndexHNSWCagra* res = new IndexHNSWCagra();
+        icg->copyTo(res);
+        return res;
+    }
+#endif
+    else if (auto ish = dynamic_cast<const IndexShards*>(index)) {
         int nshard = ish->count();
         FAISS_ASSERT(nshard > 0);
         Index* res = clone_Index(ish->at(0));
@@ -124,7 +138,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         GpuIndexFlatConfig config;
         config.device = device;
         config.useFloat16 = useFloat16;
-        config.use_raft = use_raft;
+        config.use_cuvs = use_cuvs;
         return new GpuIndexFlat(provider, ifl, config);
     } else if (
             dynamic_cast<const IndexScalarQuantizer*>(index) &&
@@ -134,7 +148,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.device = device;
         config.useFloat16 = true;
         FAISS_THROW_IF_NOT_MSG(
-                !use_raft, "this type of index is not implemented for RAFT");
+                !use_cuvs, "this type of index is not implemented for cuVS");
         GpuIndexFlat* gif = new GpuIndexFlat(
                 provider, index->d, index->metric_type, config);
         // transfer data by blocks
@@ -152,7 +166,8 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.device = device;
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
-        config.use_raft = use_raft;
+        config.use_cuvs = use_cuvs;
+        config.allowCpuCoarseQuantizer = allowCpuCoarseQuantizer;
 
         GpuIndexIVFFlat* res = new GpuIndexIVFFlat(
                 provider, ifl->d, ifl->nlist, ifl->metric_type, config);
@@ -170,7 +185,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         FAISS_THROW_IF_NOT_MSG(
-                !use_raft, "this type of index is not implemented for RAFT");
+                !use_cuvs, "this type of index is not implemented for cuVS");
 
         GpuIndexIVFScalarQuantizer* res = new GpuIndexIVFScalarQuantizer(
                 provider,
@@ -203,8 +218,9 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         config.useFloat16LookupTables = useFloat16;
         config.usePrecomputedTables = usePrecomputed;
-        config.use_raft = use_raft;
-        config.interleavedLayout = use_raft;
+        config.use_cuvs = use_cuvs;
+        config.interleavedLayout = use_cuvs;
+        config.allowCpuCoarseQuantizer = allowCpuCoarseQuantizer;
 
         GpuIndexIVFPQ* res = new GpuIndexIVFPQ(provider, ipq, config);
 
@@ -213,9 +229,25 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         }
 
         return res;
-    } else {
-        // default: use CPU cloner
-        return Cloner::clone_Index(index);
+    }
+#if defined USE_NVIDIA_CUVS
+    else if (auto icg = dynamic_cast<const faiss::IndexHNSWCagra*>(index)) {
+        GpuIndexCagraConfig config;
+        config.device = device;
+        GpuIndexCagra* res =
+                new GpuIndexCagra(provider, icg->d, icg->metric_type, config);
+        res->copyFrom(icg);
+        return res;
+    }
+#endif
+    else {
+        // use CPU cloner for IDMap and PreTransform
+        auto index_idmap = dynamic_cast<const IndexIDMap*>(index);
+        auto index_pt = dynamic_cast<const IndexPreTransform*>(index);
+        if (index_idmap || index_pt) {
+            return Cloner::clone_Index(index);
+        }
+        FAISS_THROW_MSG("This index type is not implemented on GPU.");
     }
 }
 
@@ -509,7 +541,7 @@ faiss::IndexBinary* index_binary_cpu_to_gpu(
         GpuIndexBinaryFlatConfig config;
         config.device = device;
         if (options) {
-            config.use_raft = options->use_raft;
+            config.use_cuvs = options->use_cuvs;
         }
         return new GpuIndexBinaryFlat(provider, ii, config);
     } else {

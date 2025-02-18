@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,13 +7,10 @@
 
 #include <faiss/IndexIVFAdditiveQuantizerFastScan.h>
 
-#include <cassert>
 #include <cinttypes>
 #include <cstdio>
 
 #include <omp.h>
-
-
 #include <memory>
 
 #include <faiss/impl/AuxIndexStructures.h>
@@ -24,7 +21,6 @@
 #include <faiss/utils/distances.h>
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/quantize_lut.h>
-#include <faiss/utils/simdlib.h>
 #include <faiss/utils/utils.h>
 
 namespace faiss {
@@ -71,7 +67,7 @@ void IndexIVFAdditiveQuantizerFastScan::init(
     } else {
         M = aq->M;
     }
-    init_fastscan(M, 4, nlist, metric, bbs);
+    init_fastscan(aq, M, 4, nlist, metric, bbs);
 
     max_train_points = 1024 * ksub * M;
     by_residual = true;
@@ -442,13 +438,6 @@ void IndexIVFAdditiveQuantizerFastScan::compute_LUT(
     } else {
         FAISS_THROW_FMT("metric %d not supported", metric_type);
     }
-}
-
-void IndexIVFAdditiveQuantizerFastScan::sa_decode(
-        idx_t n,
-        const uint8_t* bytes,
-        float* x) const {
-    aq->decode(bytes, x, n);
 }
 
 /********** IndexIVFLocalSearchQuantizerFastScan ************/

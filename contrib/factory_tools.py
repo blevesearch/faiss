@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -55,6 +55,8 @@ def get_code_size(d, indexkey):
     elif indexkey == 'SQ6':
         return (d * 6 + 7) // 8
     elif indexkey == 'SQfp16':
+        return d * 2
+    elif indexkey == 'SQbf16':
         return d * 2
 
     mo = re.match('PCAR?(\\d+),(.*)$', indexkey)
@@ -140,6 +142,7 @@ def reverse_index_factory(index):
             faiss.ScalarQuantizer.QT_4bit: "4",
             faiss.ScalarQuantizer.QT_6bit: "6",
             faiss.ScalarQuantizer.QT_fp16: "fp16",
+            faiss.ScalarQuantizer.QT_bf16: "bf16",
         }
         return f"SQ{sqtypes[index.sq.qtype]}"
 

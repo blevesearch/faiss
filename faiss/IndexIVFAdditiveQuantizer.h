@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -55,6 +55,9 @@ struct IndexIVFAdditiveQuantizer : IndexIVF {
             const IDSelector* sel) const override;
 
     void sa_decode(idx_t n, const uint8_t* codes, float* x) const override;
+
+    void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
+            const override;
 
     ~IndexIVFAdditiveQuantizer() override;
 };

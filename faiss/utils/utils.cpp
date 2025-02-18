@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,6 +7,7 @@
 
 // -*- c++ -*-
 
+#include <faiss/Index.h>
 #include <faiss/utils/utils.h>
 
 #include <cassert>
@@ -115,10 +116,12 @@ std::string get_compile_options() {
     options += "OPTIMIZE ";
 #endif
 
-#ifdef __AVX2__
-    options += "AVX2 ";
-#elif __AVX512F__
+#ifdef __AVX512F__
     options += "AVX512 ";
+#elif defined(__AVX2__)
+    options += "AVX2 ";
+#elif defined(__ARM_FEATURE_SVE)
+    options += "SVE NEON ";
 #elif defined(__aarch64__)
     options += "NEON ";
 #else
@@ -128,6 +131,10 @@ std::string get_compile_options() {
     options += gpu_compile_options;
 
     return options;
+}
+
+std::string get_version() {
+    return VERSION_STRING;
 }
 
 #ifdef _MSC_VER
@@ -583,9 +590,9 @@ int64_t count_gt(int64_t n, const T* row, T threshold) {
 } // namespace
 
 template <typename T>
-void CombinerRangeKNN<T>::compute_sizes(int64_t* L_res_2) {
-    this->L_res = L_res_2;
-    L_res_2[0] = 0;
+void CombinerRangeKNN<T>::compute_sizes(int64_t* L_res_init) {
+    this->L_res = L_res_init;
+    L_res_init[0] = 0;
     int64_t j = 0;
     for (int64_t i = 0; i < nq; i++) {
         int64_t n_in;
@@ -596,11 +603,11 @@ void CombinerRangeKNN<T>::compute_sizes(int64_t* L_res_2) {
             n_in = lim_remain[j + 1] - lim_remain[j];
             j++;
         }
-        L_res_2[i + 1] = n_in; // L_res_2[i] + n_in;
+        L_res_init[i + 1] = n_in; // L_res_init[i] + n_in;
     }
     // cumsum
     for (int64_t i = 0; i < nq; i++) {
-        L_res_2[i + 1] += L_res_2[i];
+        L_res_init[i + 1] += L_res_init[i];
     }
 }
 

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -33,7 +33,6 @@ void pairwise_extra_distances(
         int64_t ldb = -1,
         int64_t ldd = -1);
 
-template <class C>
 void knn_extra_metrics(
         const float* x,
         const float* y,
@@ -42,7 +41,9 @@ void knn_extra_metrics(
         size_t ny,
         MetricType mt,
         float metric_arg,
-        HeapArray<C>* res);
+        size_t k,
+        float* distances,
+        int64_t* indexes);
 
 /** get a DistanceComputer that refers to this type of distance and
  *  indexes a flat array of size nb */

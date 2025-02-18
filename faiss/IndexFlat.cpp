@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,7 +16,6 @@
 #include <faiss/utils/extra_distances.h>
 #include <faiss/utils/prefetch.h>
 #include <faiss/utils/sorting.h>
-#include <faiss/utils/utils.h>
 #include <cstring>
 
 namespace faiss {
@@ -41,15 +40,19 @@ void IndexFlat::search(
     } else if (metric_type == METRIC_L2) {
         float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
         knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, sel);
-    } else if (is_similarity_metric(metric_type)) {
-        float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_extra_metrics(
-                x, get_xb(), d, n, ntotal, metric_type, metric_arg, &res);
     } else {
-        FAISS_THROW_IF_NOT(!sel);
-        float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
+        FAISS_THROW_IF_NOT(!sel); // TODO implement with selector
         knn_extra_metrics(
-                x, get_xb(), d, n, ntotal, metric_type, metric_arg, &res);
+                x,
+                get_xb(),
+                d,
+                n,
+                ntotal,
+                metric_type,
+                metric_arg,
+                k,
+                distances,
+                labels);
     }
 }
 

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -168,9 +168,12 @@ static inline std::string elements_to_string(const char* fmt, const S& simd) {
     simd.store(bytes);
     char res[1000], *ptr = res;
     for (size_t i = 0; i < N; ++i) {
-        ptr += sprintf(ptr, fmt, bytes[i]);
+        int bytesWritten =
+                snprintf(ptr, sizeof(res) - (ptr - res), fmt, bytes[i]);
+        ptr += bytesWritten;
     }
-    // strip last ,
+    // The format usually contains a ',' separator so this is to remove the last
+    // separator.
     ptr[-1] = 0;
     return std::string(res);
 }

@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -96,7 +96,7 @@ def handle_Clustering(the_class):
             Index used to decode the vectors. Should have dimension `self.d`.
         index : faiss.Index
             Index used for assignment. The dimension of the index should be `self.d`.
-        weigths : array_like, optional
+        weights : array_like, optional
             Per training sample weight (size n) used when computing the weighted
             average to obtain the centroid (default is 1 for all training vectors).
         """
@@ -812,8 +812,7 @@ def handle_Index(the_class):
                    replacement_range_search_preassigned, ignore_missing=True)
     replace_method(the_class, 'sa_encode', replacement_sa_encode)
     replace_method(the_class, 'sa_decode', replacement_sa_decode)
-    replace_method(the_class, 'add_sa_codes', replacement_add_sa_codes,
-                   ignore_missing=True)
+    replace_method(the_class, 'add_sa_codes', replacement_add_sa_codes)
     replace_method(the_class, 'permute_entries', replacement_permute_entries,
                    ignore_missing=True)
 
@@ -956,10 +955,44 @@ def handle_IndexBinary(the_class):
             sel = IDSelectorBatch(x.size, swig_ptr(x))
         return self.remove_ids_c(sel)
 
+    def replacement_assign(self, x, k, labels=None):
+        """Find the k nearest neighbors of the set of vectors x in the index.
+        This is the same as the `search` method, but discards the distances.
+
+        Parameters
+        ----------
+        x : array_like
+            Query vectors, shape (n, d) where d is appropriate for the index.
+            `dtype` must be uint8.
+        k : int
+            Number of nearest neighbors.
+        labels : array_like, optional
+            Labels array to store the results.
+
+        Returns
+        -------
+        labels: array_like
+            Labels of the nearest neighbors, shape (n, k).
+            When not enough results are found, the label is set to -1
+        """
+        n, d = x.shape
+        x = _check_dtype_uint8(x)
+        assert d == self.code_size
+        assert k > 0
+
+        if labels is None:
+            labels = np.empty((n, k), dtype=np.int64)
+        else:
+            assert labels.shape == (n, k)
+
+        self.assign_c(n, swig_ptr(x), swig_ptr(labels), k)
+        return labels
+
     replace_method(the_class, 'add', replacement_add)
     replace_method(the_class, 'add_with_ids', replacement_add_with_ids)
     replace_method(the_class, 'train', replacement_train)
     replace_method(the_class, 'search', replacement_search)
+    replace_method(the_class, 'assign', replacement_assign)
     replace_method(the_class, 'range_search', replacement_range_search)
     replace_method(the_class, 'reconstruct', replacement_reconstruct)
     replace_method(the_class, 'reconstruct_n', replacement_reconstruct_n)
@@ -1213,3 +1246,152 @@ def handle_CodeSet(the_class):
         return inserted
 
     replace_method(the_class, 'insert', replacement_insert)
+
+######################################################
+# Syntatic sugar for NeuralNet classes
+######################################################
+
+
+def handle_Tensor2D(the_class):
+    the_class.original_init = the_class.__init__
+
+    def replacement_init(self, *args):
+        if len(args) == 1:
+            array, = args
+            n, d = array.shape
+            self.original_init(n, d)
+            faiss.copy_array_to_vector(
+                np.ascontiguousarray(array).ravel(), self.v)
+        else:
+            self.original_init(*args)
+
+    def numpy(self):
+        shape = np.zeros(2, dtype=np.int64)
+        faiss.memcpy(faiss.swig_ptr(shape), self.shape, shape.nbytes)
+        return faiss.vector_to_array(self.v).reshape(shape[0], shape[1])
+
+    the_class.__init__ = replacement_init
+    the_class.numpy = numpy
+
+
+def handle_Embedding(the_class):
+    the_class.original_init = the_class.__init__
+
+    def replacement_init(self, *args):
+        if len(args) != 1 or args[0].__class__ == the_class:
+            self.original_init(*args)
+            return
+        # assume it's a torch.Embedding
+        emb = args[0]
+        self.original_init(emb.num_embeddings, emb.embedding_dim)
+        self.from_torch(emb)
+
+    def from_torch(self, emb):
+        """ copy weights from torch.Embedding """
+        assert emb.weight.shape == (self.num_embeddings, self.embedding_dim)
+        faiss.copy_array_to_vector(
+            np.ascontiguousarray(emb.weight.data).ravel(), self.weight)
+
+    def from_array(self, array):
+        """ copy weights from numpy array """
+        assert array.shape == (self.num_embeddings, self.embedding_dim)
+        faiss.copy_array_to_vector(
+            np.ascontiguousarray(array).ravel(), self.weight)
+
+    the_class.from_array = from_array
+    the_class.from_torch = from_torch
+    the_class.__init__ = replacement_init
+
+
+def handle_Linear(the_class):
+    the_class.original_init = the_class.__init__
+
+    def replacement_init(self, *args):
+        if len(args) != 1 or args[0].__class__ == the_class:
+            self.original_init(*args)
+            return
+        # assume it's a torch.Linear
+        linear = args[0]
+        bias = linear.bias is not None
+        self.original_init(linear.in_features, linear.out_features, bias)
+        self.from_torch(linear)
+
+    def from_torch(self, linear):
+        """ copy weights from torch.Linear """
+        assert linear.weight.shape == (self.out_features, self.in_features)
+        faiss.copy_array_to_vector(
+            linear.weight.data.numpy().ravel(), self.weight)
+        if linear.bias is not None:
+            assert linear.bias.shape == (self.out_features,)
+            faiss.copy_array_to_vector(linear.bias.data.numpy(), self.bias)
+
+    def from_array(self, array, bias=None):
+        """ copy weights from numpy array """
+        assert array.shape == (self.out_features, self.in_features)
+        faiss.copy_array_to_vector(
+            np.ascontiguousarray(array).ravel(), self.weight)
+        if bias is not None:
+            assert bias.shape == (self.out_features,)
+            faiss.copy_array_to_vector(bias, self.bias)
+
+    the_class.__init__ = replacement_init
+    the_class.from_array = from_array
+    the_class.from_torch = from_torch
+
+######################################################
+# Syntatic sugar for QINCo and QINCoStep
+######################################################
+
+def handle_QINCoStep(the_class):
+    the_class.original_init = the_class.__init__
+
+    def replacement_init(self, *args):
+        if len(args) != 1 or args[0].__class__ == the_class:
+            self.original_init(*args)
+            return
+        step = args[0]
+        # assume it's a Torch QINCoStep
+        self.original_init(step.d, step.K, step.L, step.h)
+        self.from_torch(step)
+
+    def from_torch(self, step):
+        """ copy weights from torch.QINCoStep """
+        assert (step.d, step.K, step.L, step.h) == (self.d, self.K, self.L, self.h)
+        self.codebook.from_torch(step.codebook)
+        self.MLPconcat.from_torch(step.MLPconcat)
+
+        for l in range(step.L):
+            src = step.residual_blocks[l]
+            dest = self.get_residual_block(l)
+            dest.linear1.from_torch(src[0])
+            dest.linear2.from_torch(src[2])
+
+    the_class.__init__ = replacement_init
+    the_class.from_torch = from_torch
+
+
+def handle_QINCo(the_class):
+    the_class.original_init = the_class.__init__
+
+    def replacement_init(self, *args):
+        if len(args) != 1 or args[0].__class__ == the_class:
+            self.original_init(*args)
+            return
+
+        # assume it's a Torch QINCo
+        qinco = args[0]
+        self.original_init(qinco.d, qinco.K, qinco.L, qinco.M, qinco.h)
+        self.from_torch(qinco)
+
+    def from_torch(self, qinco):
+        """ copy weights from torch.QINCo """
+        assert (
+            (qinco.d, qinco.K, qinco.L, qinco.M, qinco.h) ==
+            (self.d, self.K, self.L, self.M, self.h)
+        )
+        self.codebook0.from_torch(qinco.codebook0)
+        for m in range(qinco.M - 1):
+            self.get_step(m).from_torch(qinco.steps[m])
+
+    the_class.__init__ = replacement_init
+    the_class.from_torch = from_torch

@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -11,7 +11,7 @@ LOG = logging.getLogger(__name__)
 
 
 def merge_ondisk(
-    trained_index: faiss.Index, shard_fnames: List[str], ivfdata_fname: str
+    trained_index: faiss.Index, shard_fnames: List[str], ivfdata_fname: str, shift_ids=False
 ) -> None:
     """Add the contents of the indexes stored in shard_fnames into the index
     trained_index. The on-disk data is stored in ivfdata_fname"""
@@ -51,7 +51,7 @@ def merge_ondisk(
         ivf_vector.push_back(ivf)
 
     LOG.info("merge %d inverted lists " % ivf_vector.size())
-    ntotal = invlists.merge_from(ivf_vector.data(), ivf_vector.size())
+    ntotal = invlists.merge_from_multiple(ivf_vector.data(), ivf_vector.size(), shift_ids)
 
     # now replace the inverted lists in the output index
     index.ntotal = index_ivf.ntotal = ntotal

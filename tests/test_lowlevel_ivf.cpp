@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -21,9 +21,7 @@
 #include <faiss/IndexBinaryIVF.h>
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexPreTransform.h>
-#include <faiss/VectorTransform.h>
 #include <faiss/index_factory.h>
-#include <faiss/index_io.h>
 
 using namespace faiss;
 
@@ -364,21 +362,8 @@ void test_lowlevel_access_binary(const char* index_key) {
             }
         }
 
-        printf("new before reroder: [");
-        for (int j = 0; j < k; j++)
-            printf("%" PRId64 ",%d ", I[j], D[j]);
-        printf("]\n");
-
         // re-order heap
         heap_reorder<CMax<int32_t, idx_t>>(k, D.data(), I.data());
-
-        printf("ref: [");
-        for (int j = 0; j < k; j++)
-            printf("%" PRId64 ",%d ", I_ref[j], D_ref[j]);
-        printf("]\nnew: [");
-        for (int j = 0; j < k; j++)
-            printf("%" PRId64 ",%d ", I[j], D[j]);
-        printf("]\n");
 
         // check that we have the same results as the reference search
         for (int j = 0; j < k; j++) {

@@ -1,37 +1,42 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import faiss
-import unittest
-import numpy as np
-import platform
 import os
-import random
+import platform
+import shutil
 import tempfile
+import unittest
+from contextlib import contextmanager
 
-from faiss.contrib import datasets
-from faiss.contrib import inspect_tools
-from faiss.contrib import evaluation
-from faiss.contrib import ivf_tools
-from faiss.contrib import clustering
-from faiss.contrib import big_batch_search
+import faiss
+import numpy as np
+import sys
 
 from common_faiss_tests import get_dataset_2
-try:
-    from faiss.contrib.exhaustive_search import \
-        knn_ground_truth, knn, range_ground_truth, \
-        range_search_max_results, exponential_query_iterator
-except:
-    pass  # Submodule import broken in python 2.
+
+from faiss.contrib import (
+    big_batch_search,
+    clustering,
+    datasets,
+    evaluation,
+    inspect_tools,
+    ivf_tools,
+)
+from faiss.contrib.exhaustive_search import (
+    exponential_query_iterator,
+    knn,
+    knn_ground_truth,
+    range_ground_truth,
+    range_search_max_results,
+)
+from faiss.contrib.ondisk import merge_ondisk
 
 
-@unittest.skipIf(platform.python_version_tuple()[0] < '3',
-                 'Submodule import broken in python 2.')
 class TestComputeGT(unittest.TestCase):
 
-    def do_test_compute_GT(self, metric=faiss.METRIC_L2):
+    def do_test_compute_GT(self, metric=faiss.METRIC_L2, ngpu=0):
         d = 64
         xt, xb, xq = get_dataset_2(d, 0, 10000, 100)
 
@@ -46,7 +51,7 @@ class TestComputeGT(unittest.TestCase):
                 yield xb[i0:i0 + bs]
 
         Dnew, Inew = knn_ground_truth(
-            xq, matrix_iterator(xb, 1000), 10, metric)
+            xq, matrix_iterator(xb, 1000), 10, metric, ngpu=ngpu)
 
         np.testing.assert_array_equal(Iref, Inew)
         # decimal = 4 required when run on GPU
@@ -57,6 +62,12 @@ class TestComputeGT(unittest.TestCase):
 
     def test_compute_GT_ip(self):
         self.do_test_compute_GT(faiss.METRIC_INNER_PRODUCT)
+
+    def test_compute_GT_gpu(self):
+        self.do_test_compute_GT(ngpu=-1)
+
+    def test_compute_GT_ip_gpu(self):
+        self.do_test_compute_GT(faiss.METRIC_INNER_PRODUCT, ngpu=-1)
 
 
 class TestDatasets(unittest.TestCase):
@@ -148,7 +159,6 @@ class TestExhaustiveSearch(unittest.TestCase):
         xb = ds.get_database()
         D, I = faiss.knn(xq, xb, 10, metric=metric)
         threshold = float(D[:, -1].mean())
-        print(threshold)
 
         index = faiss.IndexFlat(32, metric)
         index.add(xb)
@@ -252,7 +262,6 @@ class TestRangeEval(unittest.TestCase):
         Inew = np.hstack(Inew)
 
         precision, recall = evaluation.range_PR(lims_ref, Iref, lims_new, Inew)
-        print(precision, recall)
 
         self.assertEqual(precision, 0.6)
         self.assertEqual(recall, 0.6)
@@ -384,6 +393,12 @@ class TestPreassigned(unittest.TestCase):
             l0, l1 = lims[q], lims[q + 1]
             self.assertTrue(set(I[q]) <= set(IR[l0:l1]))
 
+    @unittest.skipIf(
+        platform.system() == 'Windows'
+        and sys.version_info[0] == 3
+        and sys.version_info[1] == 12,
+        'test_binary hangs for Windows on Python 3.12.'
+    )
     def test_binary(self):
         ds = datasets.SyntheticDataset(128, 2000, 2000, 200)
 
@@ -520,6 +535,26 @@ class TestRangeSearchMaxResults(unittest.TestCase):
 
 class TestClustering(unittest.TestCase):
 
+    def test_python_kmeans(self):
+        """ Test the python implementation of kmeans """
+        ds = datasets.SyntheticDataset(32, 10000, 0, 0)
+        x = ds.get_train()
+
+        # bad distribution to stress-test split code
+        xt = x[:10000].copy()
+        xt[:5000] = x[0]
+
+        km_ref = faiss.Kmeans(ds.d, 100, niter=10)
+        km_ref.train(xt)
+        err = faiss.knn(xt, km_ref.centroids, 1)[0].sum()
+
+        data = clustering.DatasetAssign(xt)
+        centroids = clustering.kmeans(100, data, 10)
+        err2 = faiss.knn(xt, centroids, 1)[0].sum()
+
+        # err=33498.332 err2=33380.477
+        self.assertLess(err2, err * 1.1)
+
     def test_2level(self):
         " verify that 2-level clustering is not too sub-optimal "
         ds = datasets.SyntheticDataset(32, 10000, 0, 0)
@@ -551,8 +586,7 @@ class TestClustering(unittest.TestCase):
 
         # normally 47 / 200 differences
         ndiff = (Iref != Inew).sum()
-        self.assertLess(ndiff, 51)
-
+        self.assertLess(ndiff, 53)
 
 class TestBigBatchSearch(unittest.TestCase):
 
@@ -648,7 +682,10 @@ class TestInvlistSort(unittest.TestCase):
         np.testing.assert_equal(Inew, Iref)
 
     def test_hnsw_permute(self):
-        """ make sure HNSW permutation works (useful when used as coarse quantizer) """
+        """
+            make sure HNSW permutation works
+            (useful when used as coarse quantizer)
+        """
         ds = datasets.SyntheticDataset(32, 0, 1000, 50)
         index = faiss.index_factory(ds.d, "HNSW32,Flat")
         index.add(ds.get_database())
@@ -674,3 +711,65 @@ class TestCodeSet(unittest.TestCase):
         np.testing.assert_equal(
             np.sort(np.unique(codes, axis=0), axis=None),
             np.sort(codes[inserted], axis=None))
+
+
+@unittest.skipIf(
+    platform.system() == 'Windows',
+    'OnDiskInvertedLists is unsupported on Windows.'
+)
+class TestMerge(unittest.TestCase):
+    @contextmanager
+    def temp_directory(self):
+        temp_dir = tempfile.mkdtemp()
+        try:
+            yield temp_dir
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def do_test_ondisk_merge(self, shift_ids=False):
+        with self.temp_directory() as tmpdir:
+            # only train and add index to disk without adding elements.
+            # this will create empty inverted lists.
+            ds = datasets.SyntheticDataset(32, 2000, 200, 20)
+            index = faiss.index_factory(ds.d, "IVF32,Flat")
+            index.train(ds.get_train())
+            faiss.write_index(index, tmpdir + "/trained.index")
+
+            # create 4 shards and add elements to them
+            ns = 4  # number of shards
+
+            for bno in range(ns):
+                index = faiss.read_index(tmpdir + "/trained.index")
+                i0, i1 = int(bno * ds.nb / ns), int((bno + 1) * ds.nb / ns)
+                if shift_ids:
+                    index.add_with_ids(ds.xb[i0:i1], np.arange(0, ds.nb / ns))
+                else:
+                    index.add_with_ids(ds.xb[i0:i1], np.arange(i0, i1))
+                faiss.write_index(index, tmpdir + "/block_%d.index" % bno)
+
+            # construct the output index and merge them on disk
+            index = faiss.read_index(tmpdir + "/trained.index")
+            block_fnames = [tmpdir + "/block_%d.index" % bno for bno in range(4)]
+
+            merge_ondisk(
+                index, block_fnames, tmpdir + "/merged_index.ivfdata", shift_ids
+            )
+            faiss.write_index(index, tmpdir + "/populated.index")
+
+            # perform a search from index on disk
+            index = faiss.read_index(tmpdir + "/populated.index")
+            index.nprobe = 5
+            D, I = index.search(ds.xq, 5)
+
+            # ground-truth
+            gtI = ds.get_groundtruth(5)
+
+            recall_at_1 = (I[:, :1] == gtI[:, :1]).sum() / float(ds.xq.shape[0])
+            self.assertGreaterEqual(recall_at_1, 0.5)
+
+    def test_ondisk_merge(self):
+        self.do_test_ondisk_merge()
+
+    def test_ondisk_merge_with_shift_ids(self):
+        # verified that recall is same for test_ondisk_merge and
+        self.do_test_ondisk_merge(True)

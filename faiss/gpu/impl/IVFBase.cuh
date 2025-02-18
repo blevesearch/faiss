@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -109,9 +109,18 @@ class IVFBase {
             Tensor<idx_t, 2, true>& outIndices,
             bool storePairs) = 0;
 
+    /*  It is used to reconstruct a given number of vectors in an Inverted File
+     * (IVF) index
+     *  @param i0          index of the first vector to reconstruct
+     *  @param n           number of vectors to reconstruct
+     *  @param out         This is a pointer to a buffer where the reconstructed
+     * vectors will be stored.
+     */
+    virtual void reconstruct_n(idx_t i0, idx_t n, float* out);
+
    protected:
-    /// Adds a set of codes and indices to a list, with the representation
-    /// coming from the CPU equivalent
+    /// Adds a set of codes and indices to a list, with the
+    /// representation coming from the CPU equivalent
     virtual void addEncodedVectorsToList_(
             idx_t listId,
             // resident on the host
@@ -211,15 +220,15 @@ class IVFBase {
     /// Coarse quantizer centroids available on GPU
     DeviceTensor<float, 2, true> ivfCentroids_;
 
-    /// Whether or not our index uses an interleaved by 32 layout:
+    /// Whether or not our index uses an interleaved by kWarpSize layout:
     /// The default memory layout is [vector][PQ/SQ component]:
     /// (v0 d0) (v0 d1) ... (v0 dD-1) (v1 d0) (v1 d1) ...
     ///
-    /// The interleaved by 32 memory layout is:
-    /// [vector / 32][PQ/SQ component][vector % 32] with padding:
+    /// The interleaved by kWarpSize memory layout is:
+    /// [vector / kWarpSize][PQ/SQ component][vector % kWarpSize] with padding:
     /// (v0 d0) (v1 d0) ... (v31 d0) (v0 d1) (v1 d1) ... (v31 dD-1) (v32 d0)
     /// (v33 d0) ... so the list length is always a multiple of num quantizers *
-    /// 32
+    /// kWarpSize
     bool interleavedLayout_;
 
     /// How are user indices stored on the GPU?

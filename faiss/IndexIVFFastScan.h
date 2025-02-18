@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -16,6 +16,7 @@ namespace faiss {
 
 struct NormTableScaler;
 struct SIMDResultHandlerToFloat;
+struct Quantizer;
 
 /** Fast scan version of IVFPQ and IVFAQ. Works for 4-bit PQ/AQ for now.
  *
@@ -59,6 +60,9 @@ struct IndexIVFFastScan : IndexIVF {
     int qbs = 0;
     size_t qbs2 = 0;
 
+    // quantizer used to pack the codes
+    Quantizer* fine_quantizer = nullptr;
+
     IndexIVFFastScan(
             Index* quantizer,
             size_t d,
@@ -68,7 +72,9 @@ struct IndexIVFFastScan : IndexIVF {
 
     IndexIVFFastScan();
 
+    /// called by implementations
     void init_fastscan(
+            Quantizer* fine_quantizer,
             size_t M,
             size_t nbits,
             size_t nlist,
@@ -148,7 +154,8 @@ struct IndexIVFFastScan : IndexIVF {
             float* distances,
             idx_t* labels,
             const CoarseQuantized& cq,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     void range_search_dispatch_implem(
             idx_t n,
@@ -156,7 +163,8 @@ struct IndexIVFFastScan : IndexIVF {
             float radius,
             RangeSearchResult& rres,
             const CoarseQuantized& cq_in,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     // impl 1 and 2 are just for verification
     template <class C>
@@ -167,7 +175,8 @@ struct IndexIVFFastScan : IndexIVF {
             float* distances,
             idx_t* labels,
             const CoarseQuantized& cq,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     template <class C>
     void search_implem_2(
@@ -177,7 +186,8 @@ struct IndexIVFFastScan : IndexIVF {
             float* distances,
             idx_t* labels,
             const CoarseQuantized& cq,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     // implem 10 and 12 are not multithreaded internally, so
     // export search stats
@@ -188,7 +198,8 @@ struct IndexIVFFastScan : IndexIVF {
             const CoarseQuantized& cq,
             size_t* ndis_out,
             size_t* nlist_out,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     void search_implem_12(
             idx_t n,
@@ -197,7 +208,8 @@ struct IndexIVFFastScan : IndexIVF {
             const CoarseQuantized& cq,
             size_t* ndis_out,
             size_t* nlist_out,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     // implem 14 is multithreaded internally across nprobes and queries
     void search_implem_14(
@@ -208,7 +220,8 @@ struct IndexIVFFastScan : IndexIVF {
             idx_t* labels,
             const CoarseQuantized& cq,
             int impl,
-            const NormTableScaler* scaler) const;
+            const NormTableScaler* scaler,
+            const IVFSearchParameters* params = nullptr) const;
 
     // reconstruct vectors from packed invlists
     void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
@@ -218,6 +231,17 @@ struct IndexIVFFastScan : IndexIVF {
 
     // reconstruct orig invlists (for debugging)
     void reconstruct_orig_invlists();
+
+    /** Decode a set of vectors.
+     *
+     *  NOTE: The codes in the IndexFastScan object are non-contiguous.
+     *        But this method requires a contiguous representation.
+     *
+     * @param n       number of vectors
+     * @param bytes   input encoded vectors, size n * code_size
+     * @param x       output vectors, size n * d
+     */
+    void sa_decode(idx_t n, const uint8_t* bytes, float* x) const override;
 };
 
 struct IVFFastScanStats {

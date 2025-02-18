@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -45,7 +45,6 @@ class TestIndexRowwiseMinmax(unittest.TestCase):
 
         # make sure that the reconstruction error is not crazy
         reconstruction_err = ((x - decoded) ** 2).sum()
-        print(reconstruction_err)
 
         self.assertLess(reconstruction_err, 0.6)
 

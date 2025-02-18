@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,8 +14,6 @@
 
 #include <omp.h>
 
-
-#include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/IDSelector.h>
 #include <faiss/impl/ScalarQuantizer.h>
@@ -33,7 +31,9 @@ IndexScalarQuantizer::IndexScalarQuantizer(
         MetricType metric)
         : IndexFlatCodes(0, d, metric), sq(d, qtype) {
     is_trained = qtype == ScalarQuantizer::QT_fp16 ||
-            qtype == ScalarQuantizer::QT_8bit_direct;
+            qtype == ScalarQuantizer::QT_8bit_direct ||
+            qtype == ScalarQuantizer::QT_bf16 ||
+            qtype == ScalarQuantizer::QT_8bit_direct_signed;
     code_size = sq.code_size;
 }
 

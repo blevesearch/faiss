@@ -330,7 +330,7 @@ class MapInt64ToInt64:
 # KNN function
 ######################################################
 
-def knn(xq, xb, k, metric=METRIC_L2):
+def knn(xq, xb, k, metric=METRIC_L2, metric_arg=0.0):
     """
     Compute the k nearest neighbors of a vector without constructing an index
 
@@ -345,7 +345,7 @@ def knn(xq, xb, k, metric=METRIC_L2):
         `dtype` must be float32.
     k : int
         Number of nearest neighbors.
-    distance_type : MetricType, optional
+    metric : MetricType, optional
         distance measure to use (either METRIC_L2 or METRIC_INNER_PRODUCT)
 
     Returns
@@ -374,9 +374,15 @@ def knn(xq, xb, k, metric=METRIC_L2):
             swig_ptr(xq), swig_ptr(xb),
             d, nq, nb, k, swig_ptr(D), swig_ptr(I)
         )
-    else:
-        raise NotImplementedError("only L2 and INNER_PRODUCT are supported")
+    else: 
+        knn_extra_metrics(
+            swig_ptr(xq), swig_ptr(xb),
+            d, nq, nb, metric, metric_arg, k, 
+            swig_ptr(D), swig_ptr(I)
+        )
+
     return D, I
+
 
 def knn_hamming(xq, xb, k, variant="hc"):
     """

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -50,6 +50,8 @@ class IVFFlat : public IVFBase {
             Tensor<float, 2, true>& outDistances,
             Tensor<idx_t, 2, true>& outIndices,
             bool storePairs) override;
+
+    void reconstruct_n(idx_t i0, idx_t n, float* out) override;
 
    protected:
     /// Returns the number of bytes in which an IVF list containing numVecs

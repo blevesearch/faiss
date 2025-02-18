@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -122,7 +122,7 @@ struct RangeSearchPartialResult : BufferList {
     void copy_result(bool incremental = false);
 
     /// merge a set of PartialResult's into one RangeSearchResult
-    /// on ouptut the partialresults are empty!
+    /// on output the partialresults are empty!
     static void merge(
             std::vector<RangeSearchPartialResult*>& partial_results,
             bool do_delete = true);
@@ -159,6 +159,14 @@ struct FAISS_API InterruptCallback {
      * is a reasonable interval to check for interrupts?
      */
     static size_t get_period_hint(size_t flops);
+};
+
+struct TimeoutCallback : InterruptCallback {
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    double timeout;
+    bool want_interrupt() override;
+    void set_timeout(double timeout_in_seconds);
+    static void reset(double timeout_in_seconds);
 };
 
 /// set implementation optimized for fast access.

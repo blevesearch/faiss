@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -352,7 +352,10 @@ void search_with_parameters(
     const IndexIVF* index_ivf = dynamic_cast<const IndexIVF*>(index);
     FAISS_THROW_IF_NOT(index_ivf);
 
-    index_ivf->quantizer->search(n, x, params->nprobe, Dq.data(), Iq.data());
+    SearchParameters* quantizer_params =
+            (params) ? params->quantizer_params : nullptr;
+    index_ivf->quantizer->search(
+            n, x, params->nprobe, Dq.data(), Iq.data(), quantizer_params);
 
     if (nb_dis_ptr) {
         *nb_dis_ptr = count_ndis(index_ivf, n * params->nprobe, Iq.data());

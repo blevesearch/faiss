@@ -1,11 +1,9 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
-// -*- c++ -*-
 
 #include <faiss/index_io.h>
 
@@ -15,13 +13,9 @@
 #include <cstdio>
 #include <cstdlib>
 
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #include <faiss/invlists/InvertedListsIOHook.h>
 
 #include <faiss/impl/FaissAssert.h>
-#include <faiss/impl/io.h>
 #include <faiss/impl/io_macros.h>
 #include <faiss/utils/hamming.h>
 
@@ -314,7 +308,11 @@ static void write_HNSW(const HNSW* hnsw, IOWriter* f) {
     WRITE1(hnsw->max_level);
     WRITE1(hnsw->efConstruction);
     WRITE1(hnsw->efSearch);
-    WRITE1(hnsw->upper_beam);
+
+    // // deprecated field
+    // WRITE1(hnsw->upper_beam);
+    constexpr int tmp_upper_beam = 1;
+    WRITE1(tmp_upper_beam);
 }
 
 static void write_NSG(const NSG* nsg, IOWriter* f) {
@@ -390,8 +388,12 @@ static void write_ivf_header(const IndexIVF* ivf, IOWriter* f) {
     write_direct_map(&ivf->direct_map, f);
 }
 
-void write_index(const Index* idx, IOWriter* f) {
-    if (const IndexFlat* idxf = dynamic_cast<const IndexFlat*>(idx)) {
+void write_index(const Index* idx, IOWriter* f, int io_flags) {
+    if (idx == nullptr) {
+        // eg. for a storage component of HNSW that is set to nullptr
+        uint32_t h = fourcc("null");
+        WRITE1(h);
+    } else if (const IndexFlat* idxf = dynamic_cast<const IndexFlat*>(idx)) {
         uint32_t h =
                 fourcc(idxf->metric_type == METRIC_INNER_PRODUCT ? "IxFI"
                                : idxf->metric_type == METRIC_L2  ? "IxF2"
@@ -760,12 +762,24 @@ void write_index(const Index* idx, IOWriter* f) {
                 : dynamic_cast<const IndexHNSWPQ*>(idx)      ? fourcc("IHNp")
                 : dynamic_cast<const IndexHNSWSQ*>(idx)      ? fourcc("IHNs")
                 : dynamic_cast<const IndexHNSW2Level*>(idx)  ? fourcc("IHN2")
+                : dynamic_cast<const IndexHNSWCagra*>(idx)   ? fourcc("IHNc")
                                                              : 0;
         FAISS_THROW_IF_NOT(h != 0);
         WRITE1(h);
         write_index_header(idxhnsw, f);
+        if (h == fourcc("IHNc")) {
+            WRITE1(idxhnsw->keep_max_size_level0);
+            auto idx_hnsw_cagra = dynamic_cast<const IndexHNSWCagra*>(idxhnsw);
+            WRITE1(idx_hnsw_cagra->base_level_only);
+            WRITE1(idx_hnsw_cagra->num_base_level_search_entrypoints);
+        }
         write_HNSW(&idxhnsw->hnsw, f);
-        write_index(idxhnsw->storage, f);
+        if (io_flags & IO_FLAG_SKIP_STORAGE) {
+            uint32_t n4 = fourcc("null");
+            WRITE1(n4);
+        } else {
+            write_index(idxhnsw->storage, f);
+        }
     } else if (const IndexNSG* idxnsg = dynamic_cast<const IndexNSG*>(idx)) {
         uint32_t h = dynamic_cast<const IndexNSGFlat*>(idx) ? fourcc("INSf")
                 : dynamic_cast<const IndexNSGPQ*>(idx)      ? fourcc("INSp")
@@ -841,14 +855,14 @@ void write_index(const Index* idx, IOWriter* f) {
     }
 }
 
-void write_index(const Index* idx, FILE* f) {
+void write_index(const Index* idx, FILE* f, int io_flags) {
     FileIOWriter writer(f);
-    write_index(idx, &writer);
+    write_index(idx, &writer, io_flags);
 }
 
-void write_index(const Index* idx, const char* fname) {
+void write_index(const Index* idx, const char* fname, int io_flags) {
     FileIOWriter writer(fname);
-    write_index(idx, &writer);
+    write_index(idx, &writer, io_flags);
 }
 
 void write_VectorTransform(const VectorTransform* vt, const char* fname) {

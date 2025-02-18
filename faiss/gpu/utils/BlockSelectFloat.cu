@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -55,7 +55,7 @@ void runBlockSelect(
     if (dir) {
         if (k == 1) {
             BLOCK_SELECT_CALL(float, true, 1);
-        } else if (k <= 32) {
+        } else if (k <= 32 && getWarpSizeCurrentDevice() == 32) {
             BLOCK_SELECT_CALL(float, true, 32);
         } else if (k <= 64) {
             BLOCK_SELECT_CALL(float, true, 64);
@@ -75,7 +75,7 @@ void runBlockSelect(
     } else {
         if (k == 1) {
             BLOCK_SELECT_CALL(float, false, 1);
-        } else if (k <= 32) {
+        } else if (k <= 32 && getWarpSizeCurrentDevice() == 32) {
             BLOCK_SELECT_CALL(float, false, 32);
         } else if (k <= 64) {
             BLOCK_SELECT_CALL(float, false, 64);
@@ -108,7 +108,7 @@ void runBlockSelectPair(
     if (dir) {
         if (k == 1) {
             BLOCK_SELECT_PAIR_CALL(float, true, 1);
-        } else if (k <= 32) {
+        } else if (k <= 32 && getWarpSizeCurrentDevice() == 32) {
             BLOCK_SELECT_PAIR_CALL(float, true, 32);
         } else if (k <= 64) {
             BLOCK_SELECT_PAIR_CALL(float, true, 64);
@@ -128,7 +128,7 @@ void runBlockSelectPair(
     } else {
         if (k == 1) {
             BLOCK_SELECT_PAIR_CALL(float, false, 1);
-        } else if (k <= 32) {
+        } else if (k <= 32 && getWarpSizeCurrentDevice() == 32) {
             BLOCK_SELECT_PAIR_CALL(float, false, 32);
         } else if (k <= 64) {
             BLOCK_SELECT_PAIR_CALL(float, false, 64);
