@@ -1289,13 +1289,9 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
 }
 
 void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
-    printf("checking compatiblity\n");
-    fflush(stdout);
     check_compatible_for_merge(otherIndex);
     std::vector<size_t> list_mapping;
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
-    printf("base compatibilty check done\n");
-    fflush(stdout);
     // expensive check involves seeing if the centroids are same across two IVF
     // indexes (the order need not to be same, so the check involves a set for
     // comparison)
@@ -1308,10 +1304,9 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
             quantizer->reconstruct(i, v.data());
             all_vecs.push_back(v);
         }
-
         long quantizer_size = all_vecs.size();
         // other_invlist's list no -> this_invlist's list no
-        list_mapping.resize(quantizer_size, -1);
+        list_mapping.resize(nlist, -1);
         for (size_t i = 0; i < nlist; i++) {
             other->quantizer->reconstruct(i, v2.data());
             bool found = false;
@@ -1320,17 +1315,14 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
                     found = true;
                     list_mapping[(int)i] = j;
                     break;
-            }
-
-            if (!found) {
-                FAISS_THROW_IF_NOT_MSG(
-                    v == v2, "coarse quantizers should be the same");
-            }
-        }
+                }
+             }
+             if (!found) {
+                    FAISS_THROW_IF_NOT_MSG(
+                        v == v2, "coarse quantizers should be the same");
+                }
         }
     }
-    printf("compatible!\n");
-    fflush(stdout);
     // direct_map.merge_from(other->direct_map);
     // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
     // while merging, we need to update those values, which are encoded.
@@ -1340,9 +1332,9 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
         auto other_map = other->direct_map.hashtable;
         for (auto it = other_map.begin(); it != other_map.end(); it++) {
             idx_t key = it->first;
-            uint64_t value = (uint64_t) it->second;
-            idx_t list_no = (idx_t)lo_listno(value);
-            idx_t this_list_no = (idx_t)list_mapping[(int)list_no];
+            uint64_t value = it->second;
+            idx_t list_no = lo_listno(value);
+            idx_t this_list_no = list_mapping[list_no];
             if (this_list_no != list_no) {
                 size_t offset = (size_t)lo_offset(value) + invlists->list_size(this_list_no);
                 direct_map.add_single_id(key, this_list_no, offset);
@@ -1355,8 +1347,6 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
 
     invlists->list_no_mapping = list_mapping;
     invlists->merge_from(other->invlists, add_id);
-    printf("merge from invlist complete!\n");
-    fflush(stdout);
     ntotal += other->ntotal;
     other->ntotal = 0;
 }
