@@ -1280,26 +1280,83 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
     FAISS_THROW_IF_NOT_MSG(
             typeid(*this) == typeid(*other),
             "can only merge indexes of the same type");
-    FAISS_THROW_IF_NOT_MSG(
-            this->direct_map.no() && other->direct_map.no(),
-            "merge direct_map not implemented");
 
-    if (check_compatible_for_merge_expensive_check) {
-        std::vector<float> v(d), v2(d);
-        for (size_t i = 0; i < nlist; i++) {
-            quantizer->reconstruct(i, v.data());
-            other->quantizer->reconstruct(i, v2.data());
-            FAISS_THROW_IF_NOT_MSG(
-                    v == v2, "coarse quantizers should be the same");
-        }
-    }
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Hashtable && this->direct_map.type == DirectMap::Hashtable)||
+    (this->direct_map.no() && other->direct_map.no());
+    FAISS_THROW_IF_NOT_MSG(
+            merge_direct_map_cond,
+            "merge direct_map not implemented");
 }
 
 void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
+    printf("checking compatiblity\n");
+    fflush(stdout);
     check_compatible_for_merge(otherIndex);
+    std::vector<size_t> list_mapping;
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
-    invlists->merge_from(other->invlists, add_id);
+    printf("base compatibilty check done\n");
+    fflush(stdout);
+    // expensive check involves seeing if the centroids are same across two IVF
+    // indexes (the order need not to be same, so the check involves a set for
+    // comparison)
+    // the thinking is that, the number of centroids would be in order of thousands
+    // or 10s of thousands so this way of checking shouldn't be too expensive(?)
+    if (check_compatible_for_merge_expensive_check) {
+        std::vector<float> v(d), v2(d);
+        std::vector<std::vector<float>> all_vecs;
+        for (size_t i = 0; i < nlist; i++) {
+            quantizer->reconstruct(i, v.data());
+            all_vecs.push_back(v);
+        }
 
+        long quantizer_size = all_vecs.size();
+        // other_invlist's list no -> this_invlist's list no
+        list_mapping.resize(quantizer_size, -1);
+        for (size_t i = 0; i < nlist; i++) {
+            other->quantizer->reconstruct(i, v2.data());
+            bool found = false;
+            for (size_t j = 0; j < quantizer_size; j++) {
+                if (all_vecs[j] == v2) {
+                    found = true;
+                    list_mapping[(int)i] = j;
+                    break;
+            }
+
+            if (!found) {
+                FAISS_THROW_IF_NOT_MSG(
+                    v == v2, "coarse quantizers should be the same");
+            }
+        }
+        }
+    }
+    printf("compatible!\n");
+    fflush(stdout);
+    // direct_map.merge_from(other->direct_map);
+    // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
+    // while merging, we need to update those values, which are encoded.
+    // high 32 bits are list_no and low 32 bits are offset
+    if (direct_map.type == DirectMap::Hashtable && 
+        other->direct_map.type == DirectMap::Hashtable) {
+        auto other_map = other->direct_map.hashtable;
+        for (auto it = other_map.begin(); it != other_map.end(); it++) {
+            idx_t key = it->first;
+            uint64_t value = (uint64_t) it->second;
+            idx_t list_no = (idx_t)lo_listno(value);
+            idx_t this_list_no = (idx_t)list_mapping[(int)list_no];
+            if (this_list_no != list_no) {
+                size_t offset = (size_t)lo_offset(value) + invlists->list_size(this_list_no);
+                direct_map.add_single_id(key, this_list_no, offset);
+                continue;
+            }
+            uint64_t offset = lo_offset(value) + invlists->list_size(list_no);
+            direct_map.add_single_id(key, list_no, offset);
+        }
+    }
+
+    invlists->list_no_mapping = list_mapping;
+    invlists->merge_from(other->invlists, add_id);
+    printf("merge from invlist complete!\n");
+    fflush(stdout);
     ntotal += other->ntotal;
     other->ntotal = 0;
 }
