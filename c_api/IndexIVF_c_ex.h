@@ -69,6 +69,11 @@ int faiss_Search_closest_eligible_centroids(
         idx_t* centroid_ids,
         const FaissSearchParameters* params);
 
+int faiss_IndexIVF_get_centroids(
+        FaissIndex* index,
+        float* centroids
+);
+
 /*
     Search the clusters whose IDs are in 'assign' and
     return the 'k' nearest neighbours from among them.
