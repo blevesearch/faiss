@@ -52,6 +52,22 @@ int faiss_Search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
+int faiss_IndexIVF_get_centroids(FaissIndex* index, float* centroids) {
+    try {
+        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index);
+        assert(index_ivf);
+
+        int n = index_ivf->nlist;
+        idx_t* keys = new idx_t[n];
+        for (int i = 0; i < n; i++) {
+            keys[i] = i;
+        }
+
+        index_ivf->quantizer->reconstruct_batch(n, keys, centroids);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_IndexIVF_search_preassigned_with_params(
         const FaissIndexIVF* index,
         idx_t n,
