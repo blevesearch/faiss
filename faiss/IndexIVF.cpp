@@ -23,6 +23,7 @@
 
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
+#include <faiss/utils/distances.h>
 
 #include <faiss/IndexFlat.h>
 #include <faiss/impl/AuxIndexStructures.h>
@@ -1290,38 +1291,50 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
 
 void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     check_compatible_for_merge(otherIndex);
-    std::vector<size_t> list_mapping;
+    std::vector<idx_t> list_mapping;
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
     // expensive check involves seeing if the centroids are same across two IVF
     // indexes (the order need not to be same, so the check involves a set for
     // comparison)
     // the thinking is that, the number of centroids would be in order of thousands
     // or 10s of thousands so this way of checking shouldn't be too expensive(?)
+    printf("exp check started\n");
+        // fflush(stdout);
     if (check_compatible_for_merge_expensive_check) {
         std::vector<float> v(d), v2(d);
         std::vector<std::vector<float>> all_vecs;
-        for (size_t i = 0; i < nlist; i++) {
+        for (idx_t i = 0; i < nlist; i++) {
             quantizer->reconstruct(i, v.data());
             all_vecs.push_back(v);
         }
         long quantizer_size = all_vecs.size();
         // other_invlist's list no -> this_invlist's list no
         list_mapping.resize(nlist, -1);
-        for (size_t i = 0; i < nlist; i++) {
+        int update = 0;
+        for (idx_t i = 0; i < nlist; i++) {
             other->quantizer->reconstruct(i, v2.data());
-            bool found = false;
-            for (size_t j = 0; j < quantizer_size; j++) {
-                if (all_vecs[j] == v2) {
-                    found = true;
-                    list_mapping[(int)i] = j;
-                    break;
+            // bool found = false;
+            float min_score = std::numeric_limits<float>::max();
+            for (idx_t j = 0; j < quantizer_size; j++) {
+                float score = fvec_L2sqr(all_vecs[j].data(), v2.data(), d);
+                if (score < min_score) {
+                    min_score = score;
+                    list_mapping[i] = j;
+                    update++;
                 }
              }
-             if (!found) {
-                    FAISS_THROW_IF_NOT_MSG(
-                        v == v2, "coarse quantizers should be the same");
-                }
+             
+            //  if (!found) {
+            //         FAISS_THROW_IF_NOT_MSG(
+            //             v == v2, "coarse quantizers should be the same");
+            //     }
         }
+        printf("exp check complete %d\n", update);
+        fflush(stdout);
+
+        // for (int i = 0; i < list_mapping.size(); i++) {
+        //     printf("%d -> %d\n", i, list_mapping[i]);
+        // }
     }
     // direct_map.merge_from(other->direct_map);
     // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
@@ -1335,20 +1348,19 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
             uint64_t value = it->second;
             idx_t list_no = lo_listno(value);
             idx_t this_list_no = list_mapping[list_no];
-            if (this_list_no != list_no) {
-                size_t offset = (size_t)lo_offset(value) + invlists->list_size(this_list_no);
-                direct_map.add_single_id(key, this_list_no, offset);
-                continue;
-            }
-            uint64_t offset = lo_offset(value) + invlists->list_size(list_no);
-            direct_map.add_single_id(key, list_no, offset);
+
+            size_t offset =  invlists->list_size(this_list_no) + lo_offset(value);
+            direct_map.add_single_id(key, this_list_no, offset);
         }
     }
-
+    printf("completed hashtable merge\n");
+    fflush(stdout);
     invlists->list_no_mapping = list_mapping;
     invlists->merge_from(other->invlists, add_id);
     ntotal += other->ntotal;
     other->ntotal = 0;
+    printf("merge_from completed\n");
+    fflush(stdout);
 }
 
 CodePacker* IndexIVF::get_CodePacker() const {
