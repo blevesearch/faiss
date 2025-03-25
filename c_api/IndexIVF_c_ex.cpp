@@ -52,6 +52,13 @@ int faiss_Search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
+idx_t faiss_get_list_for_key(FaissIndexIVF* index, idx_t key) {
+    try {
+        return reinterpret_cast<IndexIVF*>(index)->get_list_for_key(key);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_IndexIVF_search_preassigned_with_params(
         const FaissIndexIVF* index,
         idx_t n,

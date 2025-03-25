@@ -91,6 +91,8 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists);
 
+idx_t faiss_get_list_for_key(FaissIndexIVF* index, idx_t key);
+
 #ifdef __cplusplus
 }
 #endif
