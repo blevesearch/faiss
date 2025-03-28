@@ -343,7 +343,7 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
     void reconstruct_n(idx_t i0, idx_t ni, float* recons) const override;
 
-    idx_t get_list_for_key(idx_t key);
+    void get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists);
 
     /** Similar to search, but also reconstructs the stored vectors (or an
      * approximation in the case of lossy coding) for the search results.

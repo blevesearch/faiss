@@ -922,9 +922,10 @@ void IndexIVF::reconstruct(idx_t key, float* recons) const {
     reconstruct_from_offset(lo_listno(lo), lo_offset(lo), recons);
 }
 
-idx_t IndexIVF::get_list_for_key(idx_t key) {
-    idx_t lo = direct_map.get(key);
-    return lo_listno(lo);
+void IndexIVF::get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists) {
+    for (int i = 0; i < n_keys; i++) {
+        lists[i] = lo_listno(direct_map.get(keys[i]));
+    }
 }
 
 void IndexIVF::reconstruct_n(idx_t i0, idx_t ni, float* recons) const {

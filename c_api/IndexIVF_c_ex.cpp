@@ -36,9 +36,9 @@ int faiss_SearchParametersIVF_new_with_sel(
 
 int faiss_Search_closest_eligible_centroids(
         FaissIndex* index,
-        int n,
-        float* query,
-        int k, 
+        idx_t n,
+        const float* query,
+        idx_t k, 
         float* centroid_distances,
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
@@ -52,11 +52,13 @@ int faiss_Search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
-idx_t faiss_get_list_for_key(
-        FaissIndexIVF* index, 
-        idx_t key) {
+int faiss_get_lists_for_keys(
+        FaissIndexIVF* index,
+        idx_t* keys,
+        size_t n_keys,
+        idx_t* lists) {
     try {
-        return reinterpret_cast<IndexIVF*>(index)->get_list_for_key(key);
+        reinterpret_cast<IndexIVF*>(index)->get_lists_for_keys(keys, n_keys, lists);
     }
     CATCH_AND_HANDLE
 }
