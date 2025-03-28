@@ -91,6 +91,18 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists);
 
+/* 
+    Given a query vector ID `key`, return the list number  
+    where the vector is stored. In the context of an IVF index,  
+    this corresponds to the cluster that contains the vector.  
+
+    @param key - vector ID  
+*/
+
+idx_t faiss_get_list_for_key(
+        FaissIndexIVF* index, 
+        idx_t key);
+
 #ifdef __cplusplus
 }
 #endif
