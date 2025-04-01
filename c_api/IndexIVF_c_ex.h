@@ -37,9 +37,9 @@ int faiss_SearchParametersIVF_new_with_sel(
 */
 int faiss_Search_closest_eligible_centroids(
         FaissIndex* index,
-        int n,
-        float* query,
-        int k,
+        idx_t n,
+        const float* query,
+        idx_t k,
         float* centroid_distances,
         idx_t* centroid_ids,
         const FaissSearchParameters* params
@@ -91,17 +91,22 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists);
 
-/* 
-    Given a query vector ID `key`, return the list number  
-    where the vector is stored. In the context of an IVF index,  
-    this corresponds to the cluster that contains the vector.  
+/*
+    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs  
+    from an IVF index. This function efficiently assigns vector IDs to their  
+    respective inverted lists/clusters in a batch operation.  
 
-    @param key - vector ID  
+    @param index  - Pointer to the Faiss IVF index  
+    @param keys   - Input array of vector IDs (keys)  
+    @param n_keys - Number of vector keys in the input array  
+    @param lists  - Output array where corresponding cluster (list) IDs are stored  
 */
 
-idx_t faiss_get_list_for_key(
+int faiss_get_lists_for_keys(
         FaissIndexIVF* index, 
-        idx_t key);
+        idx_t* keys,
+        size_t n_keys,
+        idx_t* lists);
 
 #ifdef __cplusplus
 }
