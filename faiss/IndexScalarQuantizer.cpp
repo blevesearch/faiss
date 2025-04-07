@@ -287,7 +287,8 @@ void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
         const float* x,
         idx_t n,
         const uint8_t* codes,
-        float* dists) const {
+        float* dists,
+        float* dist_table) const {
 
     std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
         sq.get_distance_computer(metric_type));

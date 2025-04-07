@@ -459,6 +459,7 @@ struct IndexIVF : Index, IndexIVFInterface {
      * @param n - number of codes
      * @param codes - input codes
      * @param dists - output computed distances
+     * @param dist_table - input precomputed distance table for PQ
      */
 
     virtual void compute_distance_to_codes_for_list(
@@ -466,7 +467,20 @@ struct IndexIVF : Index, IndexIVFInterface {
         const float* x,
         idx_t n,
         const uint8_t* codes,
-        float* dists) const {};
+        float* dists,
+        float* dist_table) const {};
+
+    /** Given a query vector x, compute distance table and
+     *  return to the caller.
+     *
+     * @param x - input query vector
+     * @param dist_table - output precomputed distance table for PQ
+     *
+     */
+
+    virtual void compute_distance_table(
+        const float* x,
+        float* dist_table) const {};
 
 
     IndexIVF();
