@@ -76,8 +76,7 @@ void IndexBinaryFlat::search(
                     approx_topk_mode,
                     sel);
         } else {
-            printf("don't use heap \n");
-
+            
             hammings_knn_mc(
                     x + s * code_size,
                     xb.data(),
