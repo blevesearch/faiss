@@ -9,7 +9,7 @@
 
 #ifndef OMPCONFIG_H
 #define OMPCONFIG_H
-
+#include <iostream>
 #include <thread>
 
 namespace faiss {

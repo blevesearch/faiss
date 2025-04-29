@@ -46,6 +46,17 @@ int faiss_read_index_buf(
     CATCH_AND_HANDLE
 }
 
+int faiss_read_index_binary_buf(const uint8_t* buf, size_t size, int io_flags, FaissIndexBinary** p_out) {
+    try {
+        faiss::BufIOReader reader;
+        reader.buf = buf;
+        reader.buf_size = size;
+        auto index = faiss::read_index_binary(&reader, io_flags);
+        *p_out = reinterpret_cast<FaissIndexBinary*>(index);
+    }
+    CATCH_AND_HANDLE
+}
+
 void faiss_free_buf(uint8_t** buf) {
     free(*buf);
     *buf = nullptr;

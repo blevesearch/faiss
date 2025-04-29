@@ -10,6 +10,9 @@
 #include "IndexBinary_c.h"
 #include <faiss/IndexBinary.h>
 #include "macros_impl.h"
+#include "IndexIVF_c_ex.h"
+#include <faiss/IndexIVF.h>
+#include <faiss/IndexBinaryIVF.h>
 
 extern "C" {
 
@@ -25,6 +28,16 @@ DEFINE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
 DEFINE_GETTER(IndexBinary, int, verbose);
 DEFINE_SETTER(IndexBinary, int, verbose);
+
+int faiss_IndexBinaryIVF_set_direct_map(
+        FaissIndexBinaryIVF* index,
+        int direct_map_type) {
+    try {
+        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->set_direct_map_type(
+                static_cast<faiss::DirectMap::Type>(direct_map_type));
+    }
+    CATCH_AND_HANDLE
+}
 
 int faiss_IndexBinary_train(
         FaissIndexBinary* index,

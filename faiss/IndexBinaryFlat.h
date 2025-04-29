@@ -22,7 +22,8 @@ namespace faiss {
 /** Index that stores the full vectors and performs exhaustive search. */
 struct IndexBinaryFlat : IndexBinary {
     /// database vectors, size ntotal * d / 8
-    MaybeOwnedVector<uint8_t> xb;
+    std::vector<uint8_t> xb;
+    std::vector<idx_t> ids;
 
     /** Select between using a heap or counting to select the k smallest values
      * when scanning inverted lists.
@@ -36,6 +37,8 @@ struct IndexBinaryFlat : IndexBinary {
     explicit IndexBinaryFlat(idx_t d);
 
     void add(idx_t n, const uint8_t* x) override;
+
+    void add_with_ids(idx_t n, const uint8_t* x, const idx_t* xids) override;
 
     void reset() override;
 

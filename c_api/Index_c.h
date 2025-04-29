@@ -63,6 +63,9 @@ FAISS_DECLARE_GETTER(Index, FaissMetricType, metric_type)
 
 FAISS_DECLARE_GETTER_SETTER(Index, int, verbose)
 
+FAISS_DECLARE_CLASS(IndexBinary)
+FAISS_DECLARE_DESTRUCTOR(IndexBinary)
+
 /** Perform training on a representative set of vectors
  *
  * @param index  opaque pointer to index object

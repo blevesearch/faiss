@@ -25,8 +25,21 @@ void IndexBinaryFlat::add(idx_t n, const uint8_t* x) {
     ntotal += n;
 }
 
+void IndexBinaryFlat::add_with_ids(idx_t n, const uint8_t* x, const idx_t* xids) {
+    xb.insert(xb.end(), x, x + n * code_size);
+    if (xids) {
+        ids.insert(ids.end(), xids, xids + n);
+    } else {
+        for (idx_t i = 0; i < n; i++) {
+            ids.push_back(ntotal + i);
+        }
+    }
+    ntotal += n;
+}
+
 void IndexBinaryFlat::reset() {
     xb.clear();
+    ids.clear();
     ntotal = 0;
 }
 
@@ -63,6 +76,8 @@ void IndexBinaryFlat::search(
                     approx_topk_mode,
                     sel);
         } else {
+            printf("don't use heap \n");
+
             hammings_knn_mc(
                     x + s * code_size,
                     xb.data(),
@@ -71,8 +86,7 @@ void IndexBinaryFlat::search(
                     k,
                     code_size,
                     distances + s * k,
-                    labels + s * k,
-                    sel);
+                    labels + s * k);
         }
     }
 }

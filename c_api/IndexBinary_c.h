@@ -28,6 +28,9 @@ typedef struct FaissIDSelector_H FaissIDSelector;
 FAISS_DECLARE_CLASS(IndexBinary)
 FAISS_DECLARE_DESTRUCTOR(IndexBinary)
 
+FAISS_DECLARE_CLASS_INHERITED(IndexBinaryIVF, Index)
+FAISS_DECLARE_INDEX_DOWNCAST(IndexBinaryIVF)
+
 /// Getter for d
 FAISS_DECLARE_GETTER(IndexBinary, int, d)
 
@@ -41,6 +44,10 @@ FAISS_DECLARE_GETTER(IndexBinary, idx_t, ntotal)
 FAISS_DECLARE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
 FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, verbose)
+
+int faiss_IndexBinaryIVF_set_direct_map(
+        FaissIndexBinaryIVF* index,
+        int direct_map_type);
 
 /** Perform training on a representative set of vectors
  *
