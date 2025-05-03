@@ -29,6 +29,11 @@ DEFINE_GETTER(IndexBinary, FaissMetricType, metric_type)
 DEFINE_GETTER(IndexBinary, int, verbose);
 DEFINE_SETTER(IndexBinary, int, verbose);
 
+DEFINE_GETTER(IndexBinaryIVF, size_t, nprobe);
+DEFINE_SETTER(IndexBinaryIVF, size_t, nprobe);
+
+DEFINE_INDEXBINARY_DOWNCAST(IndexBinaryIVF)
+
 int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
         int direct_map_type) {
