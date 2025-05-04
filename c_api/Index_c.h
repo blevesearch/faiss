@@ -279,6 +279,22 @@ int faiss_Index_sa_decode(
 
 void faiss_set_omp_threads(unsigned int n);
 
+
+/** Compute distances between a query vector and a set of vectors for IVF indices
+ *
+ * @param index       opaque pointer to IVF index object
+ * @param query       query vector, size d
+ * @param ids         array of vector ids to compute distances to
+ * @param n_ids       number of ids in the array
+ * @param distances   output distances, size n_ids
+ */
+int faiss_IndexIVF_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances);
+
 #ifdef __cplusplus
 }
 #endif
