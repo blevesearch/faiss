@@ -32,6 +32,9 @@ DEFINE_SETTER(IndexBinary, int, verbose);
 DEFINE_GETTER(IndexBinaryIVF, size_t, nprobe);
 DEFINE_SETTER(IndexBinaryIVF, size_t, nprobe);
 
+DEFINE_GETTER(IndexBinaryIVF, size_t, nlist);
+DEFINE_SETTER(IndexBinaryIVF, size_t, nlist);
+
 DEFINE_INDEXBINARY_DOWNCAST(IndexBinaryIVF)
 
 int faiss_IndexBinaryIVF_set_direct_map(
@@ -82,6 +85,26 @@ int faiss_IndexBinary_search(
     try {
         reinterpret_cast<const faiss::IndexBinary*>(index)->search(
                 n, x, k, distances, labels);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexBinary_search_with_params(
+        const FaissIndexBinary* index,
+        idx_t n,
+        const uint8_t* x,
+        idx_t k,
+        const FaissSearchParameters* params,
+        int32_t* distances,
+        idx_t* labels) {
+    try {
+        reinterpret_cast<const faiss::IndexBinary*>(index)->search(
+                n,
+                x,
+                k,
+                distances,
+                labels,
+                reinterpret_cast<const faiss::SearchParameters*>(params));
     }
     CATCH_AND_HANDLE
 }
