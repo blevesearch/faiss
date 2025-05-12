@@ -37,7 +37,8 @@ FaissIndexBinaryIVF* faiss_IndexBinaryIVF_cast(FaissIndexBinary* index);
 FAISS_DECLARE_GETTER(IndexBinary, int, d)
 
 /// Getter for is_trained
-FAISS_DECLARE_GETTER(IndexBinary, int, is_trained)
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, is_trained)
 
 /// Getter for ntotal
 FAISS_DECLARE_GETTER(IndexBinary, idx_t, ntotal)
@@ -50,6 +51,9 @@ FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, verbose)
 FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nlist)
 
 FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nprobe)
+
+/// quantizer that maps vectors to inverted lists
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, FaissIndexBinary*, quantizer)
 
 /** Perform training on a representative set of vectors
  *

@@ -21,6 +21,7 @@ DEFINE_DESTRUCTOR(IndexBinary)
 DEFINE_GETTER(IndexBinary, int, d)
 
 DEFINE_GETTER(IndexBinary, int, is_trained)
+DEFINE_SETTER(IndexBinary, int, is_trained)
 
 DEFINE_GETTER(IndexBinary, idx_t, ntotal)
 
@@ -179,5 +180,15 @@ int faiss_IndexBinary_reconstruct_n(
                 i0, ni, recons);
     }
     CATCH_AND_HANDLE
+}
+
+FaissIndexBinary* faiss_IndexBinaryIVF_quantizer(const FaissIndexBinaryIVF* index) {
+    return reinterpret_cast<FaissIndexBinary*>(
+        reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->quantizer);
+}
+
+void faiss_IndexBinaryIVF_set_quantizer(FaissIndexBinaryIVF* index, FaissIndexBinary* quantizer) {
+    reinterpret_cast<faiss::IndexBinaryIVF*>(index)->quantizer = 
+        reinterpret_cast<faiss::IndexBinary*>(quantizer);
 }
 }
