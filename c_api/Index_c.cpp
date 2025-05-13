@@ -235,19 +235,17 @@ void faiss_set_omp_threads(unsigned int n) {
     faiss::set_num_omp_threads(n);
 }
 
-int faiss_IndexIVF_dist_compute(
+int faiss_Index_dist_compute(
         const FaissIndex* index,
         const float* query,
         const idx_t* ids,
         size_t n_ids,
         float* distances) {
     try {
-        const faiss::IndexIVF* ivf = dynamic_cast<const faiss::IndexIVF*>(
-                reinterpret_cast<const faiss::Index*>(index));
-        FAISS_THROW_IF_NOT_MSG(ivf, "index is not an IVF index");
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
         
         // Get a distance computer for this index
-        std::unique_ptr<faiss::DistanceComputer> dc(ivf->get_distance_computer());
+        std::unique_ptr<faiss::DistanceComputer> dc(idx->get_distance_computer());
         
         // Set the query vector
         dc->set_query(query);
@@ -256,6 +254,8 @@ int faiss_IndexIVF_dist_compute(
         for (size_t i = 0; i < n_ids; i++) {
             distances[i] = (*dc)(ids[i]);
         }
+        
+        return 0;
     }
     CATCH_AND_HANDLE
 }
