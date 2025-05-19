@@ -68,6 +68,11 @@ option(FAISS_ENABLE_C_API "Build C API." OFF)
 option(FAISS_ENABLE_EXTRAS "Build extras like benchmarks and demos" ON)
 option(FAISS_USE_LTO "Enable Link-Time optimization" OFF)
 
+# Force FAISS_OPT_LEVEL to "generic" if not building on x86_64.
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  set(FAISS_OPT_LEVEL "generic" CACHE STRING "No AVX since not building on x86_64" FORCE)
+endif()
+
 if(FAISS_ENABLE_GPU)
   if(FAISS_ENABLE_ROCM)
     enable_language(HIP)

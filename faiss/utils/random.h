@@ -14,6 +14,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <faiss/OMPConfig.h>
 #include <random>
 
 namespace faiss {

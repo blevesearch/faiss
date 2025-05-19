@@ -10,6 +10,7 @@
 #include <faiss/impl/PolysemousTraining.h>
 
 #include <omp.h>
+
 #include <stdint.h>
 
 #include <algorithm>
@@ -778,7 +779,7 @@ void PolysemousTraining::optimize_reproduce_distances(
                 nt);
     }
 
-#pragma omp parallel for num_threads(nt)
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int m = 0; m < pq.M; m++) {
         std::vector<double> dis_table;
 
@@ -845,7 +846,7 @@ void PolysemousTraining::optimize_ranking(
         pq.compute_sdc_table();
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int m = 0; m < pq.M; m++) {
         size_t nq, nb;
         std::vector<uint32_t> codes;     // query codes, then db codes

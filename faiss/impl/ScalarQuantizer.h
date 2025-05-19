@@ -107,6 +107,8 @@ struct ScalarQuantizer : Quantizer {
         float distance_to_code(const uint8_t* code) final {
             return query_to_code(code);
         }
+
+	void distance_to_codes(idx_t n, const uint8_t* codes, float* dists);
     };
 
     SQDistanceComputer* get_distance_computer(

@@ -10,6 +10,7 @@
 
 #include "index_io_c.h"
 #include <faiss/index_io.h>
+#include <faiss/impl/io.h>
 #include "macros_impl.h"
 
 using faiss::Index;

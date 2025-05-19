@@ -8,6 +8,7 @@
 #include <faiss/IndexBinaryHNSW.h>
 
 #include <omp.h>
+
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -110,7 +111,7 @@ void hnsw_add_vertices(
                 std::swap(order[j], order[j + rng2.rand_int(i1 - j)]);
             }
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
             {
                 VisitedTable vt(ntotal);
 
@@ -202,7 +203,7 @@ void IndexBinaryHNSW::search(
     using RH = HeapBlockResultHandler<HNSW::C>;
     RH bres(n, distances_f, labels, k);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         VisitedTable vt(ntotal);
         std::unique_ptr<DistanceComputer> dis(get_distance_computer());
@@ -217,7 +218,7 @@ void IndexBinaryHNSW::search(
         }
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < n * k; ++i) {
         distances[i] = std::round(distances_f[i]);
     }

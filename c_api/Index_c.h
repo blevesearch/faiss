@@ -274,6 +274,8 @@ int faiss_Index_sa_decode(
         const uint8_t* bytes,
         float* x);
 
+void faiss_set_omp_threads(unsigned int n);
+
 #ifdef __cplusplus
 }
 #endif

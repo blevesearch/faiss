@@ -181,7 +181,7 @@ void hammings_knn_hc(
     const size_t block_size = hamming_batch_size;
     for (size_t j0 = 0; j0 < n2; j0 += block_size) {
         const size_t j1 = std::min(j0 + block_size, n2);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < ha->nh; i++) {
             HammingComputer hc(bs1 + i * bytes_per_code, bytes_per_code);
 
@@ -262,7 +262,7 @@ void hammings_knn_mc(
     const size_t block_size = hamming_batch_size;
     for (size_t j0 = 0; j0 < nb; j0 += block_size) {
         const size_t j1 = std::min(j0 + block_size, nb);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < na; ++i) {
             for (size_t j = j0; j < j1; ++j) {
                 if (!sel || sel->is_member(j)) {
@@ -301,7 +301,7 @@ void hamming_range_search(
         size_t code_size,
         RangeSearchResult* res,
         const faiss::IDSelector* sel) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(res);
 
@@ -381,7 +381,7 @@ void fvecs2bitvecs(
         size_t d,
         size_t n) {
     const int64_t ncodes = ((d + 7) / 8);
-#pragma omp parallel for if (n > 100000)
+#pragma omp parallel for if (n > 100000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++)
         fvec2bitvec(x + i * d, b + i * ncodes, d);
 }
@@ -392,7 +392,7 @@ void bitvecs2fvecs(
         size_t d,
         size_t n) {
     const int64_t ncodes = ((d + 7) / 8);
-#pragma omp parallel for if (n > 100000)
+#pragma omp parallel for if (n > 100000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         binary_to_real(d, b + i * ncodes, x + i * d);
     }
@@ -437,7 +437,7 @@ void bitvec_shuffle(
     size_t lda = (da + 7) / 8;
     size_t ldb = (db + 7) / 8;
 
-#pragma omp parallel for if (n > 10000)
+#pragma omp parallel for if (n > 10000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const uint8_t* ai = a + i * lda;
         uint8_t* bi = b + i * ldb;
@@ -670,7 +670,7 @@ void generalized_hammings_knn_hc(
     if (ordered)
         ha->heapify();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < na; i++) {
         const uint8_t* __restrict ca = a + i * code_size;
         const uint8_t* __restrict cb = b;
@@ -710,7 +710,7 @@ void pack_bitstrings(
         uint8_t* packed,
         size_t code_size) {
     FAISS_THROW_IF_NOT(code_size >= (M * nbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* in = unpacked + i * M;
         uint8_t* out = packed + i * code_size;
@@ -733,7 +733,7 @@ void pack_bitstrings(
         totbit += nbit[j];
     }
     FAISS_THROW_IF_NOT(code_size >= (totbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* in = unpacked + i * M;
         uint8_t* out = packed + i * code_size;
@@ -752,7 +752,7 @@ void unpack_bitstrings(
         size_t code_size,
         int32_t* unpacked) {
     FAISS_THROW_IF_NOT(code_size >= (M * nbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const uint8_t* in = packed + i * code_size;
         int32_t* out = unpacked + i * M;
@@ -775,7 +775,7 @@ void unpack_bitstrings(
         totbit += nbit[j];
     }
     FAISS_THROW_IF_NOT(code_size >= (totbit + 7) / 8);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const uint8_t* in = packed + i * code_size;
         int32_t* out = unpacked + i * M;

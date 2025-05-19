@@ -256,6 +256,12 @@ struct OnDiskInvertedLists::OngoingPrefetch {
 int OnDiskInvertedLists::OngoingPrefetch::global_cs = 0;
 
 void OnDiskInvertedLists::prefetch_lists(const idx_t* list_nos, int n) const {
+
+    // avoid prefetch when the ondisk-ivf is already prepared for read-only paths
+    // helpful when the queries are not batched
+    if (skip_prefetch) {
+        return;
+    }
     pf->prefetch_lists(list_nos, n);
 }
 
@@ -352,6 +358,8 @@ OnDiskInvertedLists::OnDiskInvertedLists(
           filename(filename),
           totsize(0),
           ptr(nullptr),
+          pre_mapped(false),
+          skip_prefetch(false),
           read_only(false),
           locks(new LockLevels()),
           pf(new OngoingPrefetch(this)),
@@ -368,11 +376,16 @@ OnDiskInvertedLists::~OnDiskInvertedLists() {
 
     // unmap all lists
     if (ptr != nullptr) {
-        int err = munmap(ptr, totsize);
-        if (err != 0) {
-            fprintf(stderr, "mumap error: %s", strerror(errno));
+        if (!pre_mapped) {
+            int err = munmap(ptr, totsize);
+            if (err != 0) {
+                fprintf(stderr, "mumap error: %s", strerror(errno));
+            }
+        } else {
+            ptr = nullptr;
         }
     }
+
     delete locks;
 }
 
@@ -602,7 +615,7 @@ size_t OnDiskInvertedLists::merge_from_multiple(
     size_t nmerged = 0;
     double t0 = getmillisecs(), last_t = t0;
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (size_t j = 0; j < nlist; j++) {
         List& l = lists[j];
         for (int i = 0; i < n_il; i++) {
@@ -755,10 +768,48 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     return od;
 }
 
+/**
+ * This function is just an alternate way to use the OnDiskInvertedLists.
+ * It's useful when the index is read using BufIOReader from a uint8_t* buffer
+ * which is already mmap'd by the application layer.
+ * All the responbility of handling this mmap pointer now falls on the app layer
+**/
+InvertedLists* read_ArrayInvertedLists_MMAP(
+        IOReader* f,
+        OnDiskInvertedLists* ails,
+        const std::vector<size_t>& sizes) {
+
+    // setting this true is to ensure that the destructor does not unmap
+    // since the mmap control is on the parent layer of faiss.
+    ails->pre_mapped = true;
+
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+
+    size_t o = reader->rp;
+    ails->totsize = reader->buf_size;
+    FAISS_THROW_IF_NOT(o <= ails->totsize);
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
+    // using the base pointer to the mmap'd region
+    ails->ptr = const_cast<uint8_t*>(reader->buf);
+
+    for (size_t i = 0; i < ails->nlist; i++) {
+        OnDiskInvertedLists::List& l = ails->lists[i];
+        l.size = l.capacity = sizes[i];
+        l.offset = o;
+        o += l.size * (sizeof(idx_t) + ails->code_size);
+    }
+
+    // updating the read pointer appropriately, this is needed when the IVF
+    // wrapped with another index class.
+    reader->rp = o;
+    return ails;
+}
+
 /** read from a ArrayInvertedLists into this invertedlist type */
 InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
         IOReader* f,
-        int /* io_flags */,
+        int io_flags,
         size_t nlist,
         size_t code_size,
         const std::vector<size_t>& sizes) const {
@@ -767,6 +818,13 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     ails->code_size = code_size;
     ails->read_only = true;
     ails->lists.resize(nlist);
+    if (io_flags & IO_FLAG_SKIP_PREFETCH) {
+        ails->skip_prefetch = true;
+    }
+
+    if (io_flags & IO_FLAG_READ_MMAP) {
+        return read_ArrayInvertedLists_MMAP(f, ails, sizes);
+    }
 
     FileIOReader* reader = dynamic_cast<FileIOReader*>(f);
     FAISS_THROW_IF_NOT_MSG(reader, "mmap only supported for File objects");

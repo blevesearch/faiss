@@ -298,7 +298,7 @@ TEST(TestHamming, test_hamming_knn) {
                 true_byte_distances);
 
         // run test on generalized_hammings_knn_hc
-        std::vector<long> ids_gen(na * k);
+        std::vector<long long> ids_gen(na * k);
         std::vector<int> dist_gen(na * k);
         faiss::int_maxheap_array_t res = {
                 na, k, ids_gen.data(), dist_gen.data()};
@@ -308,7 +308,7 @@ TEST(TestHamming, test_hamming_knn) {
         ASSERT_EQ(dist_gen, *true_byte_distances) << assert_str.str();
 
         // run test on hammings_knn
-        std::vector<long> ids_ham_knn(na * k, 0);
+        std::vector<long long> ids_ham_knn(na * k, 0);
         std::vector<int> dist_ham_knn(na * k, 0);
         res = {na, k, ids_ham_knn.data(), dist_ham_knn.data()};
         faiss::hammings_knn(&res, a->data(), b->data(), nb, code_size, true);

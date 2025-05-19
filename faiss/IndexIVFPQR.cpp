@@ -144,7 +144,7 @@ void IndexIVFPQR::search_preassigned(
 
     // 3rd level refinement
     size_t n_refine = 0;
-#pragma omp parallel reduction(+ : n_refine)
+#pragma omp parallel reduction(+ : n_refine) num_threads(num_omp_threads)
     {
         // tmp buffers
         std::unique_ptr<float[]> residual_1(new float[2 * d]);

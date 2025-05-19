@@ -10,6 +10,7 @@
 #include <faiss/IndexIVF.h>
 
 #include <omp.h>
+
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -239,7 +240,7 @@ void IndexIVF::add_core(
 
     DirectMapAdd dm_adder(direct_map, n, xids);
 
-#pragma omp parallel reduction(+ : nadd)
+#pragma omp parallel reduction(+ : nadd) num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();
@@ -351,7 +352,7 @@ void IndexIVF::search(
         std::mutex exception_mutex;
         std::string exception_string;
 
-#pragma omp parallel for if (nt > 1)
+#pragma omp parallel for if (nt > 1) num_threads(num_omp_threads)
         for (idx_t slice = 0; slice < nt; slice++) {
             IndexIVFStats local_stats;
             idx_t i0 = n * slice / nt;
@@ -452,7 +453,7 @@ void IndexIVF::search_preassigned(
     void* inverted_list_context =
             params ? params->inverted_list_context : nullptr;
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap) num_threads(num_omp_threads)
     {
         std::unique_ptr<InvertedListScanner> scanner(
                 get_InvertedListScanner(store_pairs, sel, params));
@@ -792,7 +793,7 @@ void IndexIVF::range_search_preassigned(
     void* inverted_list_context =
             params ? params->inverted_list_context : nullptr;
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis) num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(result);
         std::unique_ptr<InvertedListScanner> scanner(
@@ -922,6 +923,12 @@ void IndexIVF::reconstruct(idx_t key, float* recons) const {
     reconstruct_from_offset(lo_listno(lo), lo_offset(lo), recons);
 }
 
+void IndexIVF::get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists) {
+    for (int i = 0; i < n_keys; i++) {
+        lists[i] = lo_listno(direct_map.get(keys[i]));
+    }
+}
+
 void IndexIVF::reconstruct_n(idx_t i0, idx_t ni, float* recons) const {
     FAISS_THROW_IF_NOT(ni == 0 || (i0 >= 0 && i0 + ni <= ntotal));
 
@@ -1005,7 +1012,7 @@ void IndexIVF::search_and_reconstruct(
             labels,
             true /* store_pairs */,
             params);
-#pragma omp parallel for if (n * k > 1000)
+#pragma omp parallel for if (n * k > 1000) num_threads(num_omp_threads)
     for (idx_t ij = 0; ij < n * k; ij++) {
         idx_t key = labels[ij];
         float* reconstructed = recons + ij * d;
@@ -1067,7 +1074,7 @@ void IndexIVF::search_and_return_codes(
         code_size_1 += coarse_code_size();
     }
 
-#pragma omp parallel for if (n * k > 1000)
+#pragma omp parallel for if (n * k > 1000) num_threads(num_omp_threads)
     for (idx_t ij = 0; ij < n * k; ij++) {
         idx_t key = labels[ij];
         uint8_t* code1 = codes + ij * code_size_1;

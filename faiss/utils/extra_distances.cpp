@@ -10,6 +10,7 @@
 #include <faiss/utils/extra_distances.h>
 
 #include <omp.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -38,7 +39,7 @@ struct Run_pairwise_extra_distances {
            int64_t ldq,
            int64_t ldb,
            int64_t ldd) {
-#pragma omp parallel for if (nq > 10)
+#pragma omp parallel for if (nq > 10) num_threads(num_omp_threads)
         for (int64_t i = 0; i < nq; i++) {
             const float* xqi = xq + i * ldq;
             const float* xbj = xb;
@@ -71,7 +72,8 @@ struct Run_knn_extra_metrics {
         for (size_t i0 = 0; i0 < nx; i0 += check_period) {
             size_t i1 = std::min(i0 + check_period, nx);
 
-#pragma omp parallel for
+
+#pragma omp parallel for num_threads(num_omp_threads)
             for (int64_t i = i0; i < i1; i++) {
                 const float* x_i = x + i * d;
                 const float* y_j = y;
