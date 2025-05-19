@@ -37,7 +37,7 @@ std::stringstream get_correct_hamming_example(
         const size_t code_size,
         std::shared_ptr<std::vector<uint8_t>> a,
         std::shared_ptr<std::vector<uint8_t>> b,
-        std::shared_ptr<std::vector<long>> true_ids,
+        std::shared_ptr<std::vector<long long>> true_ids,
         // regular Hamming (bit-level distances)
         std::shared_ptr<std::vector<int>> true_bit_distances,
         // generalized Hamming (byte-level distances)
@@ -278,7 +278,7 @@ TEST(TestHamming, test_hamming_knn) {
 
     auto a = std::make_shared<std::vector<uint8_t>>();
     auto b = std::make_shared<std::vector<uint8_t>>();
-    auto true_ids = std::make_shared<std::vector<long>>();
+    auto true_ids = std::make_shared<std::vector<long long>>();
     auto true_bit_distances = std::make_shared<std::vector<int>>();
     auto true_byte_distances = std::make_shared<std::vector<int>>();
 
