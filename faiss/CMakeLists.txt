@@ -28,6 +28,7 @@ set(FAISS_SRC
   IndexIVFAdditiveQuantizerFastScan.cpp
   IndexIVFPQFastScan.cpp
   IndexIVFPQR.cpp
+  IndexIVFRaBitQ.cpp
   IndexIVFSpectralHash.cpp
   IndexLSH.cpp
   IndexNNDescent.cpp
@@ -39,6 +40,7 @@ set(FAISS_SRC
   IndexIVFIndependentQuantizer.cpp
   IndexPQFastScan.cpp
   IndexPreTransform.cpp
+  IndexRaBitQ.cpp
   IndexRefine.cpp
   IndexReplicas.cpp
   IndexRowwiseMinMax.cpp
@@ -61,6 +63,7 @@ set(FAISS_SRC
   impl/PolysemousTraining.cpp
   impl/ProductQuantizer.cpp
   impl/AdditiveQuantizer.cpp
+  impl/RaBitQuantizer.cpp
   impl/ResidualQuantizer.cpp
   impl/LocalSearchQuantizer.cpp
   impl/ProductAdditiveQuantizer.cpp
@@ -70,12 +73,12 @@ set(FAISS_SRC
   impl/io.cpp
   impl/kmeans1d.cpp
   impl/lattice_Zn.cpp
+  impl/mapped_io.cpp
   impl/pq4_fast_scan.cpp
   impl/pq4_fast_scan_search_1.cpp
   impl/pq4_fast_scan_search_qbs.cpp
   impl/residual_quantizer_encode_steps.cpp
-  impl/io.cpp
-  impl/lattice_Zn.cpp
+  impl/zerocopy_io.cpp
   impl/NNDescent.cpp
   invlists/BlockInvertedLists.cpp
   invlists/DirectMap.cpp
@@ -124,6 +127,7 @@ set(FAISS_HEADERS
   IndexIVFAdditiveQuantizerFastScan.h
   IndexIVFPQFastScan.h
   IndexIVFPQR.h
+  IndexIVFRaBitQ.h
   IndexIVFSpectralHash.h
   IndexLSH.h
   IndexNeuralNetCodec.h
@@ -137,6 +141,7 @@ set(FAISS_HEADERS
   IndexPreTransform.h
   IndexRefine.h
   IndexReplicas.h
+  IndexRaBitQ.h
   IndexRowwiseMinMax.h
   IndexScalarQuantizer.h
   IndexShards.h
@@ -160,12 +165,14 @@ set(FAISS_HEADERS
   impl/LocalSearchQuantizer.h
   impl/ProductAdditiveQuantizer.h
   impl/LookupTableScaler.h
+  impl/maybe_owned_vector.h
   impl/NNDescent.h
   impl/NSG.h
   impl/PolysemousTraining.h
   impl/ProductQuantizer-inl.h
   impl/ProductQuantizer.h
   impl/Quantizer.h
+  impl/RaBitQuantizer.h
   impl/ResidualQuantizer.h
   impl/ResultHandler.h
   impl/ScalarQuantizer.h
@@ -357,6 +364,10 @@ if(WIN32)
   target_compile_definitions(faiss_sve PRIVATE FAISS_MAIN_LIB)
 endif()
 
+if(WIN32)
+  set_target_properties(faiss PROPERTIES LINK_FLAGS "-Wl,--export-all-symbols")
+endif()
+
 string(FIND "${CMAKE_CXX_FLAGS}" "FINTEGER" finteger_idx)
 if (${finteger_idx} EQUAL -1)
   target_compile_definitions(faiss PRIVATE FINTEGER=int)
@@ -439,7 +450,7 @@ if(FAISS_OPT_LEVEL STREQUAL "avx512")
   )
 endif()
 if(FAISS_OPT_LEVEL STREQUAL "avx512_spr")
-  install(TARGETS faiss_avx2 faiss_avx512 faiss_avx512_spr
+  install(TARGETS faiss_avx2 faiss_avx512_spr
     EXPORT faiss-targets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

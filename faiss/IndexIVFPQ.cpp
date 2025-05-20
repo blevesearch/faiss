@@ -1350,7 +1350,8 @@ InvertedListScanner* get_InvertedListScanner2(
 
 InvertedListScanner* IndexIVFPQ::get_InvertedListScanner(
         bool store_pairs,
-        const IDSelector* sel) const {
+        const IDSelector* sel,
+        const IVFSearchParameters*) const {
     if (sel) {
         return get_InvertedListScanner2<true>(*this, store_pairs, sel);
     } else {
@@ -1425,7 +1426,7 @@ void IndexIVFPQ::compute_distance_to_codes_for_list(
         float* dist_table) const {
 
     std::unique_ptr<InvertedListScanner> scanner(
-        get_InvertedListScanner(true, nullptr));
+        get_InvertedListScanner(true, nullptr, nullptr));
 
 
     if (dist_table) {
@@ -1477,7 +1478,7 @@ void IndexIVFPQ::compute_distance_table(
         float* dist_table) const {
 
     std::unique_ptr<InvertedListScanner> scanner(
-        get_InvertedListScanner(true, nullptr));
+        get_InvertedListScanner(true, nullptr, nullptr));
 
     scanner->set_query(x);
 

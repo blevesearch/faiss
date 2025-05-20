@@ -193,6 +193,27 @@ TEST(HNSW, Test_popmin_infinite_distances) {
     }
 }
 
+TEST(HNSW, Test_IndexHNSW_METRIC_Lp) {
+    // Create an HNSW index with METRIC_Lp and metric_arg = 3
+    faiss::IndexFlat storage_index(1, faiss::METRIC_Lp);
+    storage_index.metric_arg = 3;
+    faiss::IndexHNSW index(&storage_index, 32);
+
+    // Add a single data point
+    float data[1] = {0.0};
+    index.add(1, data);
+
+    // Prepare a query
+    float query[1] = {2.0};
+    float distance;
+    faiss::idx_t label;
+
+    index.search(1, query, 1, &distance, &label);
+
+    EXPECT_NEAR(distance, 8.0, 1e-5); // Distance should be 8.0 (2^3)
+    EXPECT_EQ(label, 0);              // Label should be 0
+}
+
 class HNSWTest : public testing::Test {
    protected:
     HNSWTest() {
@@ -580,6 +601,16 @@ TEST_F(HNSWTest, TEST_search_neighbors_to_add) {
         link_targets.pop();
         reference_link_targets.pop();
     }
+}
+
+TEST_F(HNSWTest, TEST_nb_neighbors_bound) {
+    omp_set_num_threads(1);
+    EXPECT_EQ(index->hnsw.nb_neighbors(0), 8);
+    EXPECT_EQ(index->hnsw.nb_neighbors(1), 4);
+    EXPECT_EQ(index->hnsw.nb_neighbors(2), 4);
+    EXPECT_EQ(index->hnsw.nb_neighbors(3), 4);
+    // picking a large number to trigger an exception based on checking bounds
+    EXPECT_THROW(index->hnsw.nb_neighbors(100), faiss::FaissException);
 }
 
 TEST_F(HNSWTest, TEST_search_level_0) {

@@ -173,8 +173,8 @@ struct GpuIndexCagraConfig : public GpuIndexConfig {
     /// Number of Iterations to run if building with NN_DESCENT
     size_t nn_descent_niter = 20;
 
-    IVFPQBuildCagraConfig* ivf_pq_params = nullptr;
-    IVFPQSearchCagraConfig* ivf_pq_search_params = nullptr;
+    std::shared_ptr<IVFPQBuildCagraConfig> ivf_pq_params{nullptr};
+    std::shared_ptr<IVFPQSearchCagraConfig> ivf_pq_search_params{nullptr};
     float refine_rate = 2.0f;
     bool store_dataset = true;
 };
@@ -245,7 +245,17 @@ struct GpuIndexCagra : public GpuIndex {
             faiss::MetricType metric = faiss::METRIC_L2,
             GpuIndexCagraConfig config = GpuIndexCagraConfig());
 
-    /// Trains CAGRA based on the given vector data
+    /// Trains CAGRA based on the given vector data and add them along with ids.
+    /// NB: The use of the add function here is to build the CAGRA graph on
+    /// the base dataset. Use this function when you want to add vectors with
+    /// ids. Ref: https://github.com/facebookresearch/faiss/issues/4107
+    void add(idx_t n, const float* x) override;
+
+    /// Trains CAGRA based on the given vector data.
+    /// NB: The use of the train function here is to build the CAGRA graph on
+    /// the base dataset and is currently the only function to add the full set
+    /// of vectors (without IDs) to the index. There is no external quantizer to
+    /// be trained here.
     void train(idx_t n, const float* x) override;
 
     /// Initialize ourselves from the given CPU index; will overwrite

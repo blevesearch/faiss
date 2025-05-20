@@ -535,7 +535,7 @@ struct RangeSearchBlockResultHandler : BlockResultHandler<C, use_sel> {
             try {
                 // finalize the partial result
                 pres.finalize();
-            } catch (const faiss::FaissException& e) {
+            } catch ([[maybe_unused]] const faiss::FaissException& e) {
                 // Do nothing if allocation fails in finalizing partial results.
 #ifndef NDEBUG
                 std::cerr << e.what() << std::endl;
@@ -599,7 +599,7 @@ struct RangeSearchBlockResultHandler : BlockResultHandler<C, use_sel> {
             if (partial_results.size() > 0) {
                 RangeSearchPartialResult::merge(partial_results);
             }
-        } catch (const faiss::FaissException& e) {
+        } catch ([[maybe_unused]] const faiss::FaissException& e) {
             // Do nothing if allocation fails in merge.
 #ifndef NDEBUG
             std::cerr << e.what() << std::endl;

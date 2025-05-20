@@ -12,7 +12,7 @@
 #include <cstdio>
 #include <faiss/OMPConfig.h>
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 
 /*******************************************************
  * Windows specific macros
@@ -24,11 +24,11 @@
 #define FAISS_API __declspec(dllimport)
 #endif // FAISS_MAIN_LIB
 
-#ifdef _MSC_VER
 #define strtok_r strtok_s
-#endif // _MSC_VER
 
+#ifdef _MSC_VER
 #define __PRETTY_FUNCTION__ __FUNCSIG__
+#endif // _MSC_VER
 
 #define posix_memalign(p, a, s) \
     (((*(p)) = _aligned_malloc((s), (a))), *(p) ? 0 : errno)
@@ -38,6 +38,7 @@
 #define ALIGNED(x) __declspec(align(x))
 
 // redefine the GCC intrinsics with Windows equivalents
+#ifdef _MSC_VER
 
 #include <intrin.h>
 #include <limits.h>
@@ -76,6 +77,7 @@ inline int __builtin_clzll(uint64_t x) {
 
 #define __builtin_popcount __popcnt
 #define __builtin_popcountl __popcnt64
+#define __builtin_popcountll __popcnt64
 
 #ifndef __clang__
 #define __m128i_u __m128i
@@ -101,6 +103,8 @@ inline int __builtin_clzll(uint64_t x) {
 #define __FMA__ 1
 #define __F16C__ 1
 #endif
+
+#endif // _MSC_VER
 
 #define FAISS_ALWAYS_INLINE __forceinline
 
