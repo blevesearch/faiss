@@ -59,10 +59,10 @@ void IndexScalarQuantizer::search(
     FAISS_THROW_IF_NOT(
             metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
 
-// Adding an openMP guard here to spawn threads only if n > 1, where n is the number
-// of queries in the batch. If n = 1, then the search is done in a single thread.
-// This is done to avoid the overhead of spawning threads for executing sequential code.
-// This is for bleve, more in: MB-61930
+// Adding an openMP guard here to spawn threads only if n > 1, where n is the
+// number of queries in the batch. If n = 1, then the search is done in a single
+// thread. This is done to avoid the overhead of spawning threads for executing
+// sequential code. This is for bleve, more in: MB-61930
 #pragma omp parallel if (n > 1) num_threads(num_omp_threads)
     {
         std::unique_ptr<InvertedListScanner> scanner(
@@ -290,9 +290,8 @@ void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists,
         float* dist_table) const {
-
     std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
-        sq.get_distance_computer(metric_type));
+            sq.get_distance_computer(metric_type));
 
     dc->code_size = sq.code_size;
 
@@ -309,6 +308,5 @@ void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
 
     return;
 }
-
 
 } // namespace faiss

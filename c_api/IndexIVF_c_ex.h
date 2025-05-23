@@ -12,16 +12,14 @@
 #define FAISS_INDEX_IVF_EX_C_H
 
 #include "Clustering_c.h"
+#include "IndexIVF_c.h"
 #include "Index_c.h"
 #include "faiss_c.h"
-#include "IndexIVF_c.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-int faiss_IndexIVF_set_direct_map(
-        FaissIndexIVF* index,
-        int direct_map_type);
+int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type);
 
 int faiss_SearchParametersIVF_new_with_sel(
         FaissSearchParametersIVF** p_sp,
@@ -33,7 +31,7 @@ int faiss_SearchParametersIVF_new_with_sel(
     @param query: query vector.
     @param k: count of closest number of vectors.
     @param centroid_distances: output distances, size n * k.
-    @param centroid_ids: output centroid IDs, size n * k.    
+    @param centroid_ids: output centroid IDs, size n * k.
 */
 int faiss_Search_closest_eligible_centroids(
         FaissIndex* index,
@@ -42,17 +40,16 @@ int faiss_Search_closest_eligible_centroids(
         idx_t k,
         float* centroid_distances,
         idx_t* centroid_ids,
-        const FaissSearchParameters* params
-);
+        const FaissSearchParameters* params);
 
 /*
     Search the clusters whose IDs are in 'assign' and
-    return the 'k' nearest neighbours from among them.     
+    return the 'k' nearest neighbours from among them.
 
     @param n: number of queries.
     @param x: query vector, size n * d.
     @param k: count of nearest neighbours to be returned for each query.
-    @param centroid_ids: output centroid IDs, size n * k. 
+    @param centroid_ids: output centroid IDs, size n * k.
     @param distance: output distances, size n * k
     @param labels: output labels, size n * k
 */
@@ -94,18 +91,19 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         float* dist_table);
 
 /*
-    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs  
-    from an IVF index. This function efficiently assigns vector IDs to their  
-    respective inverted lists/clusters in a batch operation.  
+    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs
+    from an IVF index. This function efficiently assigns vector IDs to their
+    respective inverted lists/clusters in a batch operation.
 
-    @param index  - Pointer to the Faiss IVF index  
-    @param keys   - Input array of vector IDs (keys)  
-    @param n_keys - Number of vector keys in the input array  
-    @param lists  - Output array where corresponding cluster (list) IDs are stored  
+    @param index  - Pointer to the Faiss IVF index
+    @param keys   - Input array of vector IDs (keys)
+    @param n_keys - Number of vector keys in the input array
+    @param lists  - Output array where corresponding cluster (list) IDs are
+   stored
 */
 
 int faiss_get_lists_for_keys(
-        FaissIndexIVF* index, 
+        FaissIndexIVF* index,
         idx_t* keys,
         size_t n_keys,
         idx_t* lists);

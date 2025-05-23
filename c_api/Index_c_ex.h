@@ -13,17 +13,18 @@
 
 #include <stddef.h>
 #include <stdio.h>
-#include "faiss_c.h"
 #include "Index_c.h"
-
+#include "faiss_c.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int faiss_Index_reconstruct_batch(const FaissIndex* index, idx_t n,
-        const idx_t* keys, float* recons);
-
+int faiss_Index_reconstruct_batch(
+        const FaissIndex* index,
+        idx_t n,
+        const idx_t* keys,
+        float* recons);
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 

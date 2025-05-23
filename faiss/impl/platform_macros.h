@@ -8,9 +8,9 @@
 #pragma once
 
 // basic int types and size_t
+#include <faiss/OMPConfig.h>
 #include <cstdint>
 #include <cstdio>
-#include <faiss/OMPConfig.h>
 
 #ifdef _WIN32
 

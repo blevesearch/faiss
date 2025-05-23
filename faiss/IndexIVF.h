@@ -449,7 +449,6 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
     void sa_encode(idx_t n, const float* x, uint8_t* bytes) const override;
 
-
     /** Given a query vector x, compute distance to provided codes
      * for the input list_no. This is a special purpose method
      * to be used as a flat distance computer for an inverted
@@ -466,12 +465,12 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
 
     virtual void compute_distance_to_codes_for_list(
-        const idx_t list_no,
-        const float* x,
-        idx_t n,
-        const uint8_t* codes,
-        float* dists,
-        float* dist_table) const {};
+            const idx_t list_no,
+            const float* x,
+            idx_t n,
+            const uint8_t* codes,
+            float* dists,
+            float* dist_table) const {};
 
     /** Given a query vector x, compute distance table and
      *  return to the caller.
@@ -481,10 +480,8 @@ struct IndexIVF : Index, IndexIVFInterface {
      *
      */
 
-    virtual void compute_distance_table(
-        const float* x,
-        float* dist_table) const {};
-
+    virtual void compute_distance_table(const float* x, float* dist_table)
+            const {};
 
     IndexIVF();
 };

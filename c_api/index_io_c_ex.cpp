@@ -10,8 +10,8 @@
 // More I/O code for indexes
 
 #include "index_io_c_ex.h"
-#include <faiss/index_io.h>
 #include <faiss/impl/io.h>
+#include <faiss/index_io.h>
 #include "macros_impl.h"
 
 using faiss::Index;
@@ -21,7 +21,8 @@ int faiss_write_index_buf(const FaissIndex* idx, size_t* size, uint8_t** buf) {
     try {
         faiss::VectorIOWriter writer;
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
-        uint8_t* tempBuf = (uint8_t*)malloc((writer.data.size()) * sizeof(uint8_t));
+        uint8_t* tempBuf =
+                (uint8_t*)malloc((writer.data.size()) * sizeof(uint8_t));
         std::copy(writer.data.begin(), writer.data.end(), tempBuf);
         *buf = tempBuf;
         *size = writer.data.size();
@@ -30,7 +31,11 @@ int faiss_write_index_buf(const FaissIndex* idx, size_t* size, uint8_t** buf) {
     CATCH_AND_HANDLE
 }
 
-int faiss_read_index_buf(const uint8_t* buf, size_t size, int io_flags, FaissIndex** p_out) {
+int faiss_read_index_buf(
+        const uint8_t* buf,
+        size_t size,
+        int io_flags,
+        FaissIndex** p_out) {
     try {
         faiss::BufIOReader reader;
         reader.buf = buf;

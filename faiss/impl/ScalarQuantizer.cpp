@@ -15,7 +15,6 @@
 #include <faiss/impl/platform_macros.h>
 #include <omp.h>
 
-
 #ifdef __SSE__
 #include <immintrin.h>
 #endif
@@ -2121,7 +2120,10 @@ SQDistanceComputer* ScalarQuantizer::get_distance_computer(
     }
 }
 
-void SQDistanceComputer::distance_to_codes(idx_t n, const uint8_t* codes, float* dists) {
+void SQDistanceComputer::distance_to_codes(
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) {
     for (idx_t i = 0; i < n; i++) {
         const uint8_t* code = codes + i * code_size;
         dists[i] = query_to_code(code);
