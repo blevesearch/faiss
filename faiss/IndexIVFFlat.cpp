@@ -11,7 +11,6 @@
 
 #include <omp.h>
 
-
 #include <cinttypes>
 #include <cstdio>
 
