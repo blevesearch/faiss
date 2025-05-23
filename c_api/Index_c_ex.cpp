@@ -14,15 +14,22 @@
 
 extern "C" {
 
-int faiss_Index_reconstruct_batch(const FaissIndex* index, idx_t n, const idx_t* keys, float* recons) {
+int faiss_Index_reconstruct_batch(
+        const FaissIndex* index,
+        idx_t n,
+        const idx_t* keys,
+        float* recons) {
     try {
-        reinterpret_cast<const faiss::Index*>(index)->reconstruct_batch(n, keys, recons);
+        reinterpret_cast<const faiss::Index*>(index)->reconstruct_batch(
+                n, keys, recons);
     }
     CATCH_AND_HANDLE
 }
 
-
-int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, const idx_t add_id) {
+int faiss_Index_merge_from(
+        FaissIndex* index,
+        FaissIndex* other,
+        const idx_t add_id) {
     try {
         reinterpret_cast<faiss::Index*>(index)->merge_from(
                 *reinterpret_cast<faiss::Index*>(other), add_id);
@@ -35,5 +42,4 @@ size_t faiss_Index_size(FaissIndex* index) {
     size_t rv = sizeof(xIndex);
     return rv;
 }
-
 }

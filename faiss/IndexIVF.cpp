@@ -461,7 +461,8 @@ void IndexIVF::search_preassigned(
     void* inverted_list_context =
             params ? params->inverted_list_context : nullptr;
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap) num_threads(num_omp_threads)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis, nheap) \
+        num_threads(num_omp_threads)
     {
         std::unique_ptr<InvertedListScanner> scanner(
                 get_InvertedListScanner(store_pairs, sel, params));
@@ -803,7 +804,8 @@ void IndexIVF::range_search_preassigned(
     void* inverted_list_context =
             params ? params->inverted_list_context : nullptr;
 
-#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis) num_threads(num_omp_threads)
+#pragma omp parallel if (do_parallel) reduction(+ : nlistv, ndis) \
+        num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(result);
         std::unique_ptr<InvertedListScanner> scanner(

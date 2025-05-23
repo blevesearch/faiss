@@ -7,14 +7,13 @@
 
 // -*- c++ -*-
 
-
 #include <faiss/OMPConfig.h>
 
 namespace faiss {
 
-    unsigned int num_omp_threads = std::thread::hardware_concurrency();
+unsigned int num_omp_threads = std::thread::hardware_concurrency();
 
-    void set_num_omp_threads(unsigned int value) {
-        num_omp_threads = value;
-    }
+void set_num_omp_threads(unsigned int value) {
+    num_omp_threads = value;
 }
+} // namespace faiss
