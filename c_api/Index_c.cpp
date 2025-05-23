@@ -9,7 +9,10 @@
 
 #include "Index_c.h"
 #include <faiss/Index.h>
+#include <faiss/IndexIVF.h>
 #include <faiss/OMPConfig.h>
+#include <faiss/impl/DistanceComputer.h>
+#include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/IDSelector.h>
 #include "macros_impl.h"
 
@@ -225,5 +228,31 @@ int faiss_Index_sa_decode(
 
 void faiss_set_omp_threads(unsigned int n) {
     faiss::set_num_omp_threads(n);
+}
+
+int faiss_Index_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+
+        // Get a distance computer for this index
+        std::unique_ptr<faiss::DistanceComputer> dc(
+                idx->get_distance_computer());
+
+        // Set the query vector
+        dc->set_query(query);
+
+        // Compute distances for each ID
+        for (size_t i = 0; i < n_ids; i++) {
+            distances[i] = (*dc)(ids[i]);
+        }
+
+        return 0;
+    }
+    CATCH_AND_HANDLE
 }
 }

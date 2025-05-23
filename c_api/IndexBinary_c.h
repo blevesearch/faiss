@@ -28,11 +28,17 @@ typedef struct FaissIDSelector_H FaissIDSelector;
 FAISS_DECLARE_CLASS(IndexBinary)
 FAISS_DECLARE_DESTRUCTOR(IndexBinary)
 
+FAISS_DECLARE_CLASS_INHERITED(IndexBinaryIVF, IndexBinary)
+
+/// Cast function for IndexBinaryIVF
+FaissIndexBinaryIVF* faiss_IndexBinaryIVF_cast(FaissIndexBinary* index);
+
 /// Getter for d
 FAISS_DECLARE_GETTER(IndexBinary, int, d)
 
 /// Getter for is_trained
-FAISS_DECLARE_GETTER(IndexBinary, int, is_trained)
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, is_trained)
 
 /// Getter for ntotal
 FAISS_DECLARE_GETTER(IndexBinary, idx_t, ntotal)
@@ -41,6 +47,13 @@ FAISS_DECLARE_GETTER(IndexBinary, idx_t, ntotal)
 FAISS_DECLARE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
 FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, verbose)
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nlist)
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nprobe)
+
+/// quantizer that maps vectors to inverted lists
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, FaissIndexBinary*, quantizer)
 
 /** Perform training on a representative set of vectors
  *
@@ -89,6 +102,27 @@ int faiss_IndexBinary_search(
         idx_t n,
         const uint8_t* x,
         idx_t k,
+        int32_t* distances,
+        idx_t* labels);
+
+/** query n vectors of dimension d to the index.
+ *
+ * return at most k vectors. If there are not enough results for a
+ * query, the result array is padded with -1s.
+ *
+ * @param index       opaque pointer to index object
+ * @param x           input vectors to search, size n * d
+ * @param k           number of results to return
+ * @param params      search parameters
+ * @param distances   output distances, size n*k
+ * @param labels      output labels of the NNs, size n*k
+ */
+int faiss_IndexBinary_search_with_params(
+        const FaissIndexBinary* index,
+        idx_t n,
+        const uint8_t* x,
+        idx_t k,
+        const FaissSearchParameters* params,
         int32_t* distances,
         idx_t* labels);
 
@@ -161,6 +195,10 @@ int faiss_IndexBinary_reconstruct_n(
         idx_t i0,
         idx_t ni,
         uint8_t* recons);
+
+int faiss_IndexBinaryIVF_set_direct_map(
+        FaissIndexBinaryIVF* index,
+        int direct_map_type);
 
 #ifdef __cplusplus
 }

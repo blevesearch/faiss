@@ -27,9 +27,6 @@ int faiss_index_factory(
         const char* description,
         FaissMetricType metric);
 
-/** Build a binary index with the sequence of processing steps described in
- *  the string.
- */
 int faiss_index_binary_factory(
         FaissIndexBinary** p_index,
         int d,
