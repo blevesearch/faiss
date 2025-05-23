@@ -28,9 +28,9 @@ int faiss_index_factory(
         FaissMetricType metric);
 
 int faiss_index_binary_factory(
-    FaissIndexBinary** p_index,
-    int d,
-    const char* description);
+        FaissIndexBinary** p_index,
+        int d,
+        const char* description);
 
 #ifdef __cplusplus
 }

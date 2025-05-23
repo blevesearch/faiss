@@ -98,10 +98,10 @@
                 reinterpret_cast<faiss::Index*>(index)));                   \
     }
 
-#define DEFINE_INDEXBINARY_DOWNCAST(clazz)                                        \
-    Faiss##clazz* faiss_##clazz##_cast(FaissIndexBinary* index) {                 \
+#define DEFINE_INDEXBINARY_DOWNCAST(clazz)                                  \
+    Faiss##clazz* faiss_##clazz##_cast(FaissIndexBinary* index) {           \
         return reinterpret_cast<Faiss##clazz*>(dynamic_cast<faiss::clazz*>( \
-                reinterpret_cast<faiss::IndexBinary*>(index)));                   \
+                reinterpret_cast<faiss::IndexBinary*>(index)));             \
     }
 
 #define DEFINE_SEARCH_PARAMETERS_DOWNCAST(clazz)                            \

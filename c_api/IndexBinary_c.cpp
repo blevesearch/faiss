@@ -9,10 +9,10 @@
 
 #include "IndexBinary_c.h"
 #include <faiss/IndexBinary.h>
-#include "macros_impl.h"
-#include "IndexIVF_c_ex.h"
-#include <faiss/IndexIVF.h>
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/IndexIVF.h>
+#include "IndexIVF_c_ex.h"
+#include "macros_impl.h"
 
 extern "C" {
 
@@ -182,13 +182,16 @@ int faiss_IndexBinary_reconstruct_n(
     CATCH_AND_HANDLE
 }
 
-FaissIndexBinary* faiss_IndexBinaryIVF_quantizer(const FaissIndexBinaryIVF* index) {
+FaissIndexBinary* faiss_IndexBinaryIVF_quantizer(
+        const FaissIndexBinaryIVF* index) {
     return reinterpret_cast<FaissIndexBinary*>(
-        reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->quantizer);
+            reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->quantizer);
 }
 
-void faiss_IndexBinaryIVF_set_quantizer(FaissIndexBinaryIVF* index, FaissIndexBinary* quantizer) {
-    reinterpret_cast<faiss::IndexBinaryIVF*>(index)->quantizer = 
-        reinterpret_cast<faiss::IndexBinary*>(quantizer);
+void faiss_IndexBinaryIVF_set_quantizer(
+        FaissIndexBinaryIVF* index,
+        FaissIndexBinary* quantizer) {
+    reinterpret_cast<faiss::IndexBinaryIVF*>(index)->quantizer =
+            reinterpret_cast<faiss::IndexBinary*>(quantizer);
 }
 }
