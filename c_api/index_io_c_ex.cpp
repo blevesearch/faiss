@@ -46,6 +46,19 @@ int faiss_read_index_buf(
     CATCH_AND_HANDLE
 }
 
+int faiss_write_index_binary_buf(const FaissIndexBinary* idx, size_t* size, uint8_t** buf) {
+    try {
+        faiss::VectorIOWriter writer;
+        faiss::write_index_binary(reinterpret_cast<const IndexBinary*>(idx), &writer);
+        uint8_t* tempBuf = (uint8_t*)malloc((writer.data.size()) * sizeof(uint8_t));
+        std::copy(writer.data.begin(), writer.data.end(), tempBuf);
+        *buf = tempBuf;
+        *size = writer.data.size();
+        writer.data.clear();
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_read_index_binary_buf(const uint8_t* buf, size_t size, int io_flags, FaissIndexBinary** p_out) {
     try {
         faiss::BufIOReader reader;
