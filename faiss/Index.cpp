@@ -58,7 +58,7 @@ void Index::reconstruct(idx_t, float*) const {
 void Index::reconstruct_batch(idx_t n, const idx_t* keys, float* recons) const {
     std::mutex exception_mutex;
     std::string exception_string;
-    #pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         try {
             reconstruct(keys[i], &recons[i * d]);

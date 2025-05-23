@@ -9,16 +9,11 @@
 
 #include "Index_c.h"
 #include <faiss/Index.h>
-<<<<<<< HEAD
-#include <faiss/OMPConfig.h>
-#include <faiss/impl/IDSelector.h>
-=======
 #include <faiss/IndexIVF.h>
 #include <faiss/impl/IDSelector.h>
 #include <faiss/OMPConfig.h>
 #include <faiss/impl/DistanceComputer.h>
 #include <faiss/impl/FaissAssert.h>
->>>>>>> afecdb51 (added a dist computer)
 #include "macros_impl.h"
 
 extern "C" {

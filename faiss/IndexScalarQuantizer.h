@@ -65,7 +65,6 @@ struct IndexScalarQuantizer : IndexFlatCodes {
 
 struct IndexIVFScalarQuantizer : IndexIVF {
     ScalarQuantizer sq;
-    bool by_residual;
 
     IndexIVFScalarQuantizer(
             Index* quantizer,
@@ -100,31 +99,21 @@ struct IndexIVFScalarQuantizer : IndexIVF {
             const IDSelector* sel,
             const IVFSearchParameters* params) const override;
 
-    void reconstruct_from_offset(
-            int64_t list_no,
-            int64_t offset,
-            float* recons) const override;
+    void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons) const override;
 
     void compute_distance_to_codes_for_list(
-            const idx_t list_no,
-            const float* x,
-            idx_t n,
-            const uint8_t* codes,
-            float* dists,
-            float* dist_table) const override;
+    	const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* dist_table) const override;
 
     void dist_compute(const float* query, const idx_t* ids, size_t n_ids, float* dists) const;
 
     /* standalone codec interface */
     void sa_decode(idx_t n, const uint8_t* bytes, float* x) const override;
 
-    void compute_distance_to_codes_for_list(
-            const idx_t list_no,
-            const float* x,
-            idx_t n,
-            const uint8_t* codes,
-            float* dists,
-            float* dist_table) const override;
 };
 
 } // namespace faiss
