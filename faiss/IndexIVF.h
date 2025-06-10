@@ -480,12 +480,12 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
 
     virtual void compute_distance_to_codes_for_list(
-            const idx_t list_no,
-            const float* x,
-            idx_t n,
-            const uint8_t* codes,
-            float* dists,
-            float* dist_table) const {};
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* dist_table) const {};
 
     /** Given a query vector x, compute distance table and
      *  return to the caller.
