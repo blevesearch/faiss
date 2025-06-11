@@ -9,8 +9,18 @@
 
 #include "Index_c.h"
 #include <faiss/Index.h>
-#include <faiss/impl/IDSelector.h>
+#include <faiss/IndexFlat.h>
+#include <faiss/IndexIDMap.h>
+#include <faiss/IndexIVF.h>
+#include <faiss/IndexScalarQuantizer.h>
 #include <faiss/OMPConfig.h>
+#include <faiss/impl/DistanceComputer.h>
+#include <faiss/impl/FaissAssert.h>
+#include <faiss/impl/IDSelector.h>
+#include <faiss/impl/io.h>
+#include <faiss/invlists/DirectMap.h>
+#include <faiss/invlists/InvertedLists.h>
+#include <algorithm>
 #include "macros_impl.h"
 
 extern "C" {
@@ -227,4 +237,57 @@ void faiss_set_omp_threads(unsigned int n) {
     faiss::set_num_omp_threads(n);
 }
 
+int faiss_Index_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+
+        // Try to cast to IndexIVFScalarQuantizer
+        if (auto ivfsq =
+                    dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
+            ivfsq->dist_compute(query, ids, n_ids, distances);
+            return 0;
+        }
+
+        // Try to cast to IndexIDMap2
+        if (auto idmap2 = dynamic_cast<const faiss::IndexIDMap2*>(idx)) {
+            // Check if the underlying index is IndexFlat
+            auto flat = dynamic_cast<const faiss::IndexFlat*>(idmap2->index);
+            if (flat) {
+                std::vector<idx_t> internal_indices(n_ids, -1);
+                for (size_t i = 0; i < n_ids; ++i) {
+                    // Search for the ID in the id_map vector
+                    auto it = std::find(
+                            idmap2->id_map.begin(),
+                            idmap2->id_map.end(),
+                            ids[i]);
+                    if (it != idmap2->id_map.end()) {
+                        internal_indices[i] =
+                                std::distance(idmap2->id_map.begin(), it);
+                    }
+                    // else: leave as -1, or handle as you wish (e.g., set
+                    // distance to NaN)
+                }
+                flat->compute_distance_subset(
+                        1, query, n_ids, distances, internal_indices.data());
+                return 0;
+            }
+        }
+
+        // Try to cast to IndexFlat
+        if (auto flat = dynamic_cast<const faiss::IndexFlat*>(idx)) {
+            // For IndexFlat, we can use compute_distance_subset
+            flat->compute_distance_subset(1, query, n_ids, distances, ids);
+            return 0;
+        }
+
+        // If we get here, the index type doesn't support dist_compute
+        return -1;
+    }
+    CATCH_AND_HANDLE
+}
 }

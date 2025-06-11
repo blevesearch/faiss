@@ -276,6 +276,13 @@ int faiss_Index_sa_decode(
 
 void faiss_set_omp_threads(unsigned int n);
 
+int faiss_Index_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances);
+
 #ifdef __cplusplus
 }
 #endif
