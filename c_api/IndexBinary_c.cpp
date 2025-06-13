@@ -38,16 +38,6 @@ DEFINE_SETTER(IndexBinaryIVF, size_t, nlist);
 
 DEFINE_INDEXBINARY_DOWNCAST(IndexBinaryIVF)
 
-int faiss_IndexBinaryIVF_set_direct_map(
-        FaissIndexBinaryIVF* index,
-        int direct_map_type) {
-    try {
-        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->set_direct_map_type(
-                static_cast<faiss::DirectMap::Type>(direct_map_type));
-    }
-    CATCH_AND_HANDLE
-}
-
 int faiss_IndexBinary_train(
         FaissIndexBinary* index,
         idx_t n,
@@ -180,18 +170,5 @@ int faiss_IndexBinary_reconstruct_n(
                 i0, ni, recons);
     }
     CATCH_AND_HANDLE
-}
-
-FaissIndexBinary* faiss_IndexBinaryIVF_quantizer(
-        const FaissIndexBinaryIVF* index) {
-    return reinterpret_cast<FaissIndexBinary*>(
-            reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->quantizer);
-}
-
-void faiss_IndexBinaryIVF_set_quantizer(
-        FaissIndexBinaryIVF* index,
-        FaissIndexBinary* quantizer) {
-    reinterpret_cast<faiss::IndexBinaryIVF*>(index)->quantizer =
-            reinterpret_cast<faiss::IndexBinary*>(quantizer);
 }
 }

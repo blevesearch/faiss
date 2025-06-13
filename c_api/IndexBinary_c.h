@@ -52,9 +52,6 @@ FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nlist)
 
 FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nprobe)
 
-/// quantizer that maps vectors to inverted lists
-FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, FaissIndexBinary*, quantizer)
-
 /** Perform training on a representative set of vectors
  *
  * @param index  opaque pointer to index object
@@ -195,10 +192,6 @@ int faiss_IndexBinary_reconstruct_n(
         idx_t i0,
         idx_t ni,
         uint8_t* recons);
-
-int faiss_IndexBinaryIVF_set_direct_map(
-        FaissIndexBinaryIVF* index,
-        int direct_map_type);
 
 #ifdef __cplusplus
 }

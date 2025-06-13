@@ -85,7 +85,8 @@ void IndexBinaryFlat::search(
                     k,
                     code_size,
                     distances + s * k,
-                    labels + s * k);
+                    labels + s * k,
+                    sel);
         }
     }
 }

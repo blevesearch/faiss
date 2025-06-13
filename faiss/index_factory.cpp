@@ -943,9 +943,9 @@ IndexBinary* index_binary_factory(int d, const char* description) {
     } else if (sscanf(description, "BHash%d", &b) == 1) {
         index = new IndexBinaryHash(d, b);
 
-    } else if (strcmp(description, "IDMap,BFlat") == 0) {
+    } else if (strcmp(description, "IDMap2,BFlat") == 0) {
         auto* flat = new faiss::IndexBinaryFlat(d);
-        index = new faiss::IndexBinaryIDMap(flat);
+        index = new faiss::IndexBinaryIDMap2(flat);
 
     } else if (std::string(description) == "BFlat") {
         index = new IndexBinaryFlat(d);
