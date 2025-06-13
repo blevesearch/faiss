@@ -131,7 +131,7 @@ size_t IndexBinaryFlat::remove_ids(const IDSelector& sel) {
     if (nremove > 0) {
         ntotal = j;
         xb.resize(ntotal * code_size);
-        ids.resize(ntotal);  // Resize the ids vector
+        ids.resize(ntotal); // Resize the ids vector
     }
     return nremove;
 }
@@ -155,14 +155,19 @@ void IndexBinaryFlat::range_search(
             x, xb.data(), n, ntotal, radius, code_size, &tmp_result, sel);
 
     // Convert indices to actual IDs in the final result
+    RangeSearchPartialResult pres(result);
     for (idx_t i = 0; i < n; i++) {
-        RangeQueryResult& qres = tmp_result.lims[i];
-        for (idx_t j = 0; j < qres.nres; j++) {
-            if (qres.ids[j] >= 0) {
-                result->add(i, qres.dists[j], ids[qres.ids[j]]);
+        RangeQueryResult& qres = pres.new_result(i);
+        size_t start = tmp_result.lims[i];
+        size_t end = tmp_result.lims[i + 1];
+        for (size_t j = start; j < end; j++) {
+            idx_t id = ids[tmp_result.labels[j]];
+            if (!sel || sel->is_member(id)) {
+                qres.add(tmp_result.distances[j], id);
             }
         }
     }
+    pres.finalize();
 }
 
 } // namespace faiss
