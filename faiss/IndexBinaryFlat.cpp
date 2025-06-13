@@ -22,10 +22,17 @@ IndexBinaryFlat::IndexBinaryFlat(idx_t d) : IndexBinary(d) {}
 
 void IndexBinaryFlat::add(idx_t n, const uint8_t* x) {
     xb.insert(xb.end(), x, x + n * code_size);
+    // Add sequential IDs
+    for (idx_t i = 0; i < n; i++) {
+        ids.push_back(ntotal + i);
+    }
     ntotal += n;
 }
 
-void IndexBinaryFlat::add_with_ids(idx_t n, const uint8_t* x, const idx_t* xids) {
+void IndexBinaryFlat::add_with_ids(
+        idx_t n,
+        const uint8_t* x,
+        const idx_t* xids) {
     xb.insert(xb.end(), x, x + n * code_size);
     if (xids) {
         ids.insert(ids.end(), xids, xids + n);
@@ -75,8 +82,14 @@ void IndexBinaryFlat::search(
                     /* ordered = */ true,
                     approx_topk_mode,
                     sel);
+
+            // Convert indices to actual IDs
+            for (idx_t i = 0; i < nn * k; i++) {
+                if (labels[s * k + i] >= 0) {
+                    labels[s * k + i] = ids[labels[s * k + i]];
+                }
+            }
         } else {
-            
             hammings_knn_mc(
                     x + s * code_size,
                     xb.data(),
@@ -87,6 +100,13 @@ void IndexBinaryFlat::search(
                     distances + s * k,
                     labels + s * k,
                     sel);
+
+            // Convert indices to actual IDs
+            for (idx_t i = 0; i < nn * k; i++) {
+                if (labels[s * k + i] >= 0) {
+                    labels[s * k + i] = ids[labels[s * k + i]];
+                }
+            }
         }
     }
 }
@@ -101,6 +121,8 @@ size_t IndexBinaryFlat::remove_ids(const IDSelector& sel) {
                 memmove(&xb[code_size * j],
                         &xb[code_size * i],
                         sizeof(xb[0]) * code_size);
+                // Move the corresponding ID
+                ids[j] = ids[i];
             }
             j++;
         }
@@ -109,6 +131,7 @@ size_t IndexBinaryFlat::remove_ids(const IDSelector& sel) {
     if (nremove > 0) {
         ntotal = j;
         xb.resize(ntotal * code_size);
+        ids.resize(ntotal);  // Resize the ids vector
     }
     return nremove;
 }
@@ -124,8 +147,22 @@ void IndexBinaryFlat::range_search(
         RangeSearchResult* result,
         const SearchParameters* params) const {
     const IDSelector* sel = params ? params->sel : nullptr;
+
+    // Create a temporary result to store indices
+    RangeSearchResult tmp_result(n);
+
     hamming_range_search(
-            x, xb.data(), n, ntotal, radius, code_size, result, sel);
+            x, xb.data(), n, ntotal, radius, code_size, &tmp_result, sel);
+
+    // Convert indices to actual IDs in the final result
+    for (idx_t i = 0; i < n; i++) {
+        RangeQueryResult& qres = tmp_result.lims[i];
+        for (idx_t j = 0; j < qres.nres; j++) {
+            if (qres.ids[j] >= 0) {
+                result->add(i, qres.dists[j], ids[qres.ids[j]]);
+            }
+        }
+    }
 }
 
 } // namespace faiss
