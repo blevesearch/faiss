@@ -235,6 +235,23 @@ void faiss_set_omp_threads(unsigned int n) {
     faiss::set_num_omp_threads(n);
 }
 
+int faiss_SearchParameters_new_with_selector(
+        FaissSearchParameters** p_sp,
+        FaissIDSelector* sel) {
+    try {
+        // Create new SearchParameters object
+        auto* sp = new faiss::SearchParameters();
+        
+        // Set the selector during construction
+        sp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
+        
+        // Assign to output parameter
+        *p_sp = reinterpret_cast<FaissSearchParameters*>(sp);
+    }
+    CATCH_AND_HANDLE
+}
+
+
 int faiss_Index_dist_compute(
         const FaissIndex* index,
         const float* query,

@@ -1,11 +1,20 @@
+#include "IndexBinaryIVF_c.h"
+#include <faiss/IndexBinaryIVF.h>
+#include "macros_impl.h"
+
+using faiss::IndexBinaryIVF;
+
+DEFINE_GETTER_PERMISSIVE(IndexBinaryIVF, FaissIndexBinaryPtr, quantizer)
+
 extern "C" {
 
 int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
         int direct_map_type) {
     try {
-        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->set_direct_map_type(
+        reinterpret_cast<IndexBinaryIVF*>(index)->set_direct_map_type(
                 static_cast<faiss::DirectMap::Type>(direct_map_type));
+        return 0;
     }
     CATCH_AND_HANDLE
 }
@@ -16,8 +25,9 @@ int faiss_get_lists_for_keys_binary(
         size_t n_keys,
         idx_t* lists) {
     try {
-        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->get_lists_for_keys(
+        reinterpret_cast<IndexBinaryIVF*>(index)->get_lists_for_keys(
                 keys, n_keys, lists);
+        return 0;
     }
     CATCH_AND_HANDLE
 }
@@ -31,16 +41,23 @@ int faiss_Search_closest_eligible_centroids_binary(
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
     try {
-        faiss::IndexBinaryIVF* index_bivf = reinterpret_cast<IndexBinaryIVF*>(index);
-        assert(index_bivf);
-
-        index_bivf->quantizer->search(
+        auto idx = reinterpret_cast<IndexBinaryIVF*>(index);
+        idx->quantizer->search(
                 n,
                 query,
                 k,
                 centroid_distances,
                 centroid_ids,
                 reinterpret_cast<const faiss::SearchParameters*>(params));
+
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexBinaryIVF_set_is_trained(FaissIndexBinaryIVF* index, int is_trained) {
+    try {
+        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->is_trained = static_cast<bool>(is_trained);
     }
     CATCH_AND_HANDLE
 }
@@ -57,15 +74,14 @@ int faiss_IndexBinaryIVF_search_preassigned_with_params(
         int store_pairs,
         const FaissSearchParametersIVF* params) {
     try {
-        faiss::IndexBinaryIVF* index_bivf = reinterpret_cast<IndexBinaryIVF*>(index);
-        assert(index_bivf);
-
-        index_bivf->search_preassigned(n, x, k, assign, centroid_dis, distances, 
-        labels, store_pairs, reinterpret_cast<const faiss::SearchParameters*>(params));
+        auto idx = reinterpret_cast<const IndexBinaryIVF*>(index);
+        idx->search_preassigned(
+                n, x, k, assign, centroid_dis, distances, labels,
+                static_cast<bool>(store_pairs),
+                reinterpret_cast<const faiss::IVFSearchParameters*>(params));
+        return 0;
     }
     CATCH_AND_HANDLE
 }
 
-
-
-}
+} // extern "C"

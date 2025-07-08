@@ -129,8 +129,10 @@ void IndexBinaryIVF::search(
     t0 = getmillisecs();
     invlists->prefetch_lists(idx.get(), n * nprobe_2);
 
-    const IVFSearchParameters* params2 =
-            reinterpret_cast<const IVFSearchParameters*>(params);
+    const IVFSearchParameters* params2 = nullptr;
+    if(params) {
+        params2 = static_cast<const IVFSearchParameters*>(params); 
+    }
     const IDSelector* sel = params2 ? params2->sel : nullptr;
     search_preassigned(
             n,
@@ -343,6 +345,7 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
               store_pairs(store_pairs) {}
 
     void set_query(const uint8_t* query_vector) override {
+        this->query_vector = query_vector;  // Set the member directly
         hc.set(query_vector, code_size);
     }
 
@@ -363,6 +366,7 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             idx_t* __restrict idxi,
             size_t k) const override {
         using C = CMax<int32_t, idx_t>;
+        size_t nup = 0;
 
         for (size_t j = 0; j < n; j++) {
             uint32_t dis = hc.hamming(codes);
@@ -371,10 +375,12 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
                 // Add selector check
                 if (!sel || sel->is_member(id)) {
                     heap_replace_top<C>(k, simi, idxi, dis, id);
+                    nup++;
                 }
             }
             codes += code_size;
         }
+        return nup;
     }
 
     void scan_codes_range(
@@ -457,7 +463,7 @@ void search_knn_hamming_heap(
                         ivf->nlist);
 
                 scanner->set_list(key, coarse_dis[i * nprobe + ik]);
-
+                
                 nlistv++;
 
                 size_t list_size = ivf->invlists->list_size(key);

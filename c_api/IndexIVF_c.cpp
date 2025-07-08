@@ -182,3 +182,27 @@ void faiss_IndexIVFStats_reset(FaissIndexIVFStats* stats) {
 FaissIndexIVFStats* faiss_get_indexIVF_stats() {
     return reinterpret_cast<FaissIndexIVFStats*>(&faiss::indexIVF_stats);
 }
+
+int faiss_IndexIVF_get_centroids(
+        const FaissIndexIVF* index,
+        float* centroids) {
+    try {
+        const IndexIVF* ivf = reinterpret_cast<const IndexIVF*>(index);
+        const faiss::Index* quantizer = ivf->quantizer;
+        
+        if (!quantizer) {
+            FAISS_THROW_MSG("No quantizer found in IVF index");
+        }
+        
+        // Get all centroids using reconstruct_n
+        quantizer->reconstruct_n(0, ivf->nlist, centroids);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVF_free_centroids(float* centroids) {
+    try {
+        delete[] centroids;
+    }
+    CATCH_AND_HANDLE
+}

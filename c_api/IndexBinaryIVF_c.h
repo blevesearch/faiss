@@ -2,12 +2,17 @@
 #define FAISS_INDEX_BINARY_IVF_C_H
 
 #include "Index_c.h"
+#include "IndexBinary_c.h"
+#include "IndexIVF_c.h"
 #include "faiss_c.h"
-#include "macros_impl.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nlist)
+
+FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nprobe)
 
 int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
@@ -17,8 +22,7 @@ int faiss_get_lists_for_keys_binary(
         FaissIndexBinaryIVF* index,
         idx_t* keys,
         size_t n_keys,
-        idx_t* lists) ; 
-
+        idx_t* lists);
 
 int faiss_Search_closest_eligible_centroids_binary(
         FaissIndexBinaryIVF* index,
@@ -28,6 +32,8 @@ int faiss_Search_closest_eligible_centroids_binary(
         int32_t* centroid_distances,
         idx_t* centroid_ids,
         const FaissSearchParameters* params);
+
+int faiss_IndexBinaryIVF_set_is_trained(FaissIndexBinaryIVF* index, int is_trained);
 
 int faiss_IndexBinaryIVF_search_preassigned_with_params(
         const FaissIndexBinaryIVF* index,
@@ -41,7 +47,9 @@ int faiss_IndexBinaryIVF_search_preassigned_with_params(
         int store_pairs,
         const FaissSearchParametersIVF* params);
 
-DEFINE_GETTER_PERMISSIVE(IndexBinaryIVF, FaissIndexBinary*, quantizer);
+typedef FaissIndexBinary* FaissIndexBinaryPtr;
+FaissIndexBinaryPtr faiss_IndexBinaryIVF_quantizer(const FaissIndexBinaryIVF* index);
+
 #ifdef __cplusplus
 }
 #endif

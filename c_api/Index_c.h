@@ -279,6 +279,9 @@ int faiss_Index_sa_decode(
 
 void faiss_set_omp_threads(unsigned int n);
 
+int faiss_SearchParameters_new_with_selector(
+        FaissSearchParameters** p_sp,
+        FaissIDSelector* sel);
 
 /** Compute distances between a query vector and a set of vectors 
  *

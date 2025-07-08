@@ -48,10 +48,6 @@ FAISS_DECLARE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
 FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, verbose)
 
-FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nlist)
-
-FAISS_DECLARE_GETTER_SETTER(IndexBinaryIVF, size_t, nprobe)
-
 /** Perform training on a representative set of vectors
  *
  * @param index  opaque pointer to index object

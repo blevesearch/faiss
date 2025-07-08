@@ -177,6 +177,19 @@ inline void faiss_IndexIVFStats_init(FaissIndexIVFStats* stats) {
 /// global var that collects all statists
 FaissIndexIVFStats* faiss_get_indexIVF_stats();
 
+/** Get centroids from an IVF index
+ *
+ * @param index       IVF index
+ * @param centroids   output centroids, size nlist * d (allocated by caller)
+ * @return            0 if successful
+ */
+int faiss_IndexIVF_get_centroids(
+        const FaissIndexIVF* index,
+        float* centroids);
+
+// Free function for auto-allocated centroids
+int faiss_IndexIVF_free_centroids(float* centroids);
+
 #ifdef __cplusplus
 }
 #endif
