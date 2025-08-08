@@ -94,21 +94,35 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         float* dist_table);
 
 /*
-    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs  
-    from an IVF index. This function efficiently assigns vector IDs to their  
-    respective inverted lists/clusters in a batch operation.  
+    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs
+    from an IVF index. This function efficiently assigns vector IDs to their
+    respective inverted lists/clusters in a batch operation.
 
-    @param index  - Pointer to the Faiss IVF index  
-    @param keys   - Input array of vector IDs (keys)  
-    @param n_keys - Number of vector keys in the input array  
-    @param lists  - Output array where corresponding cluster (list) IDs are stored  
+    @param index  - Pointer to the Faiss IVF index
+    @param keys   - Input array of vector IDs (keys)
+    @param n_keys - Number of vector keys in the input array
+    @param lists  - Output array where corresponding cluster (list) IDs are stored
 */
 
 int faiss_get_lists_for_keys(
-        FaissIndexIVF* index, 
+        FaissIndexIVF* index,
         idx_t* keys,
         size_t n_keys,
         idx_t* lists);
+
+/*
+    Get centroid information and cardinality for all centroids in an IVF index.
+
+    @param index: the IVF index
+    @param centroid_vectors: output array for centroid vectors, size nlist * d
+    @param cardinalities: output array for cardinalities, size nlist
+    @param centroid_ids: output array for centroid IDs, size nlist (optional, can be nullptr)
+*/
+int faiss_IndexIVF_get_centroids_and_cardinality(
+        const FaissIndexIVF* index,
+        float* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids);
 
 /*
     Given a query vector x, compute distance table and

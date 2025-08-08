@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cstdio>
 #include <limits>
+#include <tuple>
 
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
@@ -1405,6 +1406,46 @@ void InvertedListScanner::iterate_codes_range(
         }
         list_size++;
     }
+}
+
+void IndexIVF::get_centroids_and_cardinality(
+        float* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) const {
+    FAISS_THROW_IF_NOT(quantizer != nullptr);
+    FAISS_THROW_IF_NOT(quantizer->is_trained);
+
+    // Get centroid vectors from quantizer
+    for (size_t i = 0; i < nlist; i++) {
+        quantizer->reconstruct(i, centroid_vectors + i * d);
+    }
+
+    // Get cardinalities from inverted lists
+    for (size_t i = 0; i < nlist; i++) {
+        cardinalities[i] = invlists->list_size(i);
+    }
+
+    // Get centroid IDs if requested
+    if (centroid_ids != nullptr) {
+        for (size_t i = 0; i < nlist; i++) {
+            centroid_ids[i] = i;
+        }
+    }
+}
+
+std::tuple<std::vector<float>, std::vector<size_t>, std::vector<idx_t>>
+IndexIVF::get_centroids_and_cardinality() const {
+    std::vector<float> centroid_vectors(nlist * d);
+    std::vector<size_t> cardinalities(nlist);
+    std::vector<idx_t> centroid_ids(nlist);
+
+    get_centroids_and_cardinality(
+        centroid_vectors.data(),
+        cardinalities.data(),
+        centroid_ids.data()
+    );
+
+    return std::make_tuple(centroid_vectors, cardinalities, centroid_ids);
 }
 
 } // namespace faiss
