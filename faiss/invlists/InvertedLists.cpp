@@ -85,7 +85,7 @@ void InvertedLists::merge_from(InvertedLists* oivf, size_t add_id) {
             add_entries(
                     this_list_no, list_size, new_ids.data(), ScopedCodes(oivf, i).get());
         }
-        oivf->resize(i, 0);
+        // oivf->resize(i, 0);
     }
 }
 

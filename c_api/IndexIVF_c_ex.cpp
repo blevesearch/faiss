@@ -9,6 +9,8 @@
 // -*- c++ -*-
 #include "IndexIVF_c_ex.h"
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexScalarQuantizer.h>
+#include <faiss/clone_index.h>
 #include "macros_impl.h"
 
 using faiss::IndexIVF;

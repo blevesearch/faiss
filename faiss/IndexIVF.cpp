@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <limits>
 #include <tuple>
+#include <typeinfo>
 
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
@@ -51,9 +52,14 @@ Level1Quantizer::Level1Quantizer(Index* quantizer, size_t nlist)
 Level1Quantizer::Level1Quantizer() = default;
 
 Level1Quantizer::~Level1Quantizer() {
+    // printf("deleting level1 quantizer\n");
+    // fflush(stdout);
     if (own_fields) {
         delete quantizer;
     }
+    // printf("deleted quantizer\n");
+    // fflush(stdout);
+
 }
 
 void Level1Quantizer::train_q1(
@@ -1272,7 +1278,11 @@ bool check_compatible_for_merge_expensive_check = true;
 
 void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
     // minimal sanity checks
+    // printf("%s\n", typeid(otherIndex).name());
+    // fflush(stdout);
     const IndexIVF* other = dynamic_cast<const IndexIVF*>(&otherIndex);
+    // printf("casting done %d\n", typeid(*other) == typeid(*this));
+    // fflush(stdout);
     FAISS_THROW_IF_NOT(other);
     FAISS_THROW_IF_NOT(other->d == d);
     FAISS_THROW_IF_NOT(other->nlist == nlist);
@@ -1298,8 +1308,8 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     // comparison)
     // the thinking is that, the number of centroids would be in order of thousands
     // or 10s of thousands so this way of checking shouldn't be too expensive(?)
-    printf("exp check started\n");
-        // fflush(stdout);
+    // printf("exp check started\n");
+    // fflush(stdout);
     if (check_compatible_for_merge_expensive_check) {
         std::vector<float> v(d), v2(d);
         std::vector<std::vector<float>> all_vecs;
@@ -1329,8 +1339,8 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
             //             v == v2, "coarse quantizers should be the same");
             //     }
         }
-        printf("exp check complete %d\n", update);
-        fflush(stdout);
+        // printf("exp check complete %d\n", update);
+        // fflush(stdout);
 
         // for (int i = 0; i < list_mapping.size(); i++) {
         //     printf("%d -> %d\n", i, list_mapping[i]);
@@ -1353,14 +1363,19 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
             direct_map.add_single_id(key, this_list_no, offset);
         }
     }
-    printf("completed hashtable merge\n");
-    fflush(stdout);
+    // printf("completed hashtable merge\n");
+    // fflush(stdout);
     invlists->list_no_mapping = list_mapping;
-    invlists->merge_from(other->invlists, add_id);
+    // auto odlist = dynamic_cast<faiss::OnDiskInvertedLists*>(other->invlists);
+    // if (odlist) {
+    //     odlist->merge_from_1(other->invlists, false);
+    // } else {
+        invlists->merge_from(other->invlists, add_id);
+    // }
     ntotal += other->ntotal;
     other->ntotal = 0;
-    printf("merge_from completed\n");
-    fflush(stdout);
+    // printf("merge_from completed\n");
+    // fflush(stdout);
 }
 
 CodePacker* IndexIVF::get_CodePacker() const {
