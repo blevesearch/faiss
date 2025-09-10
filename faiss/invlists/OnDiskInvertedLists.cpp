@@ -62,6 +62,8 @@ struct LockLevels {
         pthread_cond_destroy(&level2_cv);
         pthread_cond_destroy(&level3_cv);
         pthread_mutex_destroy(&mutex1);
+        // printf("locklevels destroyed\n");
+        // fflush(stdout);
     }
 
     void lock_1(int no) {
@@ -376,6 +378,8 @@ OnDiskInvertedLists::OnDiskInvertedLists() : OnDiskInvertedLists(0, 0, "") {}
 OnDiskInvertedLists::~OnDiskInvertedLists() {
     delete pf;
 
+//  printf("odl destructor\n");
+//     fflush(stdout);
     // unmap all lists
     if (ptr != nullptr) {
         if (!pre_mapped) {
@@ -384,6 +388,8 @@ OnDiskInvertedLists::~OnDiskInvertedLists() {
                 fprintf(stderr, "mumap error: %s", strerror(errno));
             }
         } else {
+    //             printf("odl destructor pointer assign to nil\n");
+    // fflush(stdout);
             ptr = nullptr;
         }
     }
@@ -804,6 +810,8 @@ InvertedLists* read_ArrayInvertedLists_MMAP(
         o += l.size * (sizeof(idx_t) + ails->code_size);
     }
 
+    // printf("finished reading all the lists\n");
+    // fflush(stdout);
     // updating the read pointer appropriately, this is needed when the IVF
     // wrapped with another index class.
     reader->rp = o;

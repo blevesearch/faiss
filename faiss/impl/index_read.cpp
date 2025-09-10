@@ -635,6 +635,8 @@ void read_direct_map(DirectMap* dm, IOReader* f) {
         READVECTOR(v);
         std::unordered_map<idx_t, idx_t>& map = dm->hashtable;
         map.reserve(v.size());
+        // printf("reading dm entries\n");
+        // fflush(stdout);
         for (auto it : v) {
             map[it.first] = it.second;
         }
@@ -655,6 +657,8 @@ void read_ivf_header(
         for (size_t i = 0; i < ivf->nlist; i++)
             READVECTOR((*ids)[i]);
     }
+    // printf("reading direct map\n");
+    // fflush(stdout);
     read_direct_map(&ivf->direct_map, f);
 }
 
@@ -1035,6 +1039,8 @@ Index* read_index(IOReader* f, int io_flags) {
         } else {
             READ1(ivsc->by_residual);
         }
+        // printf("finished reading metadata\n");
+        // fflush(stdout);
         read_InvertedLists(ivsc, f, io_flags);
         idx = ivsc;
     } else if (
