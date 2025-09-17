@@ -485,6 +485,23 @@ struct IndexIVF : Index, IndexIVFInterface {
         const float* x,
         float* dist_table) const {};
 
+    /** Get centroid information and cardinality for all centroids
+     *
+     * @param centroid_vectors output array for centroid vectors, size nlist * d
+     * @param cardinalities output array for cardinalities, size nlist
+     * @param centroid_ids output array for centroid IDs, size nlist (optional, can be nullptr)
+     */
+    void get_centroids_and_cardinality(
+            float* centroid_vectors,
+            size_t* cardinalities,
+            idx_t* centroid_ids = nullptr) const;
+
+    /** Get centroid information and cardinality for all centroids
+     *
+     * @return tuple of (centroid_vectors, cardinalities, centroid_ids)
+     */
+    std::tuple<std::vector<float>, std::vector<size_t>, std::vector<idx_t>>
+    get_centroids_and_cardinality() const;
 
     IndexIVF();
 };

@@ -63,6 +63,18 @@ int faiss_get_lists_for_keys(
     CATCH_AND_HANDLE
 }
 
+int faiss_IndexIVF_get_centroids_and_cardinality(
+        const FaissIndexIVF* index,
+        float* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) {
+    try {
+        reinterpret_cast<const IndexIVF*>(index)->get_centroids_and_cardinality(
+            centroid_vectors, cardinalities, centroid_ids);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_IndexIVF_search_preassigned_with_params(
         const FaissIndexIVF* index,
         idx_t n,
