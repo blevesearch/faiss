@@ -24,6 +24,7 @@ set(FAISS_C_SRC
   Index_c.cpp
   Index_c_ex.cpp
   IndexBinary_c.cpp
+  IndexBinaryIVF_c.cpp
   IndexScalarQuantizer_c.cpp
   MetaIndexes_c.cpp
   clone_index_c.cpp

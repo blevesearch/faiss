@@ -6,15 +6,12 @@
  */
 
 #include <stdio.h>
-#include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #elif defined(_WIN32)
 
@@ -30,7 +27,7 @@
 
 namespace faiss {
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__FreeBSD__)
 
 struct MmappedFileMappingOwner::PImpl {
     void* ptr = nullptr;
@@ -171,12 +168,12 @@ struct MmappedFileMappingOwner::PImpl {
         const int fd = _fileno(f);
         if (fd == -1) {
             // no good
-            FAISS_THROW_FMT("could not get a HANDLE");
+            FAISS_THROW_MSG("could not get a HANDLE");
         }
 
         HANDLE file_handle = (HANDLE)_get_osfhandle(fd);
         if (file_handle == INVALID_HANDLE_VALUE) {
-            FAISS_THROW_FMT("could not get an OS HANDLE");
+            FAISS_THROW_MSG("could not get an OS HANDLE");
         }
 
         // get the size of the file
