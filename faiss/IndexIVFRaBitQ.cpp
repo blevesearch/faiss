@@ -23,10 +23,14 @@ IndexIVFRaBitQ::IndexIVFRaBitQ(
         Index* quantizer,
         const size_t d,
         const size_t nlist,
-        MetricType metric)
-        : IndexIVF(quantizer, d, nlist, 0, metric), rabitq(d, metric) {
+        MetricType metric,
+        bool own_invlists)
+        : IndexIVF(quantizer, d, nlist, 0, metric, own_invlists),
+          rabitq(d, metric) {
     code_size = rabitq.code_size;
-    invlists->code_size = code_size;
+    if (own_invlists) {
+        invlists->code_size = code_size;
+    }
     is_trained = false;
 
     by_residual = true;
@@ -72,6 +76,27 @@ void IndexIVFRaBitQ::encode_vectors(
                     encode_listno(list_no, code);
                 }
             }
+        }
+    }
+}
+
+void IndexIVFRaBitQ::decode_vectors(
+        idx_t n,
+        const uint8_t* codes,
+        const idx_t* listnos,
+        float* x) const {
+#pragma omp parallel
+    {
+        std::vector<float> centroid(d);
+
+#pragma omp for
+        for (idx_t i = 0; i < n; i++) {
+            const uint8_t* code = codes + i * code_size;
+            int64_t list_no = listnos[i];
+            float* xi = x + i * d;
+
+            quantizer->reconstruct(list_no, centroid.data());
+            rabitq.decode_core(code, xi, 1, centroid.data());
         }
     }
 }
