@@ -39,13 +39,7 @@ set(FAISS_C_SRC
 )
 
 add_library(faiss_c ${FAISS_C_SRC})
-if(FAISS_OPT_LEVEL STREQUAL "generic")
-  target_link_libraries(faiss_c PRIVATE faiss)
-elseif(FAISS_OPT_LEVEL STREQUAL "avx2")
-  target_link_libraries(faiss_c PRIVATE faiss_avx2)
-elseif(FAISS_OPT_LEVEL STREQUAL "avx512")
-  target_link_libraries(faiss_c PRIVATE faiss_avx512)
-endif()
+target_link_libraries(faiss_c PRIVATE faiss)
 
 add_library(faiss_c_avx2 ${FAISS_C_SRC})
 target_link_libraries(faiss_c_avx2 PRIVATE faiss_avx2)
@@ -131,13 +125,15 @@ file(GLOB FAISS_C_API_HEADERS
 
 faiss_install_headers("${FAISS_C_API_HEADERS}" c_api)
 
-install(TARGETS faiss_c
-  EXPORT faiss-targets
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+if(FAISS_OPT_LEVEL STREQUAL "generic")
+  install(TARGETS faiss_c
+    EXPORT faiss-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
 if(FAISS_OPT_LEVEL STREQUAL "avx2")
   install(TARGETS faiss_c_avx2
     EXPORT faiss-targets
