@@ -464,7 +464,6 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
     void sa_encode(idx_t n, const float* x, uint8_t* bytes) const override;
 
-
     /** Given a query vector x, compute distance to provided codes
      * for the input list_no. This is a special purpose method
      * to be used as a flat distance computer for an inverted

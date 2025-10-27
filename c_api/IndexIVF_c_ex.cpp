@@ -38,16 +38,21 @@ int faiss_Search_closest_eligible_centroids(
         FaissIndex* index,
         idx_t n,
         const float* query,
-        idx_t k, 
+        idx_t k,
         float* centroid_distances,
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
     try {
-        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index); 
+        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index);
         assert(index_ivf);
 
-        index_ivf->quantizer->search(n, query, k, centroid_distances, centroid_ids,
-            reinterpret_cast<const faiss::SearchParameters*>(params));
+        index_ivf->quantizer->search(
+                n,
+                query,
+                k,
+                centroid_distances,
+                centroid_ids,
+                reinterpret_cast<const faiss::SearchParameters*>(params));
     }
     CATCH_AND_HANDLE
 }
@@ -58,7 +63,8 @@ int faiss_get_lists_for_keys(
         size_t n_keys,
         idx_t* lists) {
     try {
-        reinterpret_cast<IndexIVF*>(index)->get_lists_for_keys(keys, n_keys, lists);
+        reinterpret_cast<IndexIVF*>(index)->get_lists_for_keys(
+                keys, n_keys, lists);
     }
     CATCH_AND_HANDLE
 }
@@ -88,7 +94,14 @@ int faiss_IndexIVF_search_preassigned_with_params(
         const FaissSearchParametersIVF* params) {
     try {
         reinterpret_cast<const IndexIVF*>(index)->search_preassigned(
-                n, x, k, assign, centroid_dis, distances, labels, store_pairs,
+                n,
+                x,
+                k,
+                assign,
+                centroid_dis,
+                distances,
+                labels,
+                store_pairs,
                 reinterpret_cast<const faiss::SearchParametersIVF*>(params));
     }
     CATCH_AND_HANDLE
@@ -104,7 +117,7 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         float* dist_table) {
     try {
         reinterpret_cast<IndexIVF*>(index)->compute_distance_to_codes_for_list(
-               list_no, x, n, codes, dists, dist_table);
+                list_no, x, n, codes, dists, dist_table);
         return 0;
     }
     CATCH_AND_HANDLE
@@ -116,7 +129,7 @@ int faiss_IndexIVF_compute_distance_table(
         float* dist_table) {
     try {
         reinterpret_cast<IndexIVF*>(index)->compute_distance_table(
-               x, dist_table);
+                x, dist_table);
         return 0;
     }
     CATCH_AND_HANDLE
