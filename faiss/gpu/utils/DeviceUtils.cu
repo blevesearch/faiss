@@ -56,6 +56,12 @@ void synchronizeAllDevices() {
     }
 }
 
+// synchronize only the specified device
+void synchronizeDevice(int device) {
+    DeviceScope scope(device);
+    CUDA_VERIFY(cudaDeviceSynchronize());
+}
+
 const cudaDeviceProp& getDeviceProperties(int device) {
     static std::mutex mutex;
     static std::unordered_map<int, cudaDeviceProp> properties;

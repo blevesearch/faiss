@@ -34,6 +34,9 @@ void profilerStop();
 /// cudaDeviceSynchronize for each device)
 void synchronizeAllDevices();
 
+/// Synchronizes the CPU against the specified device
+void synchronizeDevice(int device);
+
 /// Returns a cached cudaDeviceProp for the given device
 const cudaDeviceProp& getDeviceProperties(int device);
 

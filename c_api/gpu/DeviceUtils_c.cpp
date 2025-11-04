@@ -44,3 +44,11 @@ int faiss_gpu_sync_all_devices() {
     }
     CATCH_AND_HANDLE
 }
+
+/// Synchronizes the CPU against the specified device
+int faiss_gpu_sync_device(int device) {
+    try {
+        faiss::gpu::synchronizeDevice(device);
+    }
+    CATCH_AND_HANDLE
+}

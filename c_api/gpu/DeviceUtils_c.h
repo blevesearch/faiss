@@ -31,6 +31,9 @@ int faiss_gpu_profiler_stop();
 /// cudaDeviceSynchronize for each device)
 int faiss_gpu_sync_all_devices();
 
+/// Synchronizes the CPU against the specified device
+int faiss_gpu_sync_device(int device);
+
 #ifdef __cplusplus
 }
 #endif
