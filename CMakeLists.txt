@@ -58,7 +58,6 @@ set(CMAKE_CXX_STANDARD 17)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # Valid values are "generic", "avx2", "avx512", "avx512_spr", "sve".
-# Valid values are "generic", "avx2", "avx512", "avx512_spr", "sve".
 if(NOT DEFINED FAISS_OPT_LEVEL)
   set(FAISS_OPT_LEVEL "generic" CACHE STRING "Optimization level (generic, avx2, avx512, etc.)")
 endif()
