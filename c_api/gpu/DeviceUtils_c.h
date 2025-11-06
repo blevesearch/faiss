@@ -31,6 +31,9 @@ int faiss_gpu_profiler_stop();
 /// cudaDeviceSynchronize for each device)
 int faiss_gpu_sync_all_devices();
 
+/// Returns the free memory (in bytes) on the specified device
+int faiss_get_free_memory(int device, size_t* p_free_bytes);
+
 #ifdef __cplusplus
 }
 #endif
