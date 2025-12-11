@@ -102,6 +102,10 @@ int faiss_IndexBinaryIVF_make_direct_map(
         FaissIndexBinaryIVF* index,
         int new_maintain_direct_map);
 
+int faiss_IndexBinaryIVF_set_direct_map(
+        FaissIndexBinaryIVF* index,
+        int direct_map_type);
+
 /** Check the inverted lists' imbalance factor.
  *
  * 1= perfectly balanced, >1: imbalanced

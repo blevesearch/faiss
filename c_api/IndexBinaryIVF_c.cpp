@@ -95,6 +95,17 @@ int faiss_IndexBinaryIVF_make_direct_map(
     CATCH_AND_HANDLE
 }
 
+int faiss_IndexBinaryIVF_set_direct_map(
+        FaissIndexBinaryIVF* index,
+        int direct_map_type) {
+    try {
+        reinterpret_cast<IndexBinaryIVF*>(index)->set_direct_map_type(
+                static_cast<faiss::DirectMap::Type>(direct_map_type));
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
 double faiss_IndexBinaryIVF_imbalance_factor(const FaissIndexBinaryIVF* index) {
     return reinterpret_cast<const IndexBinaryIVF*>(index)
             ->invlists->imbalance_factor();

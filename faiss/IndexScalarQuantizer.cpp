@@ -138,6 +138,43 @@ IndexIVFScalarQuantizer::IndexIVFScalarQuantizer(
     is_trained = false;
 }
 
+void IndexIVFScalarQuantizer::dist_compute(
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* dists) const {
+    // Get the distance computer
+    std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
+            sq.get_distance_computer(metric_type));
+    dc->code_size = sq.code_size;
+
+    // Set up the query if not using residuals
+    if (!by_residual) {
+        dc->set_query(query);
+    }
+
+    // Process each ID
+    for (size_t i = 0; i < n_ids; i++) {
+        idx_t id = ids[i];
+        idx_t lo = direct_map.get(id);
+        idx_t list_no = lo_listno(lo);
+        idx_t offset = lo_offset(lo);
+
+        // Get the code for the vector
+        const uint8_t* code = invlists->get_single_code(list_no, offset);
+
+        if (by_residual) {
+            // Compute residual for this list_no
+            std::vector<float> tmp(d);
+            quantizer->compute_residual(query, tmp.data(), list_no);
+            dc->set_query(tmp.data());
+        }
+
+        // Compute the distance
+        dists[i] = dc->query_to_code(code);
+    }
+}
+
 IndexIVFScalarQuantizer::IndexIVFScalarQuantizer() : IndexIVF() {
     by_residual = true;
 }
