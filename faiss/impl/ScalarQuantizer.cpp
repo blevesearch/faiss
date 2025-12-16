@@ -1131,7 +1131,11 @@ void train_NonUniform(
             }
         }
         std::vector<float> trained_d(2);
-#pragma omp parallel for
+
+// Add an openMP guard here to prevent spawning threads
+// when d = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
+#pragma omp parallel for if (d > 1) num_threads(num_omp_threads)
         for (int j = 0; j < d; j++) {
             train_Uniform(rs, rs_arg, n, k, xt.data() + j * n, trained_d);
             vmin[j] = trained_d[0];
@@ -2073,7 +2077,11 @@ void ScalarQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
     std::unique_ptr<SQuantizer> squant(select_quantizer());
 
     memset(codes, 0, code_size * n);
-#pragma omp parallel for
+
+// Add an openMP guard here to prevent spawning threads
+// when n = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
+#pragma omp parallel for if (n > 1) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         squant->encode_vector(x + i * d, codes + i * code_size);
     }
@@ -2082,7 +2090,10 @@ void ScalarQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
 void ScalarQuantizer::decode(const uint8_t* codes, float* x, size_t n) const {
     std::unique_ptr<SQuantizer> squant(select_quantizer());
 
-#pragma omp parallel for
+// Add an openMP guard here to prevent spawning threads
+// when n = 1 (which would indicate sequential execution).
+// This is for bleve, more in MB-61930.
+#pragma omp parallel for if (n > 1) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         squant->decode_vector(codes + i * code_size, x + i * d);
     }
@@ -2117,6 +2128,17 @@ SQDistanceComputer* ScalarQuantizer::get_distance_computer(
             return select_distance_computer<SimilarityIP<1>>(qtype, d, trained);
         }
     }
+}
+
+void SQDistanceComputer::distance_to_codes(
+        idx_t n,
+        const uint8_t* codes,
+        float* dists) {
+    for (idx_t i = 0; i < n; i++) {
+        const uint8_t* code = codes + i * code_size;
+        dists[i] = query_to_code(code);
+    }
+    return;
 }
 
 /*******************************************************************

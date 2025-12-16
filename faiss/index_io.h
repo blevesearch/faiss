@@ -50,6 +50,10 @@ const int IO_FLAG_ONDISK_SAME_DIR = 4;
 const int IO_FLAG_SKIP_IVF_DATA = 8;
 // don't initialize precomputed table after loading
 const int IO_FLAG_SKIP_PRECOMPUTE_TABLE = 16;
+// skip prefetch phase while searching over the inverted lists
+const int IO_FLAG_SKIP_PREFETCH = 32;
+// read the index from an already mmap'd data buffer
+const int IO_FLAG_READ_MMAP = 64 | 0x646f0000;
 // don't compute the sdc table for PQ-based indices
 // this will prevent distances from being computed
 // between elements in the index. For indices like HNSWPQ,

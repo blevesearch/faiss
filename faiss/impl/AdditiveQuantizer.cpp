@@ -276,7 +276,7 @@ void AdditiveQuantizer::pack_codes(
             norms = norm_buf.data();
         }
     }
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* codes1 = codes + i * ld_codes;
         BitstringWriter bsw(packed_codes + i * code_size, code_size);
@@ -294,7 +294,7 @@ void AdditiveQuantizer::decode(const uint8_t* code, float* x, size_t n) const {
             is_trained, "The additive quantizer is not trained yet.");
 
     // standard additive quantizer decoding
-#pragma omp parallel for if (n > 100)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         BitstringReader bsr(code + i * code_size, code_size);
         float* xi = x + i * d;
@@ -323,7 +323,7 @@ void AdditiveQuantizer::decode_unpacked(
     }
 
     // standard additive quantizer decoding
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* codesi = code + i * ld_codes;
         float* xi = x + i * d;
@@ -348,7 +348,7 @@ AdditiveQuantizer::~AdditiveQuantizer() {}
 void AdditiveQuantizer::compute_centroid_norms(float* norms) const {
     size_t ntotal = (size_t)1 << tot_bits;
     // TODO: make tree of partial sums
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> tmp(d);
 #pragma omp for
@@ -439,7 +439,7 @@ void AdditiveQuantizer::knn_centroids_inner_product(
     compute_LUT(n, xq, LUT.get());
     size_t ntotal = (size_t)1 << tot_bits;
 
-#pragma omp parallel if (n > 100)
+#pragma omp parallel if (n > 100) num_threads(num_omp_threads)
     {
         std::vector<float> dis(ntotal);
 #pragma omp for
@@ -468,7 +468,7 @@ void AdditiveQuantizer::knn_centroids_L2(
     fvec_norms_L2sqr(q_norms.get(), xq, d, n);
     size_t ntotal = (size_t)1 << tot_bits;
 
-#pragma omp parallel if (n > 100)
+#pragma omp parallel if (n > 100) num_threads(num_omp_threads)
     {
         std::vector<float> dis(ntotal);
 #pragma omp for

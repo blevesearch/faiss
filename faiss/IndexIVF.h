@@ -361,6 +361,8 @@ struct IndexIVF : Index, IndexIVFInterface {
      */
     void reconstruct_n(idx_t i0, idx_t ni, float* recons) const override;
 
+    void get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists);
+
     /** Similar to search, but also reconstructs the stored vectors (or an
      * approximation in the case of lossy coding) for the search results.
      *
@@ -461,6 +463,59 @@ struct IndexIVF : Index, IndexIVFInterface {
      * @return nb of bytes written to codes
      */
     void sa_encode(idx_t n, const float* x, uint8_t* bytes) const override;
+
+    /** Given a query vector x, compute distance to provided codes
+     * for the input list_no. This is a special purpose method
+     * to be used as a flat distance computer for an inverted
+     * list where codes are provided externally. This allows to
+     * use the quantizer independently while computing distance
+     * for the quantized codes.
+     *
+     * @param list_no list number for inverted list
+     * @param x - input query vector
+     * @param n - number of codes
+     * @param codes - input codes
+     * @param dists - output computed distances
+     * @param dist_table - input precomputed distance table for PQ
+     */
+
+    virtual void compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* dist_table) const {};
+
+    /** Given a query vector x, compute distance table and
+     *  return to the caller.
+     *
+     * @param x - input query vector
+     * @param dist_table - output precomputed distance table for PQ
+     *
+     */
+
+    virtual void compute_distance_table(
+        const float* x,
+        float* dist_table) const {};
+
+    /** Get centroid information and cardinality for all centroids
+     *
+     * @param centroid_vectors output array for centroid vectors, size nlist * d
+     * @param cardinalities output array for cardinalities, size nlist
+     * @param centroid_ids output array for centroid IDs, size nlist (optional, can be nullptr)
+     */
+    void get_centroids_and_cardinality(
+            float* centroid_vectors,
+            size_t* cardinalities,
+            idx_t* centroid_ids = nullptr) const;
+
+    /** Get centroid information and cardinality for all centroids
+     *
+     * @return tuple of (centroid_vectors, cardinalities, centroid_ids)
+     */
+    std::tuple<std::vector<float>, std::vector<size_t>, std::vector<idx_t>>
+    get_centroids_and_cardinality() const;
 
     IndexIVF();
 };

@@ -97,7 +97,7 @@ void ProductAdditiveQuantizer::train(size_t n, const float* x) {
         auto q = quantizers[s];
         xt.resize(q->d * n);
 
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             memcpy(xt.data() + i * q->d,
                    x + i * d + offset_d,
@@ -164,7 +164,7 @@ void ProductAdditiveQuantizer::compute_unpacked_codes(
         xsub.resize(n * q->d);
         codes.resize(n * q->code_size);
 
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             memcpy(xsub.data() + i * q->d,
                    x + i * d + offset_d,
@@ -174,7 +174,7 @@ void ProductAdditiveQuantizer::compute_unpacked_codes(
         q->compute_codes(xsub.data(), codes.data(), n);
 
         // unpack
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             uint8_t* code = codes.data() + i * q->code_size;
             BitstringReader bsr(code, q->code_size);
@@ -203,7 +203,7 @@ void ProductAdditiveQuantizer::decode_unpacked(
     }
 
     // product additive quantizer decoding
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         const int32_t* codesi = codes + i * ld_codes;
 
@@ -234,7 +234,7 @@ void ProductAdditiveQuantizer::decode(const uint8_t* codes, float* x, size_t n)
     FAISS_THROW_IF_NOT_MSG(
             is_trained, "The product additive quantizer is not trained yet.");
 
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         BitstringReader bsr(codes + i * code_size, code_size);
 

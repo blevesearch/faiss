@@ -59,7 +59,11 @@ void IndexScalarQuantizer::search(
     FAISS_THROW_IF_NOT(
             metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
 
-#pragma omp parallel
+// Adding an openMP guard here to spawn threads only if n > 1, where n is the
+// number of queries in the batch. If n = 1, then the search is done in a single
+// thread. This is done to avoid the overhead of spawning threads for executing
+// sequential code. This is for bleve, more in: MB-61930
+#pragma omp parallel if (n > 1) num_threads(num_omp_threads)
     {
         std::unique_ptr<InvertedListScanner> scanner(
                 sq.select_InvertedListScanner(metric_type, nullptr, true, sel));
@@ -159,7 +163,7 @@ void IndexIVFScalarQuantizer::encode_vectors(
     size_t coarse_size = include_listnos ? coarse_code_size() : 0;
     memset(codes, 0, (code_size + coarse_size) * n);
 
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 
@@ -196,7 +200,7 @@ void IndexIVFScalarQuantizer::sa_decode(idx_t n, const uint8_t* codes, float* x)
     std::unique_ptr<ScalarQuantizer::SQuantizer> squant(sq.select_quantizer());
     size_t coarse_size = coarse_code_size();
 
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 
@@ -228,7 +232,7 @@ void IndexIVFScalarQuantizer::add_core(
 
     DirectMapAdd dm_add(direct_map, n, xids);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
         std::vector<uint8_t> one_code(code_size);
@@ -289,6 +293,32 @@ void IndexIVFScalarQuantizer::reconstruct_from_offset(
     } else {
         sq.decode(code, recons, 1);
     }
+}
+
+void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* dist_table) const {
+    std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
+            sq.get_distance_computer(metric_type));
+
+    dc->code_size = sq.code_size;
+
+    if (by_residual) {
+        // shift of x_in wrt centroid
+        std::vector<float> tmp(d);
+        quantizer->compute_residual(x, tmp.data(), list_no);
+        dc->set_query(tmp.data());
+    } else {
+        dc->set_query(x);
+    }
+
+    dc->distance_to_codes(n, codes, dists);
+
+    return;
 }
 
 } // namespace faiss

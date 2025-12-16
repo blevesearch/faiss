@@ -108,7 +108,7 @@ std::vector<uint8_t> unpackNonInterleaved(
     std::vector<uint8_t> out(numVecs * dims * utils::divUp(bitsPerCode, 8));
 
     if (bitsPerCode == 4) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < dims; ++j) {
                 int srcIdx = i * srcVecSize + (j / 2);
@@ -121,7 +121,7 @@ std::vector<uint8_t> unpackNonInterleaved(
             }
         }
     } else if (bitsPerCode == 5) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < dims; ++j) {
                 int lo = i * srcVecSize + (j * 5) / 8;
@@ -137,7 +137,7 @@ std::vector<uint8_t> unpackNonInterleaved(
             }
         }
     } else if (bitsPerCode == 6) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < dims; ++j) {
                 int lo = i * srcVecSize + (j * 6) / 8;
@@ -172,7 +172,7 @@ void unpackInterleavedWord(
     int wordsPerBlock = wordsPerDimBlock * dims;
     int numBlocks = utils::divUp(numVecs, warpSize);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < numVecs; ++i) {
         int block = i / warpSize;
         FAISS_ASSERT(block < numBlocks);
@@ -218,7 +218,7 @@ std::vector<uint8_t> unpackInterleaved(
                 dims,
                 bitsPerCode);
     } else if (bitsPerCode == 4) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             int block = i / warpSize;
             int lane = i % warpSize;
@@ -236,7 +236,7 @@ std::vector<uint8_t> unpackInterleaved(
             }
         }
     } else if (bitsPerCode == 5) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             int block = i / warpSize;
             int blockVector = i % warpSize;
@@ -258,7 +258,7 @@ std::vector<uint8_t> unpackInterleaved(
             }
         }
     } else if (bitsPerCode == 6) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             int block = i / warpSize;
             int blockVector = i % warpSize;
@@ -383,7 +383,7 @@ std::vector<uint8_t> packNonInterleaved(
     std::vector<uint8_t> out(numVecs * bytesPerVec);
 
     if (bitsPerCode == 4) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < bytesPerVec; ++j) {
                 int dimLo = j * 2;
@@ -398,7 +398,7 @@ std::vector<uint8_t> packNonInterleaved(
             }
         }
     } else if (bitsPerCode == 5) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < bytesPerVec; ++j) {
                 int dimLo = (j * 8) / 5;
@@ -416,7 +416,7 @@ std::vector<uint8_t> packNonInterleaved(
             }
         }
     } else if (bitsPerCode == 6) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numVecs; ++i) {
             for (int j = 0; j < bytesPerVec; ++j) {
                 int dimLo = (j * 8) / 6;
@@ -452,7 +452,7 @@ void packInterleavedWord(
 
     // We're guaranteed that all other slots not filled by the vectors present
     // are initialized to zero (from the vector constructor in packInterleaved)
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < numVecs; ++i) {
         int block = i / warpSize;
         FAISS_ASSERT(block < numBlocks);
@@ -500,7 +500,7 @@ std::vector<uint8_t> packInterleaved(
                 dims,
                 bitsPerCode);
     } else if (bitsPerCode == 4) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numBlocks; ++i) {
             for (int j = 0; j < dims; ++j) {
                 for (int k = 0; k < bytesPerDimBlock; ++k) {
@@ -516,7 +516,7 @@ std::vector<uint8_t> packInterleaved(
             }
         }
     } else if (bitsPerCode == 5) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numBlocks; ++i) {
             for (int j = 0; j < dims; ++j) {
                 for (int k = 0; k < bytesPerDimBlock; ++k) {
@@ -536,7 +536,7 @@ std::vector<uint8_t> packInterleaved(
             }
         }
     } else if (bitsPerCode == 6) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int i = 0; i < numBlocks; ++i) {
             for (int j = 0; j < dims; ++j) {
                 for (int k = 0; k < bytesPerDimBlock; ++k) {

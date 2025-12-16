@@ -58,6 +58,35 @@ size_t VectorIOReader::operator()(void* ptr, size_t size, size_t nitems) {
 }
 
 /***********************************************************************
+ * IO Buffer
+ ***********************************************************************/
+
+size_t BufIOReader::operator()(void* ptr, size_t size, size_t nitems) {
+    // if the read pointer has passed the buffer size, exit out since we've
+    // read the complete index
+    if (rp >= buf_size)
+        return 0;
+
+    // check how many "items" of a particular size are to be read from the buffer
+    // the size of the item depends on the datatype of field being populated.
+    size_t nremain = (buf_size - rp) / size;
+    if (nremain < nitems) // we don't have enough items to be read, in which case
+        nitems = nremain; // read all the remaining ones
+    if (size * nitems > 0) {
+        // finally memcpy the data from buffer to the field of the index being
+        // populated and increment the read pointer.
+        memcpy(ptr, &buf[rp], size * nitems);
+        rp += size * nitems;
+    }
+
+    return nitems;
+}
+
+BufIOReader::~BufIOReader() {
+    buf = NULL;
+}
+
+/***********************************************************************
  * IO File
  ***********************************************************************/
 

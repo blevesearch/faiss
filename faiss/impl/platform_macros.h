@@ -8,6 +8,7 @@
 #pragma once
 
 // basic int types and size_t
+#include <faiss/OMPConfig.h>
 #include <cstdint>
 #include <cstdio>
 
