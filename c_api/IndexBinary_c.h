@@ -28,8 +28,6 @@ typedef struct FaissIDSelector_H FaissIDSelector;
 FAISS_DECLARE_CLASS(IndexBinary)
 FAISS_DECLARE_DESTRUCTOR(IndexBinary)
 
-FAISS_DECLARE_INDEX_DOWNCAST(IndexBinary)
-
 /// Getter for d
 FAISS_DECLARE_GETTER(IndexBinary, int, d)
 
