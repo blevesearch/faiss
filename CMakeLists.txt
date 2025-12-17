@@ -47,13 +47,17 @@ if(FAISS_ENABLE_CUVS)
 endif()
 
 project(faiss
-  VERSION 1.12.0
+  VERSION 1.13.1
   DESCRIPTION "A library for efficient similarity search and clustering of dense vectors."
   HOMEPAGE_URL "https://github.com/facebookresearch/faiss"
   LANGUAGES ${FAISS_LANGUAGES})
 include(GNUInstallDirs)
 
-set(CMAKE_CXX_STANDARD 17)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" OR FAISS_ENABLE_CUVS)
+  set(CMAKE_CXX_STANDARD 17)
+else()
+  set(CMAKE_CXX_STANDARD 20)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
@@ -96,11 +100,7 @@ if(FAISS_ENABLE_CUVS AND NOT TARGET cuvs::cuvs)
 add_subdirectory(faiss)
 
 if(FAISS_ENABLE_GPU)
-  if(FAISS_ENABLE_ROCM)
-    add_subdirectory(faiss/gpu-rocm)
-  else()
-    add_subdirectory(faiss/gpu)
-  endif()
+  add_subdirectory(faiss/gpu)
 endif()
 
 if(FAISS_ENABLE_PYTHON)
@@ -124,7 +124,7 @@ if(BUILD_TESTING)
   add_subdirectory(perf_tests)
   if(FAISS_ENABLE_GPU)
     if(FAISS_ENABLE_ROCM)
-      add_subdirectory(faiss/gpu-rocm/test)
+      add_subdirectory(faiss/gpu/test)
     else()
       add_subdirectory(faiss/gpu/test)
     endif()

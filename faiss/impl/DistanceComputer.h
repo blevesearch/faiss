@@ -60,7 +60,7 @@ struct DistanceComputer {
 };
 
 /* Wrap the distance computer into one that negates the
-   distances. This makes supporting INNER_PRODUCE search easier */
+   distances. This makes supporting INNER_PRODUCT search easier */
 
 struct NegativeDistanceComputer : DistanceComputer {
     /// owned by this
@@ -100,7 +100,7 @@ struct NegativeDistanceComputer : DistanceComputer {
         return -basedis->symmetric_dis(i, j);
     }
 
-    virtual ~NegativeDistanceComputer() {
+    virtual ~NegativeDistanceComputer() override {
         delete basedis;
     }
 };
@@ -125,7 +125,7 @@ struct FlatCodesDistanceComputer : DistanceComputer {
     /// compute distance of current query to an encoded vector
     virtual float distance_to_code(const uint8_t* code) = 0;
 
-    virtual ~FlatCodesDistanceComputer() {}
+    virtual ~FlatCodesDistanceComputer() override {}
 };
 
 } // namespace faiss

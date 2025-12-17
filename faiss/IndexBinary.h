@@ -49,10 +49,10 @@ struct IndexBinary {
     /** Perform training on a representative set of vectors.
      *
      * @param n      nb of training vectors
-     * @param x      training vecors, size n * d / 8
+     * @param x      training vectors, size n * d / 8
      */
     virtual void train(idx_t n, const uint8_t* x);
-    virtual void trainEx(idx_t n, const void* x, NumericType numeric_type) {
+    virtual void train_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::UInt8) {
             train(n, static_cast<const uint8_t*>(x));
         } else {
@@ -66,7 +66,7 @@ struct IndexBinary {
      * @param x      input matrix, size n * d / 8
      */
     virtual void add(idx_t n, const uint8_t* x) = 0;
-    virtual void addEx(idx_t n, const void* x, NumericType numeric_type) {
+    virtual void add_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::UInt8) {
             add(n, static_cast<const uint8_t*>(x));
         } else {
@@ -82,7 +82,7 @@ struct IndexBinary {
      * @param xids if non-null, ids to store for the vectors (size n)
      */
     virtual void add_with_ids(idx_t n, const uint8_t* x, const idx_t* xids);
-    virtual void add_with_idsEx(
+    virtual void add_with_ids_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -111,7 +111,7 @@ struct IndexBinary {
             int32_t* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const = 0;
-    virtual void searchEx(
+    virtual void search_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -172,14 +172,14 @@ struct IndexBinary {
      *
      * This function may not be defined for some indexes.
      * @param key         id of the vector to reconstruct
-     * @param recons      reconstucted vector (size d / 8)
+     * @param recons      reconstructed vector (size d / 8)
      */
     virtual void reconstruct(idx_t key, uint8_t* recons) const;
 
     /** Reconstruct vectors i0 to i0 + ni - 1.
      *
      * This function may not be defined for some indexes.
-     * @param recons      reconstucted vectors (size ni * d / 8)
+     * @param recons      reconstructed vectors (size ni * d / 8)
      */
     virtual void reconstruct_n(idx_t i0, idx_t ni, uint8_t* recons) const;
 

@@ -73,9 +73,9 @@ struct FileIOReader : IOReader {
     FILE* f = nullptr;
     bool need_close = false;
 
-    FileIOReader(FILE* rf);
+    explicit FileIOReader(FILE* rf);
 
-    FileIOReader(const char* fname);
+    explicit FileIOReader(const char* fname);
 
     ~FileIOReader() override;
 
@@ -88,9 +88,9 @@ struct FileIOWriter : IOWriter {
     FILE* f = nullptr;
     bool need_close = false;
 
-    FileIOWriter(FILE* wf);
+    explicit FileIOWriter(FILE* wf);
 
-    FileIOWriter(const char* fname);
+    explicit FileIOWriter(const char* fname);
 
     ~FileIOWriter() override;
 

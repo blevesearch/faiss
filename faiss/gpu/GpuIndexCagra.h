@@ -135,7 +135,7 @@ struct IVFPQSearchCagraConfig {
     ///
     /// The use of low-precision types reduces the amount of shared memory
     /// required at search time, so fast shared memory kernels can be used even
-    /// for datasets with large dimansionality. Note that the recall is slightly
+    /// for datasets with large dimensionality. Note that the recall is slightly
     /// degraded when low-precision type is selected.
 
     cudaDataType_t lut_dtype = CUDA_R_32F;
@@ -166,6 +166,10 @@ struct IVFPQSearchCagraConfig {
     /// negative effects on the search performance if tweaked incorrectly.
 
     double preferred_shmem_carveout = 1.0;
+
+    /// Set the internal batch size to improve GPU utilization at the cost of
+    /// larger memory footprint.
+    uint32_t max_internal_batch_size = 4096;
 };
 
 struct GpuIndexCagraConfig : public GpuIndexConfig {
@@ -258,7 +262,7 @@ struct GpuIndexCagra : public GpuIndex {
     /// the base dataset. Use this function when you want to add vectors with
     /// ids. Ref: https://github.com/facebookresearch/faiss/issues/4107
     void add(idx_t n, const float* x) override;
-    void addEx(idx_t n, const void* x, NumericType numeric_type) override;
+    void add_ex(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// Trains CAGRA based on the given vector data.
     /// NB: The use of the train function here is to build the CAGRA graph on
@@ -266,12 +270,12 @@ struct GpuIndexCagra : public GpuIndex {
     /// of vectors (without IDs) to the index. There is no external quantizer to
     /// be trained here.
     void train(idx_t n, const float* x) override;
-    void trainEx(idx_t n, const void* x, NumericType numeric_type) override;
+    void train_ex(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// Initialize ourselves from the given CPU index; will overwrite
     /// all data in ourselves
     void copyFrom(const faiss::IndexHNSWCagra* index);
-    void copyFromEx(
+    void copyFrom_ex(
             const faiss::IndexHNSWCagra* index,
             NumericType numeric_type);
 
@@ -289,7 +293,7 @@ struct GpuIndexCagra : public GpuIndex {
     bool addImplRequiresIDs_() const override;
 
     void addImpl_(idx_t n, const float* x, const idx_t* ids) override;
-    void addImplEx_(
+    void addImpl_ex_(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -303,7 +307,7 @@ struct GpuIndexCagra : public GpuIndex {
             float* distances,
             idx_t* labels,
             const SearchParameters* search_params) const override;
-    void searchImplEx_(
+    void searchImpl_ex_(
             idx_t n,
             const void* x,
             NumericType numeric_type,

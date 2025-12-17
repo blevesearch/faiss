@@ -17,6 +17,7 @@ from faiss.contrib.inspect_tools import get_invlist
 # the tests tend to timeout in stress modes + dev otherwise
 faiss.omp_set_num_threads(4)
 
+
 class TestLUTQuantization(unittest.TestCase):
 
     def compute_dis_float(self, codes, LUT, bias):
@@ -150,6 +151,7 @@ def verify_with_draws(testcase, Dref, Iref, Dnew, Inew):
             mask = Dref[i, :] == dis
             testcase.assertEqual(set(Iref[i, mask]), set(Inew[i, mask]))
 
+
 def three_metrics(Dref, Iref, Dnew, Inew):
     nq = Iref.shape[0]
     recall_at_1 = (Iref[:, 0] == Inew[:, 0]).sum() / nq
@@ -164,6 +166,7 @@ def three_metrics(Dref, Iref, Dnew, Inew):
 ##########################################################
 # Tests for various IndexIVFPQFastScan implementations
 ##########################################################
+
 
 class TestIVFImplem1(unittest.TestCase):
     """ Verify implem 1 (search from original invlists)
@@ -390,7 +393,7 @@ class TestIVFImplem12(unittest.TestCase):
     def test_by_residual_odd_dim(self):
         self.do_test(True, d=30)
 
-    # testin single query
+    # testing single query
     def test_no_residual_single_query(self):
         self.do_test(False, nq=1)
 
@@ -545,7 +548,7 @@ class TestTraining(unittest.TestCase):
 
 
 class TestReconstruct(unittest.TestCase):
-    """ test reconstruct and sa_encode / sa_decode 
+    """ test reconstruct and sa_encode / sa_decode
     (also for a few additive quantizer variants) """
 
     def do_test(self, by_residual=False):
@@ -574,7 +577,7 @@ class TestReconstruct(unittest.TestCase):
         index.reconstruct_orig_invlists()
         assert index.orig_invlists.compute_ntotal() == index.ntotal
 
-        # compare with non fast-scan index 
+        # compare with non fast-scan index
         index2 = faiss.IndexIVFPQ(
             index.quantizer, d, 50, d // 2, 4, metric)
         index2.by_residual = by_residual
@@ -591,11 +594,11 @@ class TestReconstruct(unittest.TestCase):
     def test_by_residual(self):
         self.do_test(by_residual=True)
 
-    def do_test_generic(self, factory_string, 
-                        by_residual=False, metric=faiss.METRIC_L2): 
+    def do_test_generic(self, factory_string,
+                        by_residual=False, metric=faiss.METRIC_L2):
         d = 32
         ds = datasets.SyntheticDataset(d, 250, 200, 10)
-        index = faiss.index_factory(ds.d, factory_string, metric) 
+        index = faiss.index_factory(ds.d, factory_string, metric)
         if "IVF" in factory_string:
             index.by_residual = by_residual
             index.make_direct_map(True)
@@ -615,7 +618,7 @@ class TestReconstruct(unittest.TestCase):
         index2 = faiss.deserialize_index(faiss.serialize_index(index))
         codes2 = index2.sa_encode(ds.get_database()[120:130])
         np.testing.assert_array_equal(codes, codes2)
-        
+
 
     def test_ivfpq_residual(self):
         self.do_test_generic("IVF20,PQ16x4fs", by_residual=True)

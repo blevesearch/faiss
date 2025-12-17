@@ -10,19 +10,18 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import unittest
 import faiss
-import tempfile
-import os
 import re
-import warnings
 
 from common_faiss_tests import get_dataset, get_dataset_2
 from faiss.contrib.evaluation import check_ref_knn_with_draws
+
 
 class TestModuleInterface(unittest.TestCase):
 
     def test_version_attribute(self):
         assert hasattr(faiss, '__version__')
         assert re.match('^\\d+\\.\\d+\\.\\d+$', faiss.__version__)
+
 
 class TestIndexFlat(unittest.TestCase):
 
@@ -144,6 +143,52 @@ class TestIndexFlatL2(unittest.TestCase):
         self.assertLessEqual((I3 != I1).sum(), 0)
         #  np.testing.assert_equal(Iref, I1)
         np.testing.assert_equal(D3, D1)
+
+
+class TestIndexFlatL2Panorama(unittest.TestCase):
+    def test_indexflat_l2_panorama(self):
+        d = 32
+        nlevels = 8
+        batch_size = 128
+        nq = 200
+        nb = 1000
+        nt = 0
+        k = 10
+
+        (xt, xb, xq) = get_dataset_2(d, nt, nb, nq)
+        index = faiss.IndexFlatL2Panorama(d, nlevels, batch_size)
+
+        ### k-NN search
+
+        index.add(xb)
+        D1, I1 = index.search(xq, k)
+
+        all_dis = ((xq.reshape(nq, 1, d) - xb.reshape(1, nb, d)) ** 2).sum(2)
+        Iref = all_dis.argsort(axis=1)[:, :k]
+
+        Dref = all_dis[np.arange(nq)[:, None], Iref]
+
+        # not too many elements are off.
+        self.assertLessEqual((Iref != I1).sum(), Iref.size * 0.0002)
+        np.testing.assert_almost_equal(Dref, D1, decimal=5)
+
+        ### Range search
+
+        radius = float(np.median(Dref[:, -1]))
+
+        lims, D2, I2 = index.range_search(xq, radius)
+
+        for i in range(nq):
+            l0, l1 = lims[i:i + 2]
+            _, Il = D2[l0:l1], I2[l0:l1]
+            Ilref, = np.where(all_dis[i] < radius)
+            Il.sort()
+            Ilref.sort()
+            np.testing.assert_equal(Il, Ilref)
+            np.testing.assert_almost_equal(
+                all_dis[i, Ilref], D2[l0:l1],
+                decimal=5
+            )
 
 
 class EvalIVFPQAccuracy(unittest.TestCase):
@@ -478,6 +523,24 @@ class TestSearchAndReconstruct(unittest.TestCase):
 
         self.run_search_and_reconstruct(index, xb, xq, eps=0.0)
 
+    def test_IndexIVFFlatPanorama(self):
+        d = 32
+        nb = 1000
+        nt = 1500
+        nq = 200
+        nlevels = 4
+
+        (xt, xb, xq) = get_dataset(d, nb, nt, nq)
+
+        quantizer = faiss.IndexFlatL2(d)
+        index = faiss.IndexIVFFlatPanorama(quantizer, d, 32, nlevels)
+        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.nprobe = 4
+        index.train(xt)
+        index.add(xb)
+
+        self.run_search_and_reconstruct(index, xb, xq, eps=0.0)
+
     def test_IndexIVFPQ(self):
         d = 32
         nb = 1000
@@ -623,6 +686,7 @@ class TestShardReplicas(unittest.TestCase):
         self.assertEqual(index.ntotal, nb)
         index.remove_replica(index1)
         self.assertEqual(index.ntotal, 0)
+
 
 class TestReconsException(unittest.TestCase):
 

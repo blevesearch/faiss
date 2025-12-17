@@ -8,7 +8,6 @@ import numpy as np
 import faiss
 import unittest
 import sys
-import gc
 
 from faiss.contrib import datasets
 from faiss.contrib.evaluation import sort_range_res_2, check_ref_range_results
@@ -358,6 +357,7 @@ class TestSelector(unittest.TestCase):
     def test_BinaryFlat_no_heap(self):
         self.do_test_id_selector("BinaryFlat", use_heap=False)
 
+
 class TestSearchParams(unittest.TestCase):
 
     def do_test_with_param(
@@ -379,7 +379,7 @@ class TestSearchParams(unittest.TestCase):
 
         Dnew, Inew = index.search(ds.get_queries(), 10, params=params)
 
-        # make sure rhe parameter does indeed change the result...
+        # make sure the parameter does indeed change the result...
         self.assertFalse(np.all(Inew == I0))
 
         for param_name, value in ps_params.items():

@@ -17,8 +17,8 @@
 #include <sstream>
 
 #define FAISS_VERSION_MAJOR 1
-#define FAISS_VERSION_MINOR 12
-#define FAISS_VERSION_PATCH 0
+#define FAISS_VERSION_MINOR 13
+#define FAISS_VERSION_PATCH 1
 
 // Macro to combine the version components into a single string
 #ifndef FAISS_STRINGIFY
@@ -78,7 +78,7 @@ inline size_t get_numeric_type_size(NumericType numeric_type) {
     }
 }
 
-/** Parent class for the optional search paramenters.
+/** Parent class for the optional search parameters.
  *
  * Sub-classes with additional search parameters should inherit this class.
  * Ownership of the object fields is always to the caller.
@@ -125,11 +125,11 @@ struct Index {
     /** Perform training on a representative set of vectors
      *
      * @param n      nb of training vectors
-     * @param x      training vecors, size n * d
+     * @param x      training vectors, size n * d
      */
     virtual void train(idx_t n, const float* x);
 
-    virtual void trainEx(idx_t n, const void* x, NumericType numeric_type) {
+    virtual void train_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::Float32) {
             train(n, static_cast<const float*>(x));
         } else {
@@ -147,7 +147,7 @@ struct Index {
      */
     virtual void add(idx_t n, const float* x) = 0;
 
-    virtual void addEx(idx_t n, const void* x, NumericType numeric_type) {
+    virtual void add_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::Float32) {
             add(n, static_cast<const float*>(x));
         } else {
@@ -165,7 +165,7 @@ struct Index {
      * @param xids      if non-null, ids to store for the vectors (size n)
      */
     virtual void add_with_ids(idx_t n, const float* x, const idx_t* xids);
-    virtual void add_with_idsEx(
+    virtual void add_with_ids_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -196,7 +196,7 @@ struct Index {
             idx_t* labels,
             const SearchParameters* params = nullptr) const = 0;
 
-    virtual void searchEx(
+    virtual void search_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -258,7 +258,7 @@ struct Index {
      *
      * this function may not be defined for some indexes
      * @param key         id of the vector to reconstruct
-     * @param recons      reconstucted vector (size d)
+     * @param recons      reconstructed vector (size d)
      */
     virtual void reconstruct(idx_t key, float* recons) const;
 
@@ -268,7 +268,7 @@ struct Index {
      * this function may not be defined for some indexes
      * @param n           number of vectors to reconstruct
      * @param keys        ids of the vectors to reconstruct (size n)
-     * @param recons      reconstucted vector (size n * d)
+     * @param recons      reconstructed vector (size n * d)
      */
     virtual void reconstruct_batch(idx_t n, const idx_t* keys, float* recons)
             const;
@@ -278,7 +278,7 @@ struct Index {
      * this function may not be defined for some indexes
      * @param i0          index of the first vector in the sequence
      * @param ni          number of vectors in the sequence
-     * @param recons      reconstucted vector (size ni * d)
+     * @param recons      reconstructed vector (size ni * d)
      */
     virtual void reconstruct_n(idx_t i0, idx_t ni, float* recons) const;
 

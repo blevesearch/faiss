@@ -46,7 +46,7 @@ struct SIMDResultHandler {
     virtual ~SIMDResultHandler() {}
 };
 
-/* Result handler that will return float resutls eventually */
+/* Result handler that will return float results eventually */
 struct SIMDResultHandlerToFloat : SIMDResultHandler {
     size_t nq;     // number of queries
     size_t ntotal; // ignore excess elements after ntotal
@@ -70,13 +70,35 @@ struct SIMDResultHandlerToFloat : SIMDResultHandler {
     virtual void end() {
         normalizers = nullptr;
     }
+
+    // Number of updates made to the underlying data structure.
+    // For example: number of heap updates.
+    virtual size_t num_updates() {
+        return 0;
+    }
+
+    /** Set context information for handlers that need additional data
+     *
+     * This method can be overridden by handlers that need list numbers
+     * and probe mappings (e.g., RaBitQ handlers). Base implementation
+     * does nothing since most handlers don't need this context.
+     *
+     * @param list_no      current inverted list number being processed
+     * @param probe_map    mapping from local query index to probe index
+     */
+    virtual void set_list_context(
+            size_t /* list_no */,
+            const std::vector<int>& /* probe_map */) {
+        // Default implementation does nothing
+        // Derived handlers can override if they need this context
+    }
 };
 
 FAISS_API extern bool simd_result_handlers_accept_virtual;
 
 namespace simd_result_handlers {
 
-/** Dummy structure that just computes a chqecksum on results
+/** Dummy structure that just computes a checksum on results
  * (to avoid the computation to be optimized away) */
 struct DummyResultHandler : SIMDResultHandler {
     size_t cs = 0;
@@ -318,8 +340,8 @@ struct HeapHandler : ResultHandlerCompare<C, with_id_map> {
     std::vector<TI> iids;
     float* dis;
     int64_t* ids;
-
-    int64_t k; // number of results to keep
+    size_t k;       // number of results to keep
+    size_t nup = 0; // number of heap updates
 
     HeapHandler(
             size_t nq,
@@ -327,14 +349,30 @@ struct HeapHandler : ResultHandlerCompare<C, with_id_map> {
             int64_t k,
             float* dis,
             int64_t* ids,
-            const IDSelector* sel_in)
+            const IDSelector* sel_in,
+            const float* normalizers = nullptr)
             : RHC(nq, ntotal, sel_in),
-              idis(nq * k),
-              iids(nq * k),
+              idis(nq * k, threshold_idis(dis, normalizers)),
+              iids(nq * k, -1),
               dis(dis),
               ids(ids),
-              k(k) {
-        heap_heapify<C>(k * nq, idis.data(), iids.data());
+              k(k) {}
+
+    static uint16_t threshold_idis(float* dis_in, const float* normalizers) {
+        if (dis_in[0] == std::numeric_limits<float>::max()) {
+            return std::numeric_limits<uint16_t>::max();
+        }
+        if (dis_in[0] == std::numeric_limits<float>::lowest()) {
+            return 0;
+        }
+        if (normalizers) {
+            float one_a = 1 / normalizers[0], b = normalizers[1];
+            float f = (dis_in[0] - b) / one_a;
+            f = C::is_max ? std::ceil(f) : std::floor(f);
+            return std::clamp<float>(
+                    f, 0, std::numeric_limits<uint16_t>::max());
+        }
+        return C::neutral();
     }
 
     void handle(size_t q, size_t b, simd16uint16 d0, simd16uint16 d1) final {
@@ -372,6 +410,7 @@ struct HeapHandler : ResultHandlerCompare<C, with_id_map> {
                     if (C::cmp(heap_dis[0], dis_2)) {
                         heap_replace_top<C>(
                                 k, heap_dis, heap_ids, dis_2, real_idx);
+                        nup++;
                     }
                 }
             }
@@ -384,6 +423,7 @@ struct HeapHandler : ResultHandlerCompare<C, with_id_map> {
                 if (C::cmp(heap_dis[0], dis_2)) {
                     int64_t idx = this->adjust_id(b, j);
                     heap_replace_top<C>(k, heap_dis, heap_ids, dis_2, idx);
+                    nup++;
                 }
             }
         }
@@ -407,6 +447,10 @@ struct HeapHandler : ResultHandlerCompare<C, with_id_map> {
                 heap_ids[j] = heap_ids_in[j];
             }
         }
+    }
+
+    size_t num_updates() override {
+        return nup;
     }
 };
 
@@ -726,7 +770,7 @@ void dispatch_SIMDResultHandler_fixedCW(
     } else { // generic handler -- will not be inlined
         FAISS_THROW_IF_NOT_FMT(
                 simd_result_handlers_accept_virtual,
-                "Running vitrual handler for %s",
+                "Running virtual handler for %s",
                 typeid(res).name());
         consumer.template f<SIMDResultHandler>(res, args...);
     }
@@ -757,7 +801,7 @@ void dispatch_SIMDResultHandler(
         } else { // generic path
             FAISS_THROW_IF_NOT_FMT(
                     simd_result_handlers_accept_virtual,
-                    "Running vitrual handler for %s",
+                    "Running virtual handler for %s",
                     typeid(res).name());
             consumer.template f<SIMDResultHandler>(res, args...);
         }

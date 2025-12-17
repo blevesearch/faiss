@@ -27,10 +27,12 @@
 #include <faiss/IndexIVFAdditiveQuantizer.h>
 #include <faiss/IndexIVFAdditiveQuantizerFastScan.h>
 #include <faiss/IndexIVFFlat.h>
+#include <faiss/IndexIVFFlatPanorama.h>
 #include <faiss/IndexIVFPQ.h>
 #include <faiss/IndexIVFPQFastScan.h>
 #include <faiss/IndexIVFPQR.h>
 #include <faiss/IndexIVFRaBitQ.h>
+#include <faiss/IndexIVFRaBitQFastScan.h>
 #include <faiss/IndexIVFSpectralHash.h>
 #include <faiss/IndexLSH.h>
 #include <faiss/IndexLattice.h>
@@ -39,6 +41,7 @@
 #include <faiss/IndexPQFastScan.h>
 #include <faiss/IndexPreTransform.h>
 #include <faiss/IndexRaBitQ.h>
+#include <faiss/IndexRaBitQFastScan.h>
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexRowwiseMinMax.h>
 #include <faiss/IndexScalarQuantizer.h>
@@ -49,6 +52,9 @@
 #include <faiss/IndexBinaryHNSW.h>
 #include <faiss/IndexBinaryHash.h>
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/IndexIDMap.h>
+#include <algorithm>
+#include <cctype>
 #include <string>
 
 namespace faiss {
@@ -187,8 +193,6 @@ std::vector<size_t> aq_parse_nbits(std::string stok) {
     return nbits;
 }
 
-const std::string rabitq_pattern = "(RaBitQ)";
-
 /***************************************************************
  * Parse VectorTransform
  */
@@ -326,6 +330,10 @@ IndexIVF* parse_IndexIVF(
     if (match("FlatDedup")) {
         return new IndexIVFFlatDedup(get_q(), d, nlist, mt, own_il);
     }
+    if (match("FlatPanorama([0-9]+)?")) {
+        int nlevels = mres_to_int(sm[1], 8); // default to 8 levels
+        return new IndexIVFFlatPanorama(get_q(), d, nlist, nlevels, mt, own_il);
+    }
     if (match(sq_pattern)) {
         return new IndexIVFScalarQuantizer(
                 get_q(),
@@ -447,8 +455,15 @@ IndexIVF* parse_IndexIVF(
         }
         return index_ivf;
     }
-    if (match(rabitq_pattern)) {
-        return new IndexIVFRaBitQ(get_q(), d, nlist, mt, own_il);
+    // IndexIVFRaBitQ with optional nb_bits (1-9)
+    // Accepts: "RaBitQ" (default 1-bit) or "RaBitQ{nb_bits}" (e.g., "RaBitQ4")
+    if (match("RaBitQ([0-9])?")) {
+        uint8_t nb_bits = sm[1].length() > 0 ? std::stoi(sm[1].str()) : 1;
+        return new IndexIVFRaBitQ(get_q(), d, nlist, mt, own_il, nb_bits);
+    }
+    if (match("RaBitQfs(_[0-9]+)?")) {
+        int bbs = mres_to_int(sm[1], 32, 1);
+        return new IndexIVFRaBitQFastScan(get_q(), d, nlist, mt, bbs, own_il);
     }
     return nullptr;
 }
@@ -553,6 +568,18 @@ Index* parse_other_indexes(
     // IndexFlat
     if (description == "Flat") {
         return new IndexFlat(d, metric);
+    }
+
+    // IndexFlatL2Panorama
+    if (match("FlatL2Panorama([0-9]+)(_[0-9]+)?")) {
+        FAISS_THROW_IF_NOT(metric == METRIC_L2);
+        int nlevels = std::stoi(sm[1].str());
+        if (sm[2].length() > 0) {
+            int batch_size = std::stoi(sm[2].str().substr(1));
+            return new IndexFlatL2Panorama(d, nlevels, (size_t)batch_size);
+        } else {
+            return new IndexFlatL2Panorama(d, nlevels);
+        }
     }
 
     // IndexLSH
@@ -671,9 +698,17 @@ Index* parse_other_indexes(
         }
     }
 
-    // IndexRaBitQ
-    if (match(rabitq_pattern)) {
-        return new IndexRaBitQ(d, metric);
+    // IndexRaBitQ with optional nb_bits (1-9)
+    // Accepts: "RaBitQ" (default 1-bit) or "RaBitQ{nb_bits}" (e.g., "RaBitQ4")
+    if (match("RaBitQ([0-9])?")) {
+        uint8_t nb_bits = sm[1].length() > 0 ? std::stoi(sm[1].str()) : 1;
+        return new IndexRaBitQ(d, metric, nb_bits);
+    }
+
+    // IndexRaBitQFastScan
+    if (match("RaBitQfs(_[0-9]+)?")) {
+        int bbs = mres_to_int(sm[1], 32, 1);
+        return new IndexRaBitQFastScan(d, metric, bbs);
     }
 
     return nullptr;
@@ -934,6 +969,28 @@ IndexBinary* index_binary_factory(
         bool own_invlists) {
     IndexBinary* index = nullptr;
 
+    std::smatch sm;
+    std::string desc_str(description);
+
+    // Handle IDMap2 and IDMap wrappers (prefix or suffix)
+    if (re_match(desc_str, "(.+),IDMap2", sm) ||
+        re_match(desc_str, "IDMap2,(.+)", sm)) {
+        IndexBinary* sub_index =
+                index_binary_factory(d, sm[1].str().c_str(), own_invlists);
+        IndexBinaryIDMap2* idmap2 = new IndexBinaryIDMap2(sub_index);
+        idmap2->own_fields = true;
+        return idmap2;
+    }
+
+    if (re_match(desc_str, "(.+),IDMap", sm) ||
+        re_match(desc_str, "IDMap,(.+)", sm)) {
+        IndexBinary* sub_index =
+                index_binary_factory(d, sm[1].str().c_str(), own_invlists);
+        IndexBinaryIDMap* idmap = new IndexBinaryIDMap(sub_index);
+        idmap->own_fields = true;
+        return idmap;
+    }
+
     int ncentroids = -1;
     int M, nhash, b;
 
@@ -959,7 +1016,7 @@ IndexBinary* index_binary_factory(
     } else if (sscanf(description, "BHash%d", &b) == 1) {
         index = new IndexBinaryHash(d, b);
 
-    } else if (std::string(description) == "BFlat") {
+    } else if (desc_str == "BFlat") {
         index = new IndexBinaryFlat(d);
 
     } else {
