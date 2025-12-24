@@ -19,7 +19,36 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/*
+    Set the direct map type for the IVF index.
+
+    @param index            - Pointer to the Faiss IVF index
+    @param direct_map_type  - Type of direct map to set (faiss::DirectMap::Type)
+*/
 int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type);
+
+/*
+    Count vectors per IVF list (cluster) for a given selector.
+
+    This function iterates over the vectors selected by the provided
+    search parameters and increments a counter for each IVF inverted
+    list (cluster) they belong to. The result is a per-list vector
+    count for the IVF index.
+
+    @param index             - Pointer to the Faiss IVF index
+    @param list_counts       - Output array of size index->nlist.
+                               On return, list_counts[i] contains the number
+                               of selected vectors assigned to IVF list i.
+    @param list_counts_size  - Size of list_counts array (must equal index->nlist)
+    @param params            - IVF search parameters containing the selector
+                               that defines which vectors are included
+*/
+int faiss_count_ivf_list_vectors(
+        const FaissIndexIVF* index,
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const FaissSearchParametersIVF* params);
 
 /*
     Return 'k' centroids in the index closest to the query vector.
@@ -86,28 +115,6 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists,
         float* dist_table);
-
-/*
-    Count vectors per IVF list (cluster) for a given selector.
-
-    This function iterates over the vectors selected by the provided
-    search parameters and increments a counter for each IVF inverted
-    list (cluster) they belong to. The result is a per-list vector
-    count for the IVF index.
-
-    @param index             - Pointer to the Faiss IVF index
-    @param list_counts       - Output array of size index->nlist.
-                               On return, list_counts[i] contains the number
-                               of selected vectors assigned to IVF list i.
-    @param list_counts_size  - Size of list_counts array (must equal index->nlist)
-    @param params            - IVF search parameters containing the selector
-                               that defines which vectors are included
-*/
-int faiss_count_ivf_list_vectors(
-        const FaissIndexIVF* index,
-        idx_t* list_counts,
-        size_t list_counts_size,
-        const FaissSearchParametersIVF* params);
 
 /*
     Get centroid information and cardinality for all centroids in an IVF index.
