@@ -936,9 +936,42 @@ void IndexIVF::reconstruct(idx_t key, float* recons) const {
     reconstruct_from_offset(lo_listno(lo), lo_offset(lo), recons);
 }
 
-void IndexIVF::get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists) {
-    for (int i = 0; i < n_keys; i++) {
-        lists[i] = lo_listno(direct_map.get(keys[i]));
+void IndexIVF::count_ivf_list_vectors(
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const faiss::SearchParameters* params) const {
+    FAISS_ASSERT(list_counts != nullptr && list_counts_size > 0 && list_counts_size == nlist);
+    FAISS_ASSERT(params != nullptr && params->sel != nullptr);
+    FAISS_ASSERT(direct_map.type != DirectMap::NoMap);
+    const IDSelector* sel = params->sel;
+    // Optimized for bitmap selectors only
+    const IDSelectorBitmap* bitmap_sel = dynamic_cast<const IDSelectorBitmap*>(sel);
+    if (!bitmap_sel) {
+        FAISS_THROW_MSG("count_ivf_list_vectors supports only IDSelectorBitmap");
+    }
+    const uint8_t* bitmap = bitmap_sel->bitmap;
+    const size_t nbytes = bitmap_sel->n;
+    // Iterate over bitmap bytes
+    for (size_t byte_idx = 0; byte_idx < nbytes; ++byte_idx) {
+        uint8_t byte = bitmap[byte_idx];
+        if (byte == 0) {
+            continue; // fast skip
+        }
+        // Iterate over bits in the byte
+        for (int bit = 0; bit < 8; ++bit) {
+            if ((byte & (1 << bit)) == 0) {
+                continue;
+            }
+            const idx_t id = static_cast<idx_t>((byte_idx * 8) + bit);
+            if (id >= ntotal) {
+                continue;
+            }
+            const idx_t list_no = lo_listno(direct_map.get(id));
+            if (list_no >= nlist) {
+                continue; // Safety check: skip invalid list numbers
+            }
+            list_counts[list_no]++;
+        }
     }
 }
 

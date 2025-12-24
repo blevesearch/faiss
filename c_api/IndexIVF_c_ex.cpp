@@ -23,19 +23,8 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
     CATCH_AND_HANDLE
 }
 
-int faiss_SearchParametersIVF_new_with_sel(
-        FaissSearchParametersIVF** p_sp,
-        FaissIDSelector* sel) {
-    try {
-        SearchParametersIVF* sp = new SearchParametersIVF;
-        sp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
-        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(sp);
-    }
-    CATCH_AND_HANDLE
-}
-
 int faiss_Search_closest_eligible_centroids(
-        FaissIndex* index,
+        const FaissIndexIVF* index,
         idx_t n,
         const float* query,
         idx_t k,
@@ -43,10 +32,7 @@ int faiss_Search_closest_eligible_centroids(
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
     try {
-        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index);
-        assert(index_ivf);
-
-        index_ivf->quantizer->search(
+        reinterpret_cast<const IndexIVF*>(index)->quantizer->search(
                 n,
                 query,
                 k,
@@ -57,14 +43,16 @@ int faiss_Search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
-int faiss_get_lists_for_keys(
-        FaissIndexIVF* index,
-        idx_t* keys,
-        size_t n_keys,
-        idx_t* lists) {
+int faiss_count_ivf_list_vectors(
+        const FaissIndexIVF* index,
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const FaissSearchParametersIVF* params) {
     try {
-        reinterpret_cast<IndexIVF*>(index)->get_lists_for_keys(
-                keys, n_keys, lists);
+        reinterpret_cast<const IndexIVF*>(index)->count_ivf_list_vectors(
+                list_counts,
+                list_counts_size,
+                reinterpret_cast<const faiss::SearchParameters*>(params));
     }
     CATCH_AND_HANDLE
 }
