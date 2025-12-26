@@ -958,15 +958,15 @@ void IndexIVF::count_ivf_list_vectors(
             continue; // fast skip
         }
         // Iterate over bits in the byte
-        for (int bit = 0; bit < 8; ++bit) {
+        for (uint8_t bit = 0; bit < 8; ++bit) {
             if ((byte & (1 << bit)) == 0) {
                 continue;
             }
-            const idx_t id = static_cast<idx_t>((byte_idx * 8) + bit);
+            idx_t id = (byte_idx << 3) + bit;
             if (id >= ntotal) {
-                continue;
+                continue; // Safety check: skip invalid ids
             }
-            const idx_t list_no = lo_listno(direct_map.get(id));
+            uint64_t list_no = lo_listno(direct_map.get(id));
             if (list_no >= nlist) {
                 continue; // Safety check: skip invalid list numbers
             }
