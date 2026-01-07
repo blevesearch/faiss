@@ -928,7 +928,9 @@ void IndexIVF::count_ivf_list_vectors(
         idx_t* list_counts,
         size_t list_counts_size,
         const faiss::SearchParameters* params) const {
-    FAISS_ASSERT(list_counts != nullptr && list_counts_size > 0 && list_counts_size == nlist);
+    FAISS_ASSERT(list_counts != nullptr);
+    FAISS_ASSERT(list_counts_size > 0);
+    FAISS_ASSERT(list_counts_size == nlist);
     FAISS_ASSERT(params != nullptr && params->sel != nullptr);
     FAISS_ASSERT(direct_map.type != DirectMap::NoMap);
     const IDSelector* sel = params->sel;

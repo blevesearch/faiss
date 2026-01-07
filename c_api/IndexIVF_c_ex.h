@@ -37,9 +37,10 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type);
     count for the IVF index.
 
     @param index             - Pointer to the Faiss IVF index
-    @param list_counts       - Output array of size index->nlist.
-                               On return, list_counts[i] contains the number
-                               of selected vectors assigned to IVF list i.
+    @param list_counts       - Output array of size index->nlist. Must be
+                               initialized to zero by the caller. On return,
+                               list_counts[i] contains the number of selected
+                               vectors assigned to IVF list i.
     @param list_counts_size  - Size of list_counts array (must equal index->nlist)
     @param params            - IVF search parameters containing the selector
                                that defines which vectors are included
