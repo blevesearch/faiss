@@ -371,7 +371,10 @@ struct IndexIVF : Index, IndexIVFInterface {
      * @param list_counts      - Output array of size list_counts_size (must be == nlist).
      *                          On return, list_counts[i] contains the number
      *                          of selected vectors assigned to IVF list i.
-     *                          Must be initialized to zero by the caller.
+     *                          Precondition: every element of list_counts must
+     *                          be initialized to 0 by the caller before
+     *                          calling this function; otherwise the resulting
+     *                          per-list counts will be incorrect.
      * @param list_counts_size - Size of list_counts array (must equal nlist)
      * @param params           - Search parameters containing the selector
      *                          that defines which vectors are included.
