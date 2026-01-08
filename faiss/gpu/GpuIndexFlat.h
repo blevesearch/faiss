@@ -107,6 +107,26 @@ class GpuIndexFlat : public GpuIndex {
             float* residuals,
             const idx_t* keys) const override;
 
+    /// Compute residual (batch mode) with paging support
+    void compute_residual_n_paged(
+        idx_t n,
+        const float* xs,
+        float* residuals,
+        const idx_t* keys,
+        bool xsOnHost,
+        bool resOnHost,
+        cudaStream_t stream) const;
+
+    /// Compute residual (batch mode)
+        void compute_residual_n_batch(
+                idx_t batchSize,
+                const float* xs,
+                float* residuals,
+                const idx_t* keys,
+                bool residualOnHost,
+                cudaStream_t stream) const;
+
+    ///             
     /// For internal access
     inline FlatIndex* getGpuData() {
         return data_.get();
