@@ -23,13 +23,13 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
     CATCH_AND_HANDLE
 }
 
-int faiss_count_ivf_list_vectors(
+int faiss_ivf_list_vector_count(
         const FaissIndexIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
         const FaissSearchParametersIVF* params) {
     try {
-        reinterpret_cast<const IndexIVF*>(index)->count_ivf_list_vectors(
+        reinterpret_cast<const IndexIVF*>(index)->ivf_list_vector_count(
                 list_counts,
                 list_counts_size,
                 reinterpret_cast<const faiss::SearchParameters*>(params));

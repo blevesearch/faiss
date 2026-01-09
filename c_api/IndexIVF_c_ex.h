@@ -45,7 +45,7 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type);
     @param params            - IVF search parameters containing the selector
                                that defines which vectors are included
 */
-int faiss_count_ivf_list_vectors(
+int faiss_ivf_list_vector_count(
         const FaissIndexIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,

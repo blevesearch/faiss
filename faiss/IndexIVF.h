@@ -382,7 +382,7 @@ struct IndexIVF : Index, IndexIVFInterface {
      *
      * @note Requires direct_map to be set (not NoMap)
      */
-    void count_ivf_list_vectors(
+    void ivf_list_vector_count(
             idx_t* list_counts,
             size_t list_counts_size,
             const SearchParameters* params) const;
