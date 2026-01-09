@@ -19,13 +19,38 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-int faiss_IndexIVF_set_direct_map(
-        FaissIndexIVF* index,
-        int direct_map_type);
 
-int faiss_SearchParametersIVF_new_with_sel(
-        FaissSearchParametersIVF** p_sp,
-        FaissIDSelector* sel);
+/*
+    Set the direct map type for the IVF index.
+
+    @param index            - Pointer to the Faiss IVF index
+    @param direct_map_type  - Type of direct map to set (faiss::DirectMap::Type)
+*/
+int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type);
+
+/*
+    Count vectors per IVF list (cluster) for a given selector.
+
+    This function iterates over the vectors selected by the provided
+    search parameters and increments a counter for each IVF inverted
+    list (cluster) they belong to. The result is a per-list vector
+    count for the IVF index.
+
+    @param index             - Pointer to the Faiss IVF index
+    @param list_counts       - Output array of size index->nlist. Must be
+                               initialized to zero by the caller. On return,
+                               list_counts[i] contains the number of selected
+                               vectors assigned to IVF list i.
+    @param list_counts_size  - Size of list_counts array (must equal index->nlist)
+    @param params            - IVF search parameters containing the selector
+                               that defines which vectors are included
+*/
+int faiss_ivf_list_vector_count(
+        const FaissIndexIVF* index,
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const FaissSearchParametersIVF* params);
+
 /*
     Return 'k' centroids in the index closest to the query vector.
 
@@ -36,7 +61,7 @@ int faiss_SearchParametersIVF_new_with_sel(
     @param centroid_ids: output centroid IDs, size n * k.    
 */
 int faiss_Search_closest_eligible_centroids(
-        FaissIndex* index,
+        const FaissIndexIVF* index,
         idx_t n,
         const float* query,
         idx_t k,
@@ -92,23 +117,6 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         const uint8_t* codes,
         float* dists,
         float* dist_table);
-
-/*
-    Given multiple vector IDs, retrieve the corresponding list (cluster) IDs
-    from an IVF index. This function efficiently assigns vector IDs to their
-    respective inverted lists/clusters in a batch operation.
-
-    @param index  - Pointer to the Faiss IVF index
-    @param keys   - Input array of vector IDs (keys)
-    @param n_keys - Number of vector keys in the input array
-    @param lists  - Output array where corresponding cluster (list) IDs are stored
-*/
-
-int faiss_get_lists_for_keys(
-        FaissIndexIVF* index,
-        idx_t* keys,
-        size_t n_keys,
-        idx_t* lists);
 
 /*
     Get centroid information and cardinality for all centroids in an IVF index.
