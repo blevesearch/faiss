@@ -23,19 +23,22 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
     CATCH_AND_HANDLE
 }
 
-int faiss_SearchParametersIVF_new_with_sel(
-        FaissSearchParametersIVF** p_sp,
-        FaissIDSelector* sel) {
+int faiss_ivf_list_vector_count(
+        const FaissIndexIVF* index,
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const FaissSearchParametersIVF* params) {
     try {
-        SearchParametersIVF* sp = new SearchParametersIVF;
-        sp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
-        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(sp);
+        reinterpret_cast<const IndexIVF*>(index)->ivf_list_vector_count(
+                list_counts,
+                list_counts_size,
+                reinterpret_cast<const faiss::SearchParameters*>(params));
     }
     CATCH_AND_HANDLE
 }
 
 int faiss_Search_closest_eligible_centroids(
-        FaissIndex* index,
+        const FaissIndexIVF* index,
         idx_t n,
         const float* query,
         idx_t k,
@@ -43,40 +46,13 @@ int faiss_Search_closest_eligible_centroids(
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
     try {
-        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index);
-        assert(index_ivf);
-
-        index_ivf->quantizer->search(
+        reinterpret_cast<const IndexIVF*>(index)->quantizer->search(
                 n,
                 query,
                 k,
                 centroid_distances,
                 centroid_ids,
                 reinterpret_cast<const faiss::SearchParameters*>(params));
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_get_lists_for_keys(
-        FaissIndexIVF* index,
-        idx_t* keys,
-        size_t n_keys,
-        idx_t* lists) {
-    try {
-        reinterpret_cast<IndexIVF*>(index)->get_lists_for_keys(
-                keys, n_keys, lists);
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_IndexIVF_get_centroids_and_cardinality(
-        const FaissIndexIVF* index,
-        float* centroid_vectors,
-        size_t* cardinalities,
-        idx_t* centroid_ids) {
-    try {
-        reinterpret_cast<const IndexIVF*>(index)->get_centroids_and_cardinality(
-            centroid_vectors, cardinalities, centroid_ids);
     }
     CATCH_AND_HANDLE
 }
@@ -119,6 +95,18 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         reinterpret_cast<IndexIVF*>(index)->compute_distance_to_codes_for_list(
                 list_no, x, n, codes, dists, dist_table);
         return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVF_get_centroids_and_cardinality(
+        const FaissIndexIVF* index,
+        float* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) {
+    try {
+        reinterpret_cast<const IndexIVF*>(index)->get_centroids_and_cardinality(
+            centroid_vectors, cardinalities, centroid_ids);
     }
     CATCH_AND_HANDLE
 }
