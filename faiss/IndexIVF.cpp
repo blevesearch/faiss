@@ -924,7 +924,7 @@ void IndexIVF::reconstruct(idx_t key, float* recons) const {
     reconstruct_from_offset(lo_listno(lo), lo_offset(lo), recons);
 }
 
-void IndexIVF::count_ivf_list_vectors(
+void IndexIVF::ivf_list_vector_count(
         idx_t* list_counts,
         size_t list_counts_size,
         const faiss::SearchParameters* params) const {
@@ -937,7 +937,7 @@ void IndexIVF::count_ivf_list_vectors(
     // Optimized for bitmap selectors only
     const IDSelectorBitmap* bitmap_sel = dynamic_cast<const IDSelectorBitmap*>(sel);
     if (!bitmap_sel) {
-        FAISS_THROW_MSG("count_ivf_list_vectors supports only IDSelectorBitmap");
+        FAISS_THROW_MSG("ivf_list_vector_count supports only IDSelectorBitmap");
     }
     const uint8_t* bitmap = bitmap_sel->bitmap;
     const size_t nbytes = bitmap_sel->n;
