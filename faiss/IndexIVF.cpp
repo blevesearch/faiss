@@ -948,16 +948,18 @@ void IndexIVF::ivf_list_vector_count(
             size_t base_idx = byte_idx << 3;
             // Iterate over bits in the byte
             for (uint8_t bit = 0; bit < 8; ++bit) {
-                if (byte & (1 << bit)) {
-                    idx_t id = base_idx + bit;
-                    if (id < ntotal) {
-                        // assumes that direct map is of either Array or Hash type
-                        uint64_t list_no = lo_listno(direct_map.get(id));
-                        if (list_no < nlist) {
-                            list_counts[list_no]++;
-                        }
-                    }
+                if ((byte & (1 << bit)) == 0) {
+                    continue;
                 }
+                idx_t id = base_idx + bit;
+                if (id >= ntotal) {
+                    continue; // Safety check: skip invalid ids
+                }
+                uint64_t list_no = lo_listno(direct_map.get(id));
+                if (list_no >= nlist) {
+                    continue; // Safety check: skip invalid list numbers
+                }
+                list_counts[list_no]++;
             }
         }
         return;
@@ -971,9 +973,10 @@ void IndexIVF::ivf_list_vector_count(
         // iterate over ids_set and get the list number from direct map
         for (const auto& id : ids_set) {
             uint64_t list_no = lo_listno(direct_map.get(id));
-            if (list_no < nlist) {
-                list_counts[list_no]++;
+            if (list_no >= nlist) {
+                continue; // Safety check: skip invalid list numbers
             }
+            list_counts[list_no]++;
         }
         return;
     }
