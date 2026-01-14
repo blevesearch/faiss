@@ -985,9 +985,10 @@ void IndexIVF::ivf_list_vector_count(
         // iterate over ids_set and get the list number from direct map
         for (const auto& id : ids_set) {
             uint64_t list_no = lo_listno(direct_map.get(id));
-            if (list_no < nlist) {
-                list_counts[list_no]++;
+            if (list_no >= nlist) {
+                continue; // Safety check: skip invalid list numbers
             }
+            list_counts[list_no]++;
         }
         return;
     }
