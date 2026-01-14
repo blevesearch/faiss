@@ -952,28 +952,28 @@ void IndexIVF::ivf_list_vector_count(
         const uint8_t* bitmap = bitmap_sel->bitmap;
         const size_t nbytes = bitmap_sel->n;
         // Iterate over bitmap bytes
-            for (size_t byte_idx = 0; byte_idx < nbytes; ++byte_idx) {
-                uint8_t byte = bitmap[byte_idx];
-                if (byte == 0) {
-                    continue; // fast skip
-                }
-                size_t base_idx = byte_idx << 3;
-                // Iterate over bits in the byte
-                for (uint8_t bit = 0; bit < 8; ++bit) {
-                    if ((byte & (1 << bit)) == 0) {
-                        continue;
-                    }
-                    idx_t id = base_idx + bit;
-                    if (id >= ntotal) {
-                        continue; // Safety check: skip invalid ids
-                    }
-                    uint64_t list_no = lo_listno(direct_map.get(id));
-                    if (list_no >= nlist) {
-                        continue; // Safety check: skip invalid list numbers
-                    }
-                    list_counts[list_no]++;
-                }
+        for (size_t byte_idx = 0; byte_idx < nbytes; ++byte_idx) {
+            uint8_t byte = bitmap[byte_idx];
+            if (byte == 0) {
+                continue; // fast skip
             }
+            size_t base_idx = byte_idx << 3;
+            // Iterate over bits in the byte
+            for (uint8_t bit = 0; bit < 8; ++bit) {
+                if ((byte & (1 << bit)) == 0) {
+                    continue;
+                }
+                idx_t id = base_idx + bit;
+                if (id >= ntotal) {
+                    continue; // Safety check: skip invalid ids
+                }
+                uint64_t list_no = lo_listno(direct_map.get(id));
+                if (list_no >= nlist) {
+                    continue; // Safety check: skip invalid list numbers
+                }
+                list_counts[list_no]++;
+            }
+        }
         return;
     }
     // With batch selector, the direct map must be of hash type, as the IDs may be
