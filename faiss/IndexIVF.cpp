@@ -1308,8 +1308,6 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     // comparison)
     // the thinking is that, the number of centroids would be in order of thousands
     // or 10s of thousands so this way of checking shouldn't be too expensive(?)
-    // printf("exp check started\n");
-    // fflush(stdout);
     if (check_compatible_for_merge_expensive_check) {
         std::vector<float> v(d), v2(d);
         std::vector<std::vector<float>> all_vecs;
@@ -1350,17 +1348,18 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
     // while merging, we need to update those values, which are encoded.
     // high 32 bits are list_no and low 32 bits are offset
-    if (direct_map.type == DirectMap::Hashtable && 
-        other->direct_map.type == DirectMap::Hashtable) {
-        auto other_map = other->direct_map.hashtable;
-        for (auto it = other_map.begin(); it != other_map.end(); it++) {
-            idx_t key = it->first;
-            uint64_t value = it->second;
-            idx_t list_no = lo_listno(value);
-            idx_t this_list_no = list_mapping[list_no];
+    if (direct_map.type == DirectMap::Array && 
+        other->direct_map.type == DirectMap::Array) {
+        auto other_map = other->direct_map.array;
+        auto ntotal = direct_map.array.size();
 
-            size_t offset =  invlists->list_size(this_list_no) + lo_offset(value);
-            direct_map.add_single_id(key, this_list_no, offset);
+        for (int i = 0; i < other_map.size(); i++) {
+            idx_t other_value = other_map[i];
+            idx_t other_list_no = lo_listno(other_value);
+            idx_t this_list_no = list_mapping[other_list_no];
+
+            size_t new_offset =  invlists->list_size(this_list_no) + lo_offset(other_value);
+            direct_map.add_single_id(ntotal + i, this_list_no, new_offset);
         }
     }
     // printf("completed hashtable merge\n");
