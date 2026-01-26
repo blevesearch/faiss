@@ -20,11 +20,9 @@
 #include <cstdio>
 #include <limits>
 #include <tuple>
-#include <typeinfo>
 
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
-#include <faiss/utils/distances.h>
 
 #include <faiss/IndexFlat.h>
 #include <faiss/impl/AuxIndexStructures.h>
@@ -52,14 +50,9 @@ Level1Quantizer::Level1Quantizer(Index* quantizer, size_t nlist)
 Level1Quantizer::Level1Quantizer() = default;
 
 Level1Quantizer::~Level1Quantizer() {
-    // printf("deleting level1 quantizer\n");
-    // fflush(stdout);
     if (own_fields) {
         delete quantizer;
     }
-    // printf("deleted quantizer\n");
-    // fflush(stdout);
-
 }
 
 void Level1Quantizer::train_q1(
@@ -1278,11 +1271,7 @@ bool check_compatible_for_merge_expensive_check = true;
 
 void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
     // minimal sanity checks
-    // printf("%s\n", typeid(otherIndex).name());
-    // fflush(stdout);
     const IndexIVF* other = dynamic_cast<const IndexIVF*>(&otherIndex);
-    // printf("casting done %d\n", typeid(*other) == typeid(*this));
-    // fflush(stdout);
     FAISS_THROW_IF_NOT(other);
     FAISS_THROW_IF_NOT(other->d == d);
     FAISS_THROW_IF_NOT(other->nlist == nlist);
@@ -1307,7 +1296,6 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
         for (size_t i = 0; i < nlist; i++) {
             quantizer->reconstruct(i, v.data());
             other->quantizer->reconstruct(i, v2.data());
-
             FAISS_THROW_IF_NOT_MSG(
                     v == v2, "coarse quantizers should be the same");
         }
