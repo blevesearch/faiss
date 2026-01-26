@@ -1292,58 +1292,32 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
             typeid(*this) == typeid(*other),
             "can only merge indexes of the same type");
 
-    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Hashtable && this->direct_map.type == DirectMap::Hashtable)||
+    // merging only the direct map type array and no map
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array && this->direct_map.type == DirectMap::Array)||
     (this->direct_map.no() && other->direct_map.no());
     FAISS_THROW_IF_NOT_MSG(
             merge_direct_map_cond,
             "merge direct_map not implemented");
+
+    // expensive check to see if all the centorids are the same
+    // even if they're trained on the same data, the smallest of the difference in the centroids will be there
+    // and it affects the residual vector computation and thereby the recall
+    if (check_compatible_for_merge_expensive_check) {
+        std::vector<float> v(d), v2(d);
+        for (size_t i = 0; i < nlist; i++) {
+            quantizer->reconstruct(i, v.data());
+            other->quantizer->reconstruct(i, v2.data());
+
+            FAISS_THROW_IF_NOT_MSG(
+                    v == v2, "coarse quantizers should be the same");
+        }
+    }
 }
 
 void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     check_compatible_for_merge(otherIndex);
-    std::vector<idx_t> list_mapping;
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
-    // expensive check involves seeing if the centroids are same across two IVF
-    // indexes (the order need not to be same, so the check involves a set for
-    // comparison)
-    // the thinking is that, the number of centroids would be in order of thousands
-    // or 10s of thousands so this way of checking shouldn't be too expensive(?)
-    if (check_compatible_for_merge_expensive_check) {
-        std::vector<float> v(d), v2(d);
-        std::vector<std::vector<float>> all_vecs;
-        for (idx_t i = 0; i < nlist; i++) {
-            quantizer->reconstruct(i, v.data());
-            all_vecs.push_back(v);
-        }
-        long quantizer_size = all_vecs.size();
-        // other_invlist's list no -> this_invlist's list no
-        list_mapping.resize(nlist, -1);
-        int update = 0;
-        for (idx_t i = 0; i < nlist; i++) {
-            other->quantizer->reconstruct(i, v2.data());
-            // bool found = false;
-            float min_score = std::numeric_limits<float>::max();
-            for (idx_t j = 0; j < quantizer_size; j++) {
-                float score = fvec_L2sqr(all_vecs[j].data(), v2.data(), d);
-                if (score < min_score) {
-                    min_score = score;
-                    list_mapping[i] = j;
-                    update++;
-                }
-             }
-             
-            //  if (!found) {
-            //         FAISS_THROW_IF_NOT_MSG(
-            //             v == v2, "coarse quantizers should be the same");
-            //     }
-        }
-        // printf("exp check complete %d\n", update);
-        // fflush(stdout);
 
-        // for (int i = 0; i < list_mapping.size(); i++) {
-        //     printf("%d -> %d\n", i, list_mapping[i]);
-        // }
-    }
     // direct_map.merge_from(other->direct_map);
     // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
     // while merging, we need to update those values, which are encoded.
@@ -1351,30 +1325,19 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     if (direct_map.type == DirectMap::Array && 
         other->direct_map.type == DirectMap::Array) {
         auto other_map = other->direct_map.array;
-        auto ntotal = direct_map.array.size();
-
         for (int i = 0; i < other_map.size(); i++) {
             idx_t other_value = other_map[i];
-            idx_t other_list_no = lo_listno(other_value);
-            idx_t this_list_no = list_mapping[other_list_no];
+            idx_t list_no = lo_listno(other_value);
 
-            size_t new_offset =  invlists->list_size(this_list_no) + lo_offset(other_value);
-            direct_map.add_single_id(ntotal + i, this_list_no, new_offset);
+            size_t new_offset =  invlists->list_size(list_no) + lo_offset(other_value);
+            direct_map.add_single_id(add_id + i, list_no, new_offset);
         }
     }
-    // printf("completed hashtable merge\n");
-    // fflush(stdout);
     invlists->list_no_mapping = list_mapping;
-    // auto odlist = dynamic_cast<faiss::OnDiskInvertedLists*>(other->invlists);
-    // if (odlist) {
-    //     odlist->merge_from_1(other->invlists, false);
-    // } else {
-        invlists->merge_from(other->invlists, add_id);
-    // }
+    invlists->merge_from(other->invlists, add_id);
+
     ntotal += other->ntotal;
     other->ntotal = 0;
-    // printf("merge_from completed\n");
-    // fflush(stdout);
 }
 
 CodePacker* IndexIVF::get_CodePacker() const {

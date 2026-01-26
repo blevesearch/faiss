@@ -71,11 +71,10 @@ void InvertedLists::reset() {
 void InvertedLists::merge_from(InvertedLists* oivf, size_t add_id) {
 #pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < nlist; i++) {
-        size_t this_list_no = (size_t)list_no_mapping[i];
         size_t list_size = oivf->list_size(i);
         ScopedIds ids(oivf, i);
         if (add_id == 0) {
-            add_entries(this_list_no, list_size, ids.get(), ScopedCodes(oivf, i).get());
+            add_entries(i, list_size, ids.get(), ScopedCodes(oivf, i).get());
         } else {
             std::vector<idx_t> new_ids(list_size);
 
@@ -83,7 +82,7 @@ void InvertedLists::merge_from(InvertedLists* oivf, size_t add_id) {
                 new_ids[j] = ids[j] + add_id;
             }
             add_entries(
-                    this_list_no, list_size, new_ids.data(), ScopedCodes(oivf, i).get());
+                    i, list_size, new_ids.data(), ScopedCodes(oivf, i).get());
         }
         // oivf->resize(i, 0);
     }
