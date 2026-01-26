@@ -80,8 +80,6 @@ struct DirectMap {
     /// remove ids from the InvertedLists, possibly using the direct map
     size_t remove_ids(const IDSelector& sel, InvertedLists* invlists);
 
-    void merge_from(DirectMap& other);
-
     /// update entries, using the direct map
     void update_codes(
             InvertedLists* invlists,

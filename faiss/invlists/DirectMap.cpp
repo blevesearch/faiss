@@ -103,16 +103,6 @@ void DirectMap::add_single_id(idx_t id, idx_t list_no, size_t offset) {
     }
 }
 
-// void DirectMap::merge_from(DirectMap &other) {
-//     // if (type == Hashtable) {
-//         // hashtable.insert(other.hashtable.begin(), other.hashtable.end());
-//         // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
-//         // while merging, we need to update those values, which are encoded.
-//         // high 32 bits are list_no and low 32 bits are offset
-
-//     }
-// }
-
 void DirectMap::check_can_add(const idx_t* ids) {
     if (type == Array && ids) {
         FAISS_THROW_MSG("cannot have array direct map and add with ids");

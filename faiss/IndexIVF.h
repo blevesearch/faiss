@@ -21,7 +21,6 @@
 #include <faiss/impl/platform_macros.h>
 #include <faiss/invlists/DirectMap.h>
 #include <faiss/invlists/InvertedLists.h>
-#include <faiss/invlists/OnDiskInvertedLists.h>
 #include <faiss/utils/Heap.h>
 
 namespace faiss {

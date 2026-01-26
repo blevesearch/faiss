@@ -40,8 +40,6 @@ int faiss_read_index_buf(
         faiss::BufIOReader reader;
         reader.buf = buf;
         reader.buf_size = size;
-        // printf("read_index starting\n");
-        // fflush(stdout);
         auto index = faiss::read_index(&reader, io_flags);
         *p_out = reinterpret_cast<FaissIndex*>(index);
     }
