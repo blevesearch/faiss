@@ -312,94 +312,6 @@ void GpuIndexFlat::compute_residual(const float* x, float* residual, idx_t key)
     compute_residual_n(1, x, residual, &key);
 }
 
-void GpuIndexFlat::compute_residual_n_batch(
-        idx_t batchSize,
-        const float* xs,
-        float* residuals,
-        const idx_t* keys,
-        bool residualOnHost,
-        cudaStream_t stream) const {
-
-    auto vecsDevice = toDeviceTemporary<float, 2>(
-            resources_.get(),
-            config_.device,
-            const_cast<float*>(xs),
-            stream,
-            {batchSize, d});
-
-    auto idsDevice = toDeviceTemporary<idx_t, 1>(
-            resources_.get(),
-            config_.device,
-            const_cast<idx_t*>(keys),
-            stream,
-            {batchSize});
-
-    auto residualDevice = toDeviceTemporary<float, 2>(
-            resources_.get(),
-            config_.device,
-            residuals,
-            stream,
-            {batchSize, d});
-
-    data_->computeResidual(vecsDevice, idsDevice, residualDevice);
-
-    if (residualOnHost) {
-        fromDevice<float, 2>(residualDevice, residuals, stream);
-    }
-}
-
-void GpuIndexFlat::compute_residual_n_paged(
-        idx_t n,
-        const float* xs,
-        float* residuals,
-        const idx_t* keys,
-        bool xsOnHost,
-        bool resOnHost,
-        cudaStream_t stream) const {
-
-    idx_t batchSize = utils::nextHighestPowerOf2(
-            pageSize_ / (d * sizeof(float)));
-
-    // If residuals already on device, create one wrapper and slice it
-    if (!resOnHost) {
-        auto residualDevice = toDeviceTemporary<float, 2>(
-                resources_.get(),
-                config_.device,
-                residuals,
-                stream,
-                {n, d});
-
-        for (idx_t cur = 0; cur < n; cur += batchSize) {
-            idx_t thisBatch = std::min(batchSize, n - cur);
-
-            auto residualBatch =
-                residualDevice.narrowOutermost(cur, thisBatch);
-
-            compute_residual_n_batch(
-                    thisBatch,
-                    xs + cur * d,
-                    residualBatch.data(),
-                    keys + cur,
-                    false,
-                    stream);
-        }
-    } else {
-        // residuals on host → per-batch copy back
-        for (idx_t cur = 0; cur < n; cur += batchSize) {
-            idx_t thisBatch = std::min(batchSize, n - cur);
-
-            compute_residual_n_batch(
-                    thisBatch,
-                    xs + cur * d,
-                    residuals + cur * d,
-                    keys + cur,
-                    true,
-                    stream);
-        }
-    }
-}
-
-
 void GpuIndexFlat::compute_residual_n(
         idx_t n,
         const float* xs,
@@ -428,7 +340,6 @@ void GpuIndexFlat::compute_residual_n(
                 xs,
                 residuals,
                 keys,
-                resOnHost,
                 stream);
         return;
     }
@@ -439,9 +350,61 @@ void GpuIndexFlat::compute_residual_n(
             xs,
             residuals,
             keys,
-            xsOnHost,
-            resOnHost,
             stream);
+}
+
+void GpuIndexFlat::compute_residual_n_batch(
+        idx_t batchSize,
+        const float* xs,
+        float* residuals,
+        const idx_t* keys,
+        cudaStream_t stream) const {
+
+    auto vecsDevice = toDeviceTemporary<float, 2>(
+            resources_.get(),
+            config_.device,
+            const_cast<float*>(xs),
+            stream,
+            {batchSize, d});
+
+    auto idsDevice = toDeviceTemporary<idx_t, 1>(
+            resources_.get(),
+            config_.device,
+            const_cast<idx_t*>(keys),
+            stream,
+            {batchSize});
+
+    auto residualDevice = toDeviceTemporary<float, 2>(
+            resources_.get(),
+            config_.device,
+            residuals,
+            stream,
+            {batchSize, d});
+
+    data_->computeResidual(vecsDevice, idsDevice, residualDevice);
+    fromDevice<float, 2>(residualDevice, residuals, stream);
+}
+
+void GpuIndexFlat::compute_residual_n_paged(
+        idx_t n,
+        const float* xs,
+        float* residuals,
+        const idx_t* keys,
+        cudaStream_t stream) const {
+
+    idx_t batchSize = utils::nextHighestPowerOf2(
+            pageSize_ / (d * sizeof(float)));
+            
+    for (idx_t cur = 0; cur < n; cur += batchSize) {
+        idx_t thisBatch = std::min(batchSize, n - cur);
+
+        compute_residual_n_batch(
+                thisBatch,
+                xs + cur * d,
+                residuals + cur * d,
+                keys + cur,
+                stream);
+    }
 }
 
 //
