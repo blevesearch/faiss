@@ -936,10 +936,64 @@ void IndexIVF::reconstruct(idx_t key, float* recons) const {
     reconstruct_from_offset(lo_listno(lo), lo_offset(lo), recons);
 }
 
-void IndexIVF::get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists) {
-    for (int i = 0; i < n_keys; i++) {
-        lists[i] = lo_listno(direct_map.get(keys[i]));
+void IndexIVF::ivf_list_vector_count(
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const faiss::SearchParameters* params) const {
+    FAISS_ASSERT(list_counts != nullptr);
+    FAISS_ASSERT(list_counts_size > 0);
+    FAISS_ASSERT(list_counts_size == nlist);
+    FAISS_ASSERT(params != nullptr && params->sel != nullptr);
+    FAISS_ASSERT(direct_map.type != DirectMap::NoMap);
+    const IDSelector* sel = params->sel;
+    // Optimized for bitmap selectors and batch selectors only
+    const IDSelectorBitmap* bitmap_sel = dynamic_cast<const IDSelectorBitmap*>(sel);
+    if (bitmap_sel) {
+        const uint8_t* bitmap = bitmap_sel->bitmap;
+        const size_t nbytes = bitmap_sel->n;
+        // Iterate over bitmap bytes
+        for (size_t byte_idx = 0; byte_idx < nbytes; ++byte_idx) {
+            uint8_t byte = bitmap[byte_idx];
+            if (byte == 0) {
+                continue; // fast skip
+            }
+            size_t base_idx = byte_idx << 3;
+            // Iterate over bits in the byte
+            for (uint8_t bit = 0; bit < 8; ++bit) {
+                if ((byte & (1 << bit)) == 0) {
+                    continue;
+                }
+                idx_t id = base_idx + bit;
+                if (id >= ntotal) {
+                    continue; // Safety check: skip invalid ids
+                }
+                uint64_t list_no = lo_listno(direct_map.get(id));
+                if (list_no >= nlist) {
+                    continue; // Safety check: skip invalid list numbers
+                }
+                list_counts[list_no]++;
+            }
+        }
+        return;
     }
+    // With batch selector, the direct map must be of hash type, as the IDs may be
+    // arbitrary, but it would still work with array type if the IDs are sequential
+    // Hence we do not enforce that check here.
+    const IDSelectorBatch* batch_sel = dynamic_cast<const IDSelectorBatch*>(sel);
+    if (batch_sel) {
+        const auto& ids_set = batch_sel->set;
+        // iterate over ids_set and get the list number from direct map
+        for (const auto& id : ids_set) {
+            uint64_t list_no = lo_listno(direct_map.get(id));
+            if (list_no >= nlist) {
+                continue; // Safety check: skip invalid list numbers
+            }
+            list_counts[list_no]++;
+        }
+        return;
+    }
+    FAISS_THROW_MSG("ivf_list_vector_count only supports "
+                     "IDSelectorBitmap and IDSelectorBatch");
 }
 
 void IndexIVF::reconstruct_n(idx_t i0, idx_t ni, float* recons) const {
