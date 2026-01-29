@@ -1321,7 +1321,6 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
             direct_map.add_single_id(add_id + i, list_no, new_offset);
         }
     }
-    invlists->list_no_mapping = list_mapping;
     invlists->merge_from(other->invlists, add_id);
 
     ntotal += other->ntotal;
