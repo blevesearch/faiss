@@ -40,7 +40,7 @@ struct InvertedListsIterator {
 struct InvertedLists {
     size_t nlist;     ///< number of possible key values
     size_t code_size; ///< code size per vector in bytes
-    
+
     /// request to use iterator rather than get_codes / get_ids
     bool use_iterator = false;
 

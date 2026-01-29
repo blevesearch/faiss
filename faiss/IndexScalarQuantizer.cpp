@@ -281,7 +281,7 @@ void IndexIVFScalarQuantizer::reconstruct_from_offset(
         int64_t offset,
         float* recons) const {
     const uint8_t* code = invlists->get_single_code(list_no, offset);
-    
+
     if (by_residual) {
         std::vector<float> centroid(d);
         quantizer->reconstruct(list_no, centroid.data());

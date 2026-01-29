@@ -375,7 +375,7 @@ OnDiskInvertedLists::OnDiskInvertedLists() : OnDiskInvertedLists(0, 0, "") {}
 
 OnDiskInvertedLists::~OnDiskInvertedLists() {
     delete pf;
-    
+
     // unmap all lists
     if (ptr != nullptr) {
         if (!pre_mapped) {
