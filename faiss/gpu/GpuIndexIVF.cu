@@ -332,9 +332,6 @@ void GpuIndexIVF::searchImpl_(
         const SearchParameters* params) const {
     // Device was already set in GpuIndex::search
     int use_nprobe = getCurrentNProbe_(params);
-    
-    // Get the selector from the params
-    auto sel = params ? params->sel : nullptr;
 
     // This was previously checked
     FAISS_ASSERT(is_trained && baseIndex_);
@@ -346,7 +343,7 @@ void GpuIndexIVF::searchImpl_(
     Tensor<idx_t, 2, true> outLabels(const_cast<idx_t*>(labels), {n, k});
 
     baseIndex_->search(
-            quantizer, queries, use_nprobe, k, sel, outDistances, outLabels);
+            quantizer, queries, use_nprobe, k, outDistances, outLabels);
 }
 
 void GpuIndexIVF::search_preassigned(
@@ -416,15 +413,12 @@ void GpuIndexIVF::search_preassigned(
     auto outIndicesDevice = toDeviceTemporary<idx_t, 2>(
             resources_.get(), config_.device, labels, stream, {n, k});
 
-    IDSelector* sel = params ? params->sel : nullptr;
-
     baseIndex_->searchPreassigned(
             quantizer,
             vecsDevice,
             distanceDevice,
             assignDevice,
             k,
-            sel,
             outDistancesDevice,
             outIndicesDevice,
             store_pairs);

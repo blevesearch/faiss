@@ -493,7 +493,6 @@ void IVFPQ::search(
         Tensor<float, 2, true>& queries,
         int nprobe,
         int k,
-        IDSelector* sel,
         Tensor<float, 2, true>& outDistances,
         Tensor<idx_t, 2, true>& outIndices) {
     // These are caught at a higher level
@@ -542,7 +541,6 @@ void IVFPQ::searchPreassigned(
         Tensor<float, 2, true>& ivfDistances,
         Tensor<idx_t, 2, true>& ivfAssignments,
         int k,
-        IDSelector* sel,
         Tensor<float, 2, true>& outDistances,
         Tensor<idx_t, 2, true>& outIndices,
         bool storePairs) {

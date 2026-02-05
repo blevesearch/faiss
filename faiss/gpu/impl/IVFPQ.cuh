@@ -52,7 +52,6 @@ class IVFPQ : public IVFBase {
             Tensor<float, 2, true>& queries,
             int nprobe,
             int k,
-            IDSelector* sel,
             Tensor<float, 2, true>& outDistances,
             Tensor<idx_t, 2, true>& outIndices) override;
 
@@ -64,7 +63,6 @@ class IVFPQ : public IVFBase {
             Tensor<float, 2, true>& ivfDistances,
             Tensor<idx_t, 2, true>& ivfAssignments,
             int k,
-            IDSelector* sel,
             Tensor<float, 2, true>& outDistances,
             Tensor<idx_t, 2, true>& outIndices,
             bool storePairs) override;
