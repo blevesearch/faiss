@@ -183,6 +183,8 @@ int faiss_IndexBinary_reconstruct_n(
         idx_t ni,
         uint8_t* recons);
 
+size_t faiss_IndexBinary_size(FaissIndexBinary* index);
+
 #ifdef __cplusplus
 }
 #endif

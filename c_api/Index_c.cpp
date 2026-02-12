@@ -246,31 +246,6 @@ int faiss_Index_dist_compute(
             return 0;
         }
 
-        // Try to cast to IndexIDMap2
-        if (auto idmap2 = dynamic_cast<const faiss::IndexIDMap2*>(idx)) {
-            // Check if the underlying index is IndexFlat
-            auto flat = dynamic_cast<const faiss::IndexFlat*>(idmap2->index);
-            if (flat) {
-                std::vector<idx_t> internal_indices(n_ids, -1);
-                for (size_t i = 0; i < n_ids; ++i) {
-                    // Search for the ID in the id_map vector
-                    auto it = std::find(
-                            idmap2->id_map.begin(),
-                            idmap2->id_map.end(),
-                            ids[i]);
-                    if (it != idmap2->id_map.end()) {
-                        internal_indices[i] =
-                                std::distance(idmap2->id_map.begin(), it);
-                    }
-                    // else: leave as -1, or handle as you wish (e.g., set
-                    // distance to NaN)
-                }
-                flat->compute_distance_subset(
-                        1, query, n_ids, distances, internal_indices.data());
-                return 0;
-            }
-        }
-
         // Try to cast to IndexFlat
         if (auto flat = dynamic_cast<const faiss::IndexFlat*>(idx)) {
             // For IndexFlat, we can use compute_distance_subset

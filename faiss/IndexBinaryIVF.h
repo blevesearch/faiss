@@ -131,7 +131,10 @@ struct IndexBinaryIVF : IndexBinary {
             bool store_pairs = false,
             const IDSelector* sel = nullptr) const;
 
-    void get_lists_for_keys(idx_t* keys, size_t n_keys, idx_t* lists);
+    void binary_ivf_vector_count(
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const faiss::SearchParameters* params) const;
 
     /** assign the vectors, then call search_preassign */
     void search(

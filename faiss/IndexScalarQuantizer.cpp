@@ -153,6 +153,9 @@ void IndexIVFScalarQuantizer::dist_compute(
         dc->set_query(query);
     }
 
+    idx_t prev_list_no = -1;
+    std::vector<float> tmp(d);
+
     // Process each ID
     for (size_t i = 0; i < n_ids; i++) {
         idx_t id = ids[i];
@@ -163,12 +166,13 @@ void IndexIVFScalarQuantizer::dist_compute(
         // Get the code for the vector
         const uint8_t* code = invlists->get_single_code(list_no, offset);
 
-        if (by_residual) {
+        if (prev_list_no != list_no) {
             // Compute residual for this list_no
-            std::vector<float> tmp(d);
             quantizer->compute_residual(query, tmp.data(), list_no);
-            dc->set_query(tmp.data());
+            prev_list_no = list_no;
         }
+            
+        dc->set_query(tmp.data());
 
         // Compute the distance
         dists[i] = dc->query_to_code(code);

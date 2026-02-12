@@ -106,6 +106,53 @@ int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
         int direct_map_type);
 
+int faiss_binary_ivf_list_vector_count(
+        FaissIndexBinaryIVF* index,
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const FaissSearchParametersIVF* params);
+
+/*
+    Return 'k' centroids in the index closest to the query vector.
+
+    @param n: number of queries.
+    @param query: query vector.
+    @param k: count of closest number of vectors.
+    @param centroid_distances: output distances, size n * k.
+    @param centroid_ids: output centroid IDs, size n * k.
+*/
+int faiss_Search_binary_closest_eligible_centroids(
+        const FaissIndexBinaryIVF* index,
+        idx_t n,
+        const uint8_t* xb,
+        idx_t k,
+        int32_t* centroid_distances,
+        idx_t* centroid_ids,
+        const FaissSearchParameters* params);
+
+/*
+    Search the clusters whose IDs are in 'assign' and
+    return the 'k' nearest neighbours from among them.
+
+    @param n: number of queries.
+    @param x: query vector, size n * d.
+    @param k: count of nearest neighbours to be returned for each query.
+    @param centroid_ids: output centroid IDs, size n * k.
+    @param distance: output distances, size n * k
+    @param labels: output labels, size n * k
+*/
+int faiss_IndexBinaryIVF_search_preassigned_with_params(
+        const FaissIndexBinaryIVF* index,
+        idx_t n,
+        const uint8_t* xb,
+        idx_t k,
+        const idx_t* assign,
+        const int32_t* centroid_dis,
+        int32_t* distances,
+        idx_t* labels,
+        int store_pairs,
+        const FaissSearchParametersIVF* params);
+
 /** Check the inverted lists' imbalance factor.
  *
  * 1= perfectly balanced, >1: imbalanced
