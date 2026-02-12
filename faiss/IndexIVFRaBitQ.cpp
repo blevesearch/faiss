@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -318,6 +319,44 @@ void IndexIVFRaBitQ::sa_decode(idx_t n, const uint8_t* codes, float* x) const {
             quantizer->reconstruct(list_no, centroid.data());
             rabitq.decode_core(code + coarse_size, xi, 1, centroid.data());
         }
+    }
+}
+
+void IndexIVFRaBitQ::compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* /*dist_table*/) const {
+    FAISS_THROW_IF_NOT(n >= 0);
+    FAISS_THROW_IF_NOT(list_no >= 0 && (size_t)list_no < nlist);
+    FAISS_THROW_IF_NOT(x != nullptr);
+    FAISS_THROW_IF_NOT(codes != nullptr);
+    FAISS_THROW_IF_NOT(dists != nullptr);
+    FAISS_THROW_IF_NOT(code_size > 0);
+    if (n == 0) {
+        return;
+    }
+    FAISS_THROW_IF_NOT(
+            (size_t)n <= (std::numeric_limits<size_t>::max)() / code_size);
+
+    // RaBitQ uses per-vector correction factors stored in the codes, so we
+    // must use the RaBitQuantizer distance computer.
+    std::vector<float> centroid(d);
+    quantizer->reconstruct(list_no, centroid.data());
+
+    // Note: "centered" query quantization is a per-search parameter in Faiss.
+    // compute_distance_to_codes_for_list does not take IVFSearchParameters, so
+    // we use centered=false here (consistent with get_distance_computer()). In
+    // future, we can look into setting centered and qb per call if needed.
+    std::unique_ptr<FlatCodesDistanceComputer> dc(
+            rabitq.get_distance_computer(qb, centroid.data(), /*centered=*/false));
+    dc->set_query(x);
+
+    const uint8_t* code = codes;
+    for (idx_t i = 0; i < n; i++, code += code_size) {
+        dists[i] = dc->distance_to_code(code);
     }
 }
 
