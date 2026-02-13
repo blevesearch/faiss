@@ -106,40 +106,44 @@ int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
         int direct_map_type);
 
+/** return list of centroids with counts of eligible centroids
+ * 
+ * @param list_counts       output counts of eligible vectors in each centroid
+ * @param list_counts_size  total number of centroids
+*/
 int faiss_binary_ivf_list_vector_count(
         FaissIndexBinaryIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
         const FaissSearchParametersIVF* params);
 
-/*
-    Return 'k' centroids in the index closest to the query vector.
-
-    @param n: number of queries.
-    @param query: query vector.
-    @param k: count of closest number of vectors.
-    @param centroid_distances: output distances, size n * k.
-    @param centroid_ids: output centroid IDs, size n * k.
+/** return 'k' centroids in the index closest to the query vector.
+ *
+ * @param n                     number of queries
+ * @param x                     query vector
+ * @param k                     count of closest number of vectors
+ * @param centroid_distances    output distances, size n * k
+ * @param centroid_ids          output centroid IDs, size n * k
 */
 int faiss_Search_binary_closest_eligible_centroids(
         const FaissIndexBinaryIVF* index,
         idx_t n,
-        const uint8_t* xb,
+        const uint8_t* x,
         idx_t k,
         int32_t* centroid_distances,
         idx_t* centroid_ids,
         const FaissSearchParameters* params);
 
-/*
-    Search the clusters whose IDs are in 'assign' and
-    return the 'k' nearest neighbours from among them.
-
-    @param n: number of queries.
-    @param x: query vector, size n * d.
-    @param k: count of nearest neighbours to be returned for each query.
-    @param centroid_ids: output centroid IDs, size n * k.
-    @param distance: output distances, size n * k
-    @param labels: output labels, size n * k
+/** search the clusters whose IDs are in 'assign' and
+ * return the 'k' nearest neighbours from among them.
+ * 
+ * @param n              number of queries
+ * @param x              query vector, size n * d
+ * @param k              count of nearest neighbours to be
+ *                         returned for each query
+ * @param centroid_ids   output centroid IDs, size n * k
+ * @param distance       output distances, size n * k
+ * @param labels         output labels, size n * k
 */
 int faiss_IndexBinaryIVF_search_preassigned_with_params(
         const FaissIndexBinaryIVF* index,

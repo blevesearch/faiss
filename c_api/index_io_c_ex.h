@@ -44,11 +44,15 @@ int faiss_read_index_buf(
         int io_flags,
         FaissIndex** p_out);
 
+/** Write binary index from buffer
+ */
 int faiss_write_index_binary_buf(
         const FaissIndexBinary* idx,
         size_t* buf_size,
         uint8_t** buf);
 
+/** Read binary index from buffer
+ */
 int faiss_read_index_binary_buf(
         const uint8_t* buf,
         size_t limit,

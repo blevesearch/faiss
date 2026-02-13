@@ -124,7 +124,7 @@ int faiss_binary_ivf_list_vector_count(
 int faiss_Search_binary_closest_eligible_centroids(
         const FaissIndexBinaryIVF* index,
         idx_t n,
-        const uint8_t* query,
+        const uint8_t* x,
         idx_t k,
         int32_t* centroid_distances,
         idx_t* centroid_ids,
@@ -132,7 +132,7 @@ int faiss_Search_binary_closest_eligible_centroids(
     try {
         reinterpret_cast<const IndexBinaryIVF*>(index)->quantizer->search(
                 n,
-                query,
+                x,
                 k,
                 centroid_distances,
                 centroid_ids,
@@ -144,7 +144,7 @@ int faiss_Search_binary_closest_eligible_centroids(
 int faiss_IndexBinaryIVF_search_preassigned_with_params(
         const FaissIndexBinaryIVF* index,
         idx_t n,
-        const uint8_t* xb,
+        const uint8_t* x,
         idx_t k,
         const idx_t* assign,
         const int32_t* centroid_dis,
@@ -155,7 +155,7 @@ int faiss_IndexBinaryIVF_search_preassigned_with_params(
     try {
         reinterpret_cast<const IndexBinaryIVF*>(index)->search_preassigned(
                 n,
-                xb,
+                x,
                 k,
                 assign,
                 centroid_dis,

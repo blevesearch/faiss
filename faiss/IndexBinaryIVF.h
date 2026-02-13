@@ -130,7 +130,28 @@ struct IndexBinaryIVF : IndexBinary {
     virtual BinaryInvertedListScanner* get_InvertedListScanner(
             bool store_pairs = false,
             const IDSelector* sel = nullptr) const;
-
+    /** Count vectors per IVF list (cluster) for a given selector.
+     *
+     * This function iterates over the vectors selected by the provided
+     * search parameters and increments a counter for each IVF inverted
+     * list (cluster) they belong to. The result is a per-list vector
+     * count for the IVF index.
+     *
+     * @param list_counts      - Output array of size list_counts_size (must be == nlist).
+     *                          On return, list_counts[i] contains the number
+     *                          of selected vectors assigned to IVF list i.
+     *                          Precondition: every element of list_counts must
+     *                          be initialized to 0 by the caller before
+     *                          calling this function; otherwise the resulting
+     *                          per-list counts will be incorrect.
+     * @param list_counts_size - Size of list_counts array (must equal nlist)
+     * @param params           - Search parameters containing the selector
+     *                          that defines which vectors are included.
+     *                          Currently only IDSelectorBitmap and
+     *                          IDSelectorBatch are supported.
+     *
+     * @note Requires direct_map to be set (not NoMap)
+     */
     void binary_ivf_vector_count(
         idx_t* list_counts,
         size_t list_counts_size,

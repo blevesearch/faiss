@@ -413,6 +413,7 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             idx_t* __restrict idxi,
             size_t k) const override {
         using C = CMax<int32_t, idx_t>;
+
         size_t nup = 0;
 
         for (size_t j = 0; j < n; j++) {
@@ -863,10 +864,10 @@ void IndexBinaryIVF::search_preassigned(
         idx_t n,
         const uint8_t* x,
         idx_t k,
-        const idx_t* assign,
-        const int32_t* centroid_dis,
-        int32_t* distances,
-        idx_t* labels,
+        const idx_t* cidx,
+        const int32_t* cdis,
+        int32_t* dis,
+        idx_t* idx,
         bool store_pairs,
         const IVFSearchParameters* params) const {
     if (per_invlist_search) {
@@ -874,28 +875,19 @@ void IndexBinaryIVF::search_preassigned(
         // clang-format off
         dispatch_HammingComputer(
                 code_size, r, this, n, x, k,
-                assign, centroid_dis, distances, labels, store_pairs, params);
+                cidx, cdis, dis, idx, store_pairs, params);
         // clang-format on
     } else if (use_heap) {
         search_knn_hamming_heap(
-                this,
-                n,
-                x,
-                k,
-                assign,
-                centroid_dis,
-                distances,
-                labels,
-                store_pairs,
-                params);
+                this, n, x, k, cidx, cdis, dis, idx, store_pairs, params);
     } else if (store_pairs) { // !use_heap && store_pairs
         Run_search_knn_hamming_count<true> r;
         dispatch_HammingComputer(
-                code_size, r, this, n, x, assign, k, distances, labels, params);
+                code_size, r, this, n, x, cidx, k, dis, idx, params);
     } else { // !use_heap && !store_pairs
         Run_search_knn_hamming_count<false> r;
         dispatch_HammingComputer(
-                code_size, r, this, n, x, assign, k, distances, labels, params);
+                code_size, r, this, n, x, cidx, k, dis, idx, params);
     }
 }
 
