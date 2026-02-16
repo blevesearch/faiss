@@ -106,13 +106,13 @@ int faiss_IndexBinaryIVF_set_direct_map(
     CATCH_AND_HANDLE
 }
 
-int faiss_binary_ivf_list_vector_count(
+int faiss_IndexBinaryIVF_list_vector_count(
         FaissIndexBinaryIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
         const FaissSearchParametersIVF* params) {
     try {
-        reinterpret_cast<IndexBinaryIVF*>(index)->binary_ivf_vector_count(
+        reinterpret_cast<IndexBinaryIVF*>(index)->list_vector_count(
                 list_counts,
                 list_counts_size,
                 reinterpret_cast<const faiss::SearchParameters*>(params));
@@ -121,7 +121,7 @@ int faiss_binary_ivf_list_vector_count(
     CATCH_AND_HANDLE
 }
 
-int faiss_Search_binary_closest_eligible_centroids(
+int faiss_Search_IndexBinaryIVF_closest_eligible_centroids(
         const FaissIndexBinaryIVF* index,
         idx_t n,
         const uint8_t* x,

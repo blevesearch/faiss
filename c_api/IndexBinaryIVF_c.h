@@ -111,7 +111,7 @@ int faiss_IndexBinaryIVF_set_direct_map(
  * @param list_counts       output counts of eligible vectors in each centroid
  * @param list_counts_size  total number of centroids
 */
-int faiss_binary_ivf_list_vector_count(
+int faiss_IndexBinaryIVF_list_vector_count(
         FaissIndexBinaryIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
@@ -125,7 +125,7 @@ int faiss_binary_ivf_list_vector_count(
  * @param centroid_distances    output distances, size n * k
  * @param centroid_ids          output centroid IDs, size n * k
 */
-int faiss_Search_binary_closest_eligible_centroids(
+int faiss_Search_IndexBinaryIVF_closest_eligible_centroids(
         const FaissIndexBinaryIVF* index,
         idx_t n,
         const uint8_t* x,

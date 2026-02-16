@@ -229,7 +229,7 @@ void IndexBinaryIVF::reconstruct_from_offset(
     memcpy(recons, invlists->get_single_code(list_no, offset), code_size);
 }
 
-void IndexBinaryIVF::binary_ivf_vector_count(
+void IndexBinaryIVF::list_vector_count(
         idx_t* list_counts,
         size_t list_counts_size,
         const faiss::SearchParameters* params) const {
@@ -285,7 +285,7 @@ void IndexBinaryIVF::binary_ivf_vector_count(
         }
         return;
     }
-    FAISS_THROW_MSG("binary_ivf_vector_count only supports "
+    FAISS_THROW_MSG("list_vector_count only supports "
                      "IDSelectorBitmap and IDSelectorBatch");
 }
 

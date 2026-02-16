@@ -152,7 +152,7 @@ struct IndexBinaryIVF : IndexBinary {
      *
      * @note Requires direct_map to be set (not NoMap)
      */
-    void binary_ivf_vector_count(
+    void list_vector_count(
         idx_t* list_counts,
         size_t list_counts_size,
         const faiss::SearchParameters* params) const;
