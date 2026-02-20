@@ -11,6 +11,8 @@
 #include "Index_c_ex.h"
 #include <faiss/Index.h>
 #include "macros_impl.h"
+#include <faiss/IndexFlat.h>
+#include <faiss/IndexScalarQuantizer.h>
 
 extern "C" {
 
@@ -41,5 +43,34 @@ size_t faiss_Index_size(FaissIndex* index) {
     auto xIndex = reinterpret_cast<faiss::Index*>(index);
     size_t rv = sizeof(xIndex);
     return rv;
+}
+
+int faiss_Index_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+
+        // Try to cast to IndexFlat
+        if (auto flat = dynamic_cast<const faiss::IndexFlat*>(idx)) {
+            // For IndexFlat, we can use compute_distance_subset
+            flat->compute_distance_subset(1, query, n_ids, distances, ids);
+            return 0;
+        }
+
+        // Try to cast to IndexIVFScalarQuantizer
+        if (auto ivfsq =
+                    dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
+            ivfsq->dist_compute(query, ids, n_ids, distances);
+            return 0;
+        }
+
+        // If we get here, the index type doesn't support dist_compute
+        return -1;
+    }
+    CATCH_AND_HANDLE
 }
 }

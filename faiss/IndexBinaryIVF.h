@@ -246,6 +246,11 @@ struct IndexBinaryIVF : IndexBinary {
     void set_direct_map_type(DirectMap::Type type);
 
     void replace_invlists(InvertedLists* il, bool own = false);
+
+    void get_centroids_and_cardinality(
+        uint8_t* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) const;
 };
 
 struct BinaryInvertedListScanner {
@@ -258,9 +263,7 @@ struct BinaryInvertedListScanner {
             bool store_pairs = false,
             const IDSelector* sel = nullptr)
             : store_pairs(store_pairs),
-              sel(sel),
-              list_no(-1),
-              query_vector(nullptr) {}
+              sel(sel) {}
 
     /// from now on we handle this query.
     virtual void set_query(const uint8_t* query_vector) = 0;

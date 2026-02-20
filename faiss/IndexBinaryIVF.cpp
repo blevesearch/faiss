@@ -121,16 +121,21 @@ void IndexBinaryIVF::search(
         idx_t k,
         int32_t* distances,
         idx_t* labels,
-        const SearchParameters* params) const {
+        const SearchParameters* params_in) const {
     FAISS_THROW_IF_NOT(k > 0);
     FAISS_THROW_IF_NOT(nprobe > 0);
+    const IVFSearchParameters* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const IVFSearchParameters*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(params, "IndexIVF params have incorrect type");
+    }
+    const size_t nprobe_2 = std::min(nlist, params ? params->nprobe : this->nprobe);
 
-    const size_t nprobe_2 = std::min(nlist, this->nprobe);
     std::unique_ptr<idx_t[]> idx(new idx_t[n * nprobe_2]);
     std::unique_ptr<int32_t[]> coarse_dis(new int32_t[n * nprobe_2]);
 
     double t0 = getmillisecs();
-    quantizer->search(n, x, nprobe_2, coarse_dis.get(), idx.get());
+    quantizer->search(n, x, nprobe_2, coarse_dis.get(), idx.get(), params ? params->quantizer_params : nullptr);
     indexIVF_stats.quantization_time += getmillisecs() - t0;
 
     t0 = getmillisecs();
@@ -375,24 +380,46 @@ void IndexBinaryIVF::replace_invlists(InvertedLists* il, bool own) {
     own_invlists = own;
 }
 
+void IndexBinaryIVF::get_centroids_and_cardinality(
+        uint8_t* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) const {
+    FAISS_THROW_IF_NOT(quantizer != nullptr);
+    FAISS_THROW_IF_NOT(quantizer->is_trained);
+
+    // Get centroid vectors from quantizer
+    for (size_t i = 0; i < nlist; i++) {
+        quantizer->reconstruct(i, centroid_vectors + i * d);
+    }
+
+    // Get cardinalities from inverted lists
+    for (size_t i = 0; i < nlist; i++) {
+        cardinalities[i] = invlists->list_size(i);
+    }
+
+    // Get centroid IDs if requested
+    if (centroid_ids != nullptr) {
+        for (size_t i = 0; i < nlist; i++) {
+            centroid_ids[i] = i;
+        }
+    }
+}
+
 namespace {
 
 template <class HammingComputer>
 struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
     HammingComputer hc;
     size_t code_size;
-    bool store_pairs;
 
     IVFBinaryScannerL2(
             size_t code_size,
             bool store_pairs,
             const IDSelector* sel = nullptr)
             : BinaryInvertedListScanner(store_pairs, sel),
-              code_size(code_size),
-              store_pairs(store_pairs) {}
+              code_size(code_size) {}
 
     void set_query(const uint8_t* query_vector) override {
-        this->query_vector = query_vector;  // Set the member directly
         hc.set(query_vector, code_size);
     }
 
@@ -421,7 +448,7 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             if (dis < simi[0]) {
                 idx_t id = store_pairs ? lo_build(list_no, j) : ids[j];
                 // Add selector check
-                if (!sel || sel->is_member(id)) {
+                if (!this->sel || this->sel->is_member(id)) {
                     heap_replace_top<C>(k, simi, idxi, dis, id);
                     nup++;
                 }
@@ -440,9 +467,9 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
         for (size_t j = 0; j < n; j++) {
             uint32_t dis = hc.hamming(codes);
             if (dis < radius) {
-                int64_t id = store_pairs ? lo_build(list_no, j) : ids[j];
+                int64_t id = this->store_pairs ? lo_build(list_no, j) : ids[j];
                 // Add selector check
-                if (!sel || sel->is_member(id)) {
+                if (!this->sel || this->sel->is_member(id)) {
                     result.add(dis, id);
                 }
             }
