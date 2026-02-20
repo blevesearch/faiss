@@ -139,10 +139,4 @@ int faiss_IndexBinary_reconstruct_n(
     }
     CATCH_AND_HANDLE
 }
-
-size_t faiss_IndexBinary_size(FaissIndexBinary* index) {
-    auto xIndex = reinterpret_cast<faiss::IndexBinary*>(index);
-    size_t rv = sizeof(xIndex);
-    return rv;
-}
 }

@@ -38,6 +38,12 @@ int faiss_IndexBinary_search_with_params(
         int32_t* distances,
         idx_t* labels);
 
+/** return the size of the binary index
+ * 
+ * @param index     opaque pointer to index object
+ */
+size_t faiss_IndexBinary_size(FaissIndexBinary* index);
+
 #ifdef __cplusplus
 }
 #endif

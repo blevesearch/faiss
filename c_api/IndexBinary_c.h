@@ -162,12 +162,6 @@ int faiss_IndexBinary_reconstruct_n(
         idx_t ni,
         uint8_t* recons);
 
-/** return the size of the binary index
- * 
- * @param index     opaque pointer to index object
- */
-size_t faiss_IndexBinary_size(FaissIndexBinary* index);
-
 #ifdef __cplusplus
 }
 #endif
