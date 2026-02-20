@@ -442,7 +442,6 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
         using C = CMax<int32_t, idx_t>;
 
         size_t nup = 0;
-
         for (size_t j = 0; j < n; j++) {
             uint32_t dis = hc.hamming(codes);
             if (dis < simi[0]) {

@@ -9,9 +9,6 @@
 
 #include "Index_c.h"
 #include <faiss/Index.h>
-#include <faiss/IndexFlat.h>
-#include <faiss/IndexIDMap.h>
-#include <faiss/IndexScalarQuantizer.h>
 #include <faiss/OMPConfig.h>
 #include <faiss/impl/IDSelector.h>
 #include "macros_impl.h"
