@@ -141,12 +141,8 @@ void IndexBinaryIVF::search(
     t0 = getmillisecs();
     invlists->prefetch_lists(idx.get(), n * nprobe_2);
 
-    const IVFSearchParameters* params2 = nullptr;
-    if(params) {
-        params2 = static_cast<const IVFSearchParameters*>(params); 
-    }
     search_preassigned(
-            n, x, k, idx.get(), coarse_dis.get(), distances, labels, false, params2);
+            n, x, k, idx.get(), coarse_dis.get(), distances, labels, false, params);
     indexIVF_stats.search_time += getmillisecs() - t0;
 }
 

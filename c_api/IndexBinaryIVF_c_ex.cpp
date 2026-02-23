@@ -7,32 +7,37 @@
 
 // -*- c -*-
 
-#include "IndexBinaryIVF_c.h"
+#include "IndexBinaryIVF_c_ex.h"
 #include <faiss/IndexBinaryIVF.h>
 #include "macros_impl.h"
+
+using faiss::IndexBinaryIVF;
+using faiss::SearchParameters;
+using faiss::SearchParametersIVF;
+using faiss::DirectMap;
 
 extern "C" {
 int faiss_IndexBinaryIVF_set_direct_map(
         FaissIndexBinaryIVF* index,
         int direct_map_type) {
     try {
-        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->set_direct_map_type(
-                static_cast<faiss::DirectMap::Type>(direct_map_type));
+        reinterpret_cast<IndexBinaryIVF*>(index)->set_direct_map_type(
+                static_cast<DirectMap::Type>(direct_map_type));
         return 0;
     }
     CATCH_AND_HANDLE
 }
 
 int faiss_IndexBinaryIVF_list_vector_count(
-        FaissIndexBinaryIVF* index,
+        const FaissIndexBinaryIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
         const FaissSearchParametersIVF* params) {
     try {
-        reinterpret_cast<faiss::IndexBinaryIVF*>(index)->list_vector_count(
+        reinterpret_cast<const IndexBinaryIVF*>(index)->list_vector_count(
                 list_counts,
                 list_counts_size,
-                reinterpret_cast<const faiss::SearchParameters*>(params));
+                reinterpret_cast<const SearchParameters*>(params));
 
     }
     CATCH_AND_HANDLE
@@ -47,13 +52,13 @@ int faiss_IndexBinaryIVF_search_closest_eligible_centroids(
         idx_t* centroid_ids,
         const FaissSearchParameters* params) {
     try {
-        reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->quantizer->search(
+        reinterpret_cast<const IndexBinaryIVF*>(index)->quantizer->search(
                 n,
                 x,
                 k,
                 centroid_distances,
                 centroid_ids,
-                reinterpret_cast<const faiss::SearchParameters*>(params));
+                reinterpret_cast<const SearchParameters*>(params));
     }
     CATCH_AND_HANDLE
 }
@@ -70,7 +75,7 @@ int faiss_IndexBinaryIVF_search_preassigned_with_params(
         int store_pairs,
         const FaissSearchParametersIVF* params) {
     try {
-        reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->search_preassigned(
+        reinterpret_cast<const IndexBinaryIVF*>(index)->search_preassigned(
                 n,
                 x,
                 k,
@@ -79,7 +84,7 @@ int faiss_IndexBinaryIVF_search_preassigned_with_params(
                 distances,
                 labels,
                 store_pairs,
-                reinterpret_cast<const faiss::SearchParametersIVF*>(params));
+                reinterpret_cast<const SearchParametersIVF*>(params));
     }
     CATCH_AND_HANDLE
 }
@@ -90,7 +95,7 @@ int faiss_IndexBinaryIVF_get_centroids_and_cardinality(
         size_t* cardinalities,
         idx_t* centroid_ids) {
     try {
-        reinterpret_cast<const faiss::IndexBinaryIVF*>(index)->get_centroids_and_cardinality(
+        reinterpret_cast<const IndexBinaryIVF*>(index)->get_centroids_and_cardinality(
             centroid_vectors, cardinalities, centroid_ids);
     }
     CATCH_AND_HANDLE

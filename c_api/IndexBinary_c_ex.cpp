@@ -8,8 +8,8 @@
 // Copyright 2004-present Facebook. All Rights Reserved
 // -*- c -*-
 
-#include "IndexBinary_c.h"
-#include <faiss/IndexBinaryIVF.h>
+#include "IndexBinary_c_ex.h"
+#include <faiss/IndexBinary.h>
 #include "macros_impl.h"
 
 extern "C" {

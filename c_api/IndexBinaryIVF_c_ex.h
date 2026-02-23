@@ -26,7 +26,7 @@ int faiss_IndexBinaryIVF_set_direct_map(
  * @param list_counts_size  total number of centroids
 */
 int faiss_IndexBinaryIVF_list_vector_count(
-        FaissIndexBinaryIVF* index,
+        const FaissIndexBinaryIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
         const FaissSearchParametersIVF* params);
