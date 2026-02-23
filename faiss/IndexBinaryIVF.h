@@ -256,8 +256,6 @@ struct IndexBinaryIVF : IndexBinary {
 struct BinaryInvertedListScanner {
     bool store_pairs;
     const IDSelector* sel;
-    idx_t list_no;
-    const uint8_t* query_vector;
 
     BinaryInvertedListScanner(
             bool store_pairs = false,
