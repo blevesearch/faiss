@@ -443,7 +443,7 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             if (dis < simi[0]) {
                 idx_t id = store_pairs ? lo_build(list_no, j) : ids[j];
                 // Add selector check
-                if (!this->sel || this->sel->is_member(id)) {
+                if (!sel || sel->is_member(id)) {
                     heap_replace_top<C>(k, simi, idxi, dis, id);
                     nup++;
                 }
@@ -462,9 +462,9 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
         for (size_t j = 0; j < n; j++) {
             uint32_t dis = hc.hamming(codes);
             if (dis < radius) {
-                int64_t id = this->store_pairs ? lo_build(list_no, j) : ids[j];
+                int64_t id = store_pairs ? lo_build(list_no, j) : ids[j];
                 // Add selector check
-                if (!this->sel || this->sel->is_member(id)) {
+                if (!sel || sel->is_member(id)) {
                     result.add(dis, id);
                 }
             }
