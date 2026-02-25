@@ -9,6 +9,8 @@
 // -*- c++ -*-
 #include "IndexIVF_c_ex.h"
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexScalarQuantizer.h>
+#include <faiss/clone_index.h>
 #include "macros_impl.h"
 
 using faiss::IndexIVF;
@@ -53,6 +55,28 @@ int faiss_Search_closest_eligible_centroids(
                 centroid_distances,
                 centroid_ids,
                 reinterpret_cast<const faiss::SearchParameters*>(params));
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_Set_coarse_quantizers(FaissIndex* index, FaissIndex* srcIndex) {
+    try {
+        faiss::IndexIVF* index_ivf = reinterpret_cast<IndexIVF*>(index);
+        assert(index_ivf);
+
+        faiss::IndexIVF* src_index = reinterpret_cast<faiss::IndexIVF*>(srcIndex);
+        assert(src_index);
+        index_ivf->quantizer = faiss::clone_index(reinterpret_cast<const faiss::Index*>(src_index->quantizer));
+        index_ivf->is_trained = true;
+
+        faiss::IndexIVFScalarQuantizer* index_ivsc_src = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(srcIndex);
+        assert(index_ivsc_src);
+
+        faiss::IndexIVFScalarQuantizer* index_ivsc = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(index);
+        assert(index_ivsc);
+
+        index_ivsc->sq = index_ivsc_src->sq;
+
     }
     CATCH_AND_HANDLE
 }

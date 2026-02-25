@@ -145,6 +145,10 @@ int faiss_IndexIVF_compute_distance_table(
         const float* x,
         float* dist_table);
 
+int faiss_Set_coarse_quantizers(
+        FaissIndex* index,
+        FaissIndex* srcIndex);
+
 #ifdef __cplusplus
 }
 #endif

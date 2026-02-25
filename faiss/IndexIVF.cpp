@@ -1280,10 +1280,17 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
     FAISS_THROW_IF_NOT_MSG(
             typeid(*this) == typeid(*other),
             "can only merge indexes of the same type");
+
+    // merging only the direct map type array and no map
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array && this->direct_map.type == DirectMap::Array)||
+    (this->direct_map.no() && other->direct_map.no());
     FAISS_THROW_IF_NOT_MSG(
-            this->direct_map.no() && other->direct_map.no(),
+            merge_direct_map_cond,
             "merge direct_map not implemented");
 
+    // expensive check to see if all the centorids are the same
+    // even if they're trained on the same data, the smallest of the difference in the centroids will be there
+    // and it affects the residual vector computation and thereby the recall
     if (check_compatible_for_merge_expensive_check) {
         std::vector<float> v(d), v2(d);
         for (size_t i = 0; i < nlist; i++) {
@@ -1298,6 +1305,22 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
 void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     check_compatible_for_merge(otherIndex);
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
+
+    // direct_map.merge_from(other->direct_map);
+    // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
+    // while merging, we need to update those values, which are encoded.
+    // high 32 bits are list_no and low 32 bits are offset
+    if (direct_map.type == DirectMap::Array && 
+        other->direct_map.type == DirectMap::Array) {
+        auto other_map = other->direct_map.array;
+        for (int i = 0; i < other_map.size(); i++) {
+            idx_t other_value = other_map[i];
+            idx_t list_no = lo_listno(other_value);
+
+            size_t new_offset =  invlists->list_size(list_no) + lo_offset(other_value);
+            direct_map.add_single_id(add_id + i, list_no, new_offset);
+        }
+    }
     invlists->merge_from(other->invlists, add_id);
 
     ntotal += other->ntotal;
