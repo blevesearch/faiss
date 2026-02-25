@@ -48,6 +48,13 @@
 #include <faiss/IndexRaBitQFastScan.h>
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexRowwiseMinMax.h>
+#ifdef FAISS_ENABLE_SVS
+#include <faiss/impl/svs_io.h>
+#include <faiss/svs/IndexSVSFlat.h>
+#include <faiss/svs/IndexSVSVamana.h>
+#include <faiss/svs/IndexSVSVamanaLVQ.h>
+#include <faiss/svs/IndexSVSVamanaLeanVec.h>
+#endif
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/MetaIndexes.h>
 #include <faiss/VectorTransform.h>
@@ -612,8 +619,7 @@ ProductQuantizer* read_ProductQuantizer(IOReader* reader) {
 static void read_RaBitQuantizer(
         RaBitQuantizer* rabitq,
         IOReader* f,
-        bool multi_bit) {
-    // don't care about rabitq->centroid
+        bool multi_bit = true) {
     READ1(rabitq->d);
     READ1(rabitq->code_size);
     READ1(rabitq->metric_type);
@@ -1123,13 +1129,19 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(imiq, f);
         read_ProductQuantizer(&imiq->pq, f);
         idx = imiq;
-    } else if (h == fourcc("IxRF")) {
+    } else if (h == fourcc("IxRF") || h == fourcc("IxRP")) {
         IndexRefine* idxrf = new IndexRefine();
         read_index_header(idxrf, f);
         idxrf->base_index = read_index(f, io_flags);
         idxrf->refine_index = read_index(f, io_flags);
         READ1(idxrf->k_factor);
-        if (dynamic_cast<IndexFlat*>(idxrf->refine_index)) {
+        if (h == fourcc("IxRP")) {
+            // then make a RefineFlatPanorama with it
+            IndexRefine* idxrf_old = idxrf;
+            idxrf = new IndexRefinePanorama();
+            *idxrf = *idxrf_old;
+            delete idxrf_old;
+        } else if (dynamic_cast<IndexFlat*>(idxrf->refine_index)) {
             // then make a RefineFlat with it
             IndexRefine* idxrf_old = idxrf;
             idxrf = new IndexRefineFlat();
@@ -1306,16 +1318,16 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (h == fourcc("Irfs")) {
         IndexRaBitQFastScan* idxqfs = new IndexRaBitQFastScan();
         read_index_header(idxqfs, f);
-        read_RaBitQuantizer(&idxqfs->rabitq, f, false);
+        read_RaBitQuantizer(&idxqfs->rabitq, f, true);
         READVECTOR(idxqfs->center);
         READ1(idxqfs->qb);
-        READVECTOR(idxqfs->factors_storage);
+        READVECTOR(idxqfs->flat_storage);
+
         READ1(idxqfs->bbs);
         READ1(idxqfs->ntotal2);
         READ1(idxqfs->M2);
         READ1(idxqfs->code_size);
 
-        // Need to initialize the FastScan base class fields
         const size_t M_fastscan = (idxqfs->d + 3) / 4;
         constexpr size_t nbits_fastscan = 4;
         idxqfs->M = M_fastscan;
@@ -1376,10 +1388,69 @@ Index* read_index(IOReader* f, int io_flags) {
         ivrq->code_size = ivrq->rabitq.code_size;
         read_InvertedLists(ivrq, f, io_flags);
         idx = ivrq;
-    } else if (h == fourcc("Iwrf")) {
+    }
+#ifdef FAISS_ENABLE_SVS
+    else if (
+            h == fourcc("ILVQ") || h == fourcc("ISVL") || h == fourcc("ISVD")) {
+        IndexSVSVamana* svs;
+        if (h == fourcc("ILVQ")) {
+            svs = new IndexSVSVamanaLVQ();
+        } else if (h == fourcc("ISVL")) {
+            svs = new IndexSVSVamanaLeanVec();
+        } else if (h == fourcc("ISVD")) {
+            svs = new IndexSVSVamana();
+        }
+
+        read_index_header(svs, f);
+        READ1(svs->graph_max_degree);
+        READ1(svs->alpha);
+        READ1(svs->search_window_size);
+        READ1(svs->search_buffer_capacity);
+        READ1(svs->construction_window_size);
+        READ1(svs->max_candidate_pool_size);
+        READ1(svs->prune_to);
+        READ1(svs->use_full_search_history);
+        READ1(svs->storage_kind);
+        if (h == fourcc("ISVL")) {
+            READ1(dynamic_cast<IndexSVSVamanaLeanVec*>(svs)->leanvec_d);
+        }
+
+        bool initialized;
+        READ1(initialized);
+        if (initialized) {
+            faiss::svs_io::ReaderStreambuf rbuf(f);
+            std::istream is(&rbuf);
+            svs->deserialize_impl(is);
+        }
+        if (h == fourcc("ISVL")) {
+            bool trained;
+            READ1(trained);
+            if (trained) {
+                faiss::svs_io::ReaderStreambuf rbuf(f);
+                std::istream is(&rbuf);
+                dynamic_cast<IndexSVSVamanaLeanVec*>(svs)
+                        ->deserialize_training_data(is);
+            }
+        }
+        idx = svs;
+    } else if (h == fourcc("ISVF")) {
+        IndexSVSFlat* svs = new IndexSVSFlat();
+        read_index_header(svs, f);
+
+        bool initialized;
+        READ1(initialized);
+        if (initialized) {
+            faiss::svs_io::ReaderStreambuf rbuf(f);
+            std::istream is(&rbuf);
+            svs->deserialize_impl(is);
+            idx = svs;
+        }
+    }
+#endif // FAISS_ENABLE_SVS
+    else if (h == fourcc("Iwrf")) {
         IndexIVFRaBitQFastScan* ivrqfs = new IndexIVFRaBitQFastScan();
         read_ivf_header(ivrqfs, f);
-        read_RaBitQuantizer(&ivrqfs->rabitq, f, false);
+        read_RaBitQuantizer(&ivrqfs->rabitq, f);
         READ1(ivrqfs->by_residual);
         READ1(ivrqfs->code_size);
         READ1(ivrqfs->bbs);
@@ -1388,7 +1459,7 @@ Index* read_index(IOReader* f, int io_flags) {
         READ1(ivrqfs->implem);
         READ1(ivrqfs->qb);
         READ1(ivrqfs->centered);
-        READVECTOR(ivrqfs->factors_storage);
+        READVECTOR(ivrqfs->flat_storage);
 
         // Initialize FastScan base class fields
         const size_t M_fastscan = (ivrqfs->d + 3) / 4;

@@ -15,8 +15,6 @@ Paper: https://www.arxiv.org/pdf/2510.00566
 """
 
 import unittest
-import tempfile
-import os
 
 import faiss
 import numpy as np
@@ -264,13 +262,11 @@ class TestIndexIVFFlatPanorama(unittest.TestCase):
         D_regular, I_regular = index_regular.search(xq, k, params=params)
         D_panorama, I_panorama = index_panorama.search(xq, k, params=params)
 
-        valid_ids = I_panorama >= 0
-        self.assertTrue(np.all(I_panorama[valid_ids] >= 10000))
-        self.assertTrue(np.all(I_panorama[valid_ids] < 50000))
+        self.assertTrue(np.all(I_panorama >= 10000))
+        self.assertTrue(np.all(I_panorama < 50000))
 
         np.testing.assert_array_equal(I_regular, I_panorama)
-        np.testing.assert_allclose(
-            D_regular[valid_ids], D_panorama[valid_ids], rtol=1e-5
+        np.testing.assert_allclose(D_regular, D_panorama, rtol=1e-5
         )
 
     def test_id_selector_batch(self):
@@ -288,15 +284,12 @@ class TestIndexIVFFlatPanorama(unittest.TestCase):
         D_regular, I_regular = index_regular.search(xq, k, params=params)
         D_panorama, I_panorama = index_panorama.search(xq, k, params=params)
 
-        allowed_set = set(allowed_ids)
-        valid_panorama = I_panorama >= 0
-        for id_val in I_panorama[valid_panorama]:
+        allowed_set = set(allowed_ids) | set([-1])
+        for id_val in I_panorama.flatten():
             self.assertIn(int(id_val), allowed_set)
 
         np.testing.assert_array_equal(I_regular, I_panorama)
-        np.testing.assert_allclose(
-            D_regular[valid_panorama], D_panorama[valid_panorama], rtol=1e-5
-        )
+        np.testing.assert_allclose(D_regular, D_panorama, rtol=1e-5)
 
     def test_selector_with_small_dataset(self):
         """Test ID selectors with dataset smaller than batch size"""
@@ -312,15 +305,11 @@ class TestIndexIVFFlatPanorama(unittest.TestCase):
         D_regular, I_regular = index_regular.search(xq, k, params=params)
         D_panorama, I_panorama = index_panorama.search(xq, k, params=params)
 
-        valid_ids = I_panorama >= 0
-        if np.any(valid_ids):
-            self.assertTrue(np.all(I_panorama[valid_ids] >= 20))
-            self.assertTrue(np.all(I_panorama[valid_ids] < 60))
+        self.assertTrue(np.all(I_panorama >= 20))
+        self.assertTrue(np.all(I_panorama < 60))
 
         np.testing.assert_array_equal(I_regular, I_panorama)
-        np.testing.assert_allclose(
-            D_regular[valid_ids], D_panorama[valid_ids], rtol=1e-5
-        )
+        np.testing.assert_allclose(D_regular, D_panorama, rtol=1e-5)
 
     def test_selector_excludes_all(self):
         """Test selector that excludes all results"""
@@ -535,10 +524,8 @@ class TestIndexIVFFlatPanorama(unittest.TestCase):
         index = self.create_panorama(d, nlist, nlevels, xt, xb, nprobe=32)
 
         D_before, I_before = index.search(xq, k)
-        faiss.write_index(index, "index.bin")
-        index_after = faiss.read_index("index.bin")
+        index_after = faiss.deserialize_index(faiss.serialize_index(index))
         D_after, I_after = index_after.search(xq, k)
-        os.unlink("index.bin")
 
         np.testing.assert_array_equal(I_before, I_after)
         np.testing.assert_array_equal(D_before, D_after)

@@ -717,15 +717,44 @@ void IndexFlatPanorama::reconstruct_n(idx_t i, idx_t n, float* recons) const {
     Index::reconstruct_n(i, n, recons);
 }
 
-size_t IndexFlatPanorama::remove_ids(const IDSelector& /* sel */) {
-    FAISS_THROW_MSG("remove_ids not implemented for IndexFlatPanorama");
-    return 0;
+size_t IndexFlatPanorama::remove_ids(const IDSelector& sel) {
+    idx_t j = 0;
+    for (idx_t i = 0; i < ntotal; i++) {
+        if (sel.is_member(i)) {
+            // should be removed
+        } else {
+            if (i > j) {
+                pano.copy_entry(
+                        codes.data(),
+                        codes.data(),
+                        cum_sums.data(),
+                        cum_sums.data(),
+                        j,
+                        i);
+            }
+            j++;
+        }
+    }
+    size_t nremove = ntotal - j;
+    if (nremove > 0) {
+        ntotal = j;
+        size_t num_batches = (ntotal + batch_size - 1) / batch_size;
+        codes.resize(num_batches * batch_size * code_size);
+        cum_sums.resize(num_batches * batch_size * (n_levels + 1));
+    }
+    return nremove;
 }
 
-void IndexFlatPanorama::merge_from(
-        Index& /* otherIndex */,
-        idx_t /* add_id */) {
-    FAISS_THROW_MSG("merge_from not implemented for IndexFlatPanorama");
+void IndexFlatPanorama::merge_from(Index& otherIndex, idx_t add_id) {
+    FAISS_THROW_IF_NOT_MSG(add_id == 0, "cannot set ids in FlatPanorama index");
+    check_compatible_for_merge(otherIndex);
+    IndexFlatPanorama* other = static_cast<IndexFlatPanorama*>(&otherIndex);
+
+    std::vector<float> buffer(other->ntotal * code_size);
+    otherIndex.reconstruct_n(0, other->ntotal, buffer.data());
+
+    add(other->ntotal, buffer.data());
+    other->reset();
 }
 
 void IndexFlatPanorama::add_sa_codes(
@@ -735,7 +764,129 @@ void IndexFlatPanorama::add_sa_codes(
     FAISS_THROW_MSG("add_sa_codes not implemented for IndexFlatPanorama");
 }
 
-void IndexFlatPanorama::permute_entries(const idx_t* /* perm */) {
-    FAISS_THROW_MSG("permute_entries not implemented for IndexFlatPanorama");
+void IndexFlatPanorama::permute_entries(const idx_t* perm) {
+    MaybeOwnedVector<uint8_t> new_codes(codes.size());
+    std::vector<float> new_cum_sums(cum_sums.size());
+
+    for (idx_t i = 0; i < ntotal; i++) {
+        pano.copy_entry(
+                new_codes.data(),
+                codes.data(),
+                new_cum_sums.data(),
+                cum_sums.data(),
+                i,
+                perm[i]);
+    }
+
+    std::swap(codes, new_codes);
+    std::swap(cum_sums, new_cum_sums);
+}
+
+void IndexFlatPanorama::search_subset(
+        idx_t n,
+        const float* x,
+        idx_t k_base,
+        const idx_t* base_labels,
+        idx_t k,
+        float* distances,
+        idx_t* labels) const {
+    using SingleResultHandler =
+            HeapBlockResultHandler<CMax<float, int64_t>, false>::
+                    SingleResultHandler;
+    HeapBlockResultHandler<CMax<float, int64_t>, false> handler(
+            size_t(n), distances, labels, size_t(k), nullptr);
+
+    FAISS_THROW_IF_NOT(k > 0);
+    FAISS_THROW_IF_NOT(batch_size == 1);
+
+    [[maybe_unused]] int nt = std::min(int(n), omp_get_max_threads());
+
+#pragma omp parallel num_threads(nt)
+    {
+        SingleResultHandler res(handler);
+
+        std::vector<float> query_cum_norms(n_levels + 1);
+
+        // Panorama's optimized point-wise refinement (Algorithm 2):
+        // Batch-wise Panorama, as implemented in Panorama.h, incurs overhead
+        // from maintaining active_indices and exact_distances. This optimized
+        // implementation has minimal overhead and is thus preferred for
+        // IndexRefine's use case.
+        // 1. Initialize exact distance as ||y||^2 + ||x||^2.
+        // 2. For each level, refine distance incrementally:
+        //    - Compute dot product for current level: exact_dist -= 2*<x,y>.
+        //    - Use Cauchy-Schwarz bound on remaining levels to get lower bound.
+        //    - If there are less than k points in the heap, add the point to
+        //    the heap.
+        //    - Else, prune if lower bound exceeds k-th best distance.
+        // 3. After all levels, update heap if the point survived.
+#pragma omp for
+        for (idx_t i = 0; i < n; i++) {
+            const idx_t* __restrict idsi = base_labels + i * k_base;
+            const float* xi = x + i * d;
+
+            PanoramaStats local_stats;
+            local_stats.reset();
+
+            pano.compute_query_cum_sums(xi, query_cum_norms.data());
+            float query_cum_norm = query_cum_norms[0] * query_cum_norms[0];
+
+            res.begin(i);
+
+            for (size_t j = 0; j < k_base; j++) {
+                idx_t idx = idsi[j];
+
+                if (idx < 0) {
+                    continue;
+                }
+
+                size_t cum_sum_offset = (n_levels + 1) * idx;
+                float cum_sum = cum_sums[cum_sum_offset];
+                float exact_distance = cum_sum * cum_sum + query_cum_norm;
+                cum_sum_offset++;
+
+                const float* x_ptr = xi;
+                const float* p_ptr =
+                        reinterpret_cast<const float*>(codes.data()) + d * idx;
+
+                local_stats.total_dims += d;
+
+                bool pruned = false;
+                for (size_t level = 0; level < n_levels; level++) {
+                    local_stats.total_dims_scanned += pano.level_width_floats;
+
+                    // Refine distance
+                    size_t actual_level_width = std::min(
+                            pano.level_width_floats,
+                            d - level * pano.level_width_floats);
+                    float dot_product = fvec_inner_product(
+                            x_ptr, p_ptr, actual_level_width);
+                    exact_distance -= 2 * dot_product;
+
+                    float cum_sum = cum_sums[cum_sum_offset];
+                    float cauchy_schwarz_bound =
+                            2.0f * cum_sum * query_cum_norms[level + 1];
+                    float lower_bound = exact_distance - cauchy_schwarz_bound;
+
+                    // Prune using Cauchy-Schwarz bound
+                    if (lower_bound > res.heap_dis[0]) {
+                        pruned = true;
+                        break;
+                    }
+
+                    cum_sum_offset++;
+                    x_ptr += pano.level_width_floats;
+                    p_ptr += pano.level_width_floats;
+                }
+
+                if (!pruned) {
+                    res.add_result(exact_distance, idx);
+                }
+            }
+
+            res.end();
+            indexPanorama_stats.add(local_stats);
+        }
+    }
 }
 } // namespace faiss
