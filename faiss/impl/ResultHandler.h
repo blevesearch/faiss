@@ -276,7 +276,7 @@ struct HeapBlockResultHandler : TopkBlockResultHandler<C, use_sel> {
 
     /// add results for query i0..i1 and j0..j1
     void add_results(size_t j0, size_t j1, const T* dis_tab) final {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = i0; i < i1; i++) {
             T* heap_dis = this->dis_tab + i * k;
             TI* heap_ids = this->ids_tab + i * k;
@@ -463,7 +463,8 @@ struct ReservoirBlockResultHandler : TopkBlockResultHandler<C, use_sel> {
 
     /// add results for query i0..i1 and j0..j1
     void add_results(size_t j0, size_t j1, const T* dis_tab) {
-#pragma omp parallel for
+        // maybe parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = i0; i < i1; i++) {
             ReservoirTopN<C>& reservoir = reservoirs[i - i0];
             const T* dis_tab_i = dis_tab + (j1 - j0) * (i - i0) - j0;

@@ -8,6 +8,7 @@
 #include <faiss/IndexBinaryHNSW.h>
 
 #include <omp.h>
+
 #include <cassert>
 #include <cmath>
 #include <cstdio>
@@ -114,7 +115,7 @@ void hnsw_add_vertices(
                 std::swap(order[j], order[j + rng2.rand_int(i1 - j)]);
             }
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
             {
                 VisitedTable vt(ntotal);
 
@@ -205,10 +206,14 @@ void IndexBinaryHNSW::search(
         idx_t k,
         int32_t* distances,
         idx_t* labels,
-        const SearchParameters* params) const {
-    FAISS_THROW_IF_NOT_MSG(
-            !params, "search params not supported for this index");
+        const SearchParameters* params_in) const {
     FAISS_THROW_IF_NOT(k > 0);
+    const SearchParametersHNSW* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const SearchParametersHNSW*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(
+                params, "IndexBinaryHNSW params have incorrect type");
+    }
 
     // we use the buffer for distances as float but convert them back
     // to int in the end
@@ -217,7 +222,7 @@ void IndexBinaryHNSW::search(
     using RH = HeapBlockResultHandler<HNSW::C>;
     RH bres(n, distances_f, labels, k);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         VisitedTable vt(ntotal);
         std::unique_ptr<DistanceComputer> dis(get_distance_computer());
@@ -231,12 +236,12 @@ void IndexBinaryHNSW::search(
             // as the index parameter. This state does not get used in the
             // search function, as it is merely there to to enable Panorama
             // execution for IndexHNSWFlatPanorama.
-            hnsw.search(*dis, nullptr, res, vt);
+            hnsw.search(*dis, nullptr, res, vt, params_in);
             res.end();
         }
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < n * k; ++i) {
         distances[i] = std::round(distances_f[i]);
     }

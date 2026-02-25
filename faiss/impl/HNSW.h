@@ -12,6 +12,7 @@
 
 #include <omp.h>
 
+
 #include <faiss/Index.h>
 #include <faiss/impl/DistanceComputer.h>
 #include <faiss/impl/FaissAssert.h>

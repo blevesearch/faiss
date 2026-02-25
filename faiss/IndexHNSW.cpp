@@ -140,7 +140,7 @@ void hnsw_add_vertices(
 
             bool interrupt = false;
 
-#pragma omp parallel if (i1 > i0 + 100)
+#pragma omp parallel if (i1 > i0 + 100) num_threads(num_omp_threads)
             {
                 VisitedTable vt(ntotal);
 
@@ -263,7 +263,7 @@ void hnsw_search(
     for (idx_t i0 = 0; i0 < n; i0 += check_period) {
         idx_t i1 = std::min(i0 + check_period, n);
 
-#pragma omp parallel if (i1 - i0 > 1)
+#pragma omp parallel if (i1 - i0 > 1) num_threads(num_omp_threads)
         {
             VisitedTable vt(index->ntotal);
             typename BlockResultHandler::SingleResultHandler res(bres);
@@ -367,7 +367,7 @@ void IndexHNSW::reconstruct(idx_t key, float* recons) const {
  * link_singletons
  **************************************************************/
 void IndexHNSW::shrink_level_0_neighbors(int new_size) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> dis(
                 storage_distance_computer(storage));
@@ -423,7 +423,7 @@ void IndexHNSW::search_level_0(
     using RH = HeapBlockResultHandler<HNSW::C>;
     RH bres(n, distances, labels, k);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> qdis(
                 storage_distance_computer(storage));
@@ -469,7 +469,7 @@ void IndexHNSW::init_level_0_from_knngraph(
         const idx_t* I) {
     int dest_size = hnsw.nb_neighbors(0);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < ntotal; i++) {
         DistanceComputer* qdis = storage_distance_computer(storage);
         std::vector<float> vec(d);
@@ -514,7 +514,7 @@ void IndexHNSW::init_level_0_from_entry_points(
         omp_init_lock(&locks[i]);
     }
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         VisitedTable vt(ntotal);
 
@@ -550,7 +550,7 @@ void IndexHNSW::init_level_0_from_entry_points(
 void IndexHNSW::reorder_links() {
     int M = hnsw.nb_neighbors(0);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> distances(M);
         std::vector<size_t> order(M);
@@ -901,7 +901,7 @@ void IndexHNSW2Level::search(
                 labels,
                 false);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             VisitedTable vt(ntotal);
             std::unique_ptr<DistanceComputer> dis(

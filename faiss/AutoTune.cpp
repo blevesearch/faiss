@@ -19,15 +19,20 @@
 #include <faiss/utils/random.h>
 #include <faiss/utils/utils.h>
 
+#include <faiss/IndexBinaryHNSW.h>
+#include <faiss/IndexBinaryIVF.h>
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexIDMap.h>
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexIVFPQ.h>
 #include <faiss/IndexIVFPQR.h>
+#include <faiss/IndexIVFRaBitQ.h>
 #include <faiss/IndexPQ.h>
 #include <faiss/IndexPreTransform.h>
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexShardsIVF.h>
+
+#include <faiss/OMPConfig.h>
 
 namespace faiss {
 
@@ -78,7 +83,7 @@ double IntersectionCriterion::evaluate(const float* /*D*/, const idx_t* I)
             (gt_I.size() == gt_nnn * nq && gt_nnn >= R && nnn >= R),
             "ground truth not initialized");
     int64_t n_ok = 0;
-#pragma omp parallel for reduction(+ : n_ok)
+#pragma omp parallel for reduction(+ : n_ok) num_threads(num_omp_threads)
     for (idx_t q = 0; q < nq; q++) {
         n_ok += ranklist_intersection_size(
                 R, &gt_I[q * gt_nnn], R, I + q * nnn);
@@ -404,25 +409,37 @@ void ParameterSpace::initialize(const Index* index) {
             pr.values.push_back(1 << i);
         }
     }
+    if (dynamic_cast<const IndexIVFRaBitQ*>(index)) {
+        ParameterRange& pr = add_range("qb");
+        for (int i = 0; i <= 8; i++) {
+            pr.values.push_back(i);
+        }
+    }
 }
 
 #undef DC
 
-/// set a combination of parameters on an index
-void ParameterSpace::set_index_parameters(Index* index, size_t cno) const {
-    for (int i = 0; i < parameter_ranges.size(); i++) {
-        const ParameterRange& pr = parameter_ranges[i];
+template <typename IndexType, typename SetParamFunc>
+static void set_index_parameters_common(
+        const ParameterSpace* ps,
+        IndexType* index,
+        size_t cno,
+        SetParamFunc set_param) {
+    for (int i = 0; i < ps->parameter_ranges.size(); i++) {
+        const ParameterRange& pr = ps->parameter_ranges[i];
         size_t j = cno % pr.values.size();
         cno /= pr.values.size();
         double val = pr.values[j];
-        set_index_parameter(index, pr.name, val);
+        set_param(pr.name, val);
     }
 }
 
-/// set a combination of parameters on an index
-void ParameterSpace::set_index_parameters(
-        Index* index,
-        const char* description_in) const {
+template <typename IndexType, typename SetParamFunc>
+static void set_index_parameters_string_common(
+        const ParameterSpace* ps,
+        IndexType* index,
+        const char* description_in,
+        SetParamFunc set_param) {
     std::string description(description_in);
     char* ptr;
 
@@ -433,8 +450,57 @@ void ParameterSpace::set_index_parameters(
         int ret = sscanf(tok, "%99[^=]=%lf", name, &val);
         FAISS_THROW_IF_NOT_FMT(
                 ret == 2, "could not interpret parameters %s", tok);
-        set_index_parameter(index, name, val);
+        set_param(name, val);
     }
+}
+
+/// set a combination of parameters on an index
+void ParameterSpace::set_index_parameters(Index* index, size_t cno) const {
+    set_index_parameters_common(
+            this,
+            index,
+            cno,
+            [this, index](const std::string& name, double val) {
+                this->set_index_parameter(index, name, val);
+            });
+}
+
+/// set a combination of parameters on an index
+void ParameterSpace::set_index_parameters(
+        Index* index,
+        const char* description_in) const {
+    set_index_parameters_string_common(
+            this,
+            index,
+            description_in,
+            [this, index](const std::string& name, double val) {
+                this->set_index_parameter(index, name, val);
+            });
+}
+
+/// set a combination of parameters on a binary index
+void ParameterSpace::set_index_parameters(IndexBinary* index, size_t cno)
+        const {
+    set_index_parameters_common(
+            this,
+            index,
+            cno,
+            [this, index](const std::string& name, double val) {
+                this->set_index_parameter(index, name, val);
+            });
+}
+
+/// set a combination of parameters on a binary index
+void ParameterSpace::set_index_parameters(
+        IndexBinary* index,
+        const char* description_in) const {
+    set_index_parameters_string_common(
+            this,
+            index,
+            description_in,
+            [this, index](const std::string& name, double val) {
+                this->set_index_parameter(index, name, val);
+            });
 }
 
 // non-const version
@@ -490,7 +556,6 @@ void ParameterSpace::set_index_parameter(
     }
 
     if (name == "verbose") {
-        index->verbose = int(val);
         return; // last verbose that we could find
     }
 
@@ -499,6 +564,14 @@ void ParameterSpace::set_index_parameter(
             ix->nprobe = int(val);
             return;
         }
+    }
+
+    if (name == "qb") {
+        if (DC(IndexIVFRaBitQ)) {
+            ix->qb = int(val);
+            return;
+        }
+        FAISS_THROW_MSG("qb parameter is only supported for IndexIVFRaBitQ");
     }
 
     if (name == "ht") {
@@ -570,6 +643,84 @@ void ParameterSpace::set_index_parameter(
     FAISS_THROW_FMT(
             "ParameterSpace::set_index_parameter:"
             "could not set parameter %s",
+            name.c_str());
+}
+
+void ParameterSpace::set_index_parameter(
+        IndexBinary* index,
+        const std::string& name,
+        double val) const {
+    if (verbose > 1) {
+        printf("    set_index_parameter (binary) %s=%g\n", name.c_str(), val);
+    }
+
+    if (name == "verbose") {
+        index->verbose = int(val);
+        // and fall through to also enable it on sub-indexes
+    }
+
+    if (DC(IndexBinaryIDMap)) {
+        set_index_parameter(ix->index, name, val);
+        return;
+    }
+
+    if (name == "verbose") {
+        return; // last verbose that we could find
+    }
+
+    if (name == "nprobe") {
+        if (DC(IndexBinaryIVF)) {
+            ix->nprobe = int(val);
+            return;
+        }
+    }
+
+    if (name == "max_codes") {
+        if (DC(IndexBinaryIVF)) {
+            ix->max_codes = std::isfinite(val) ? size_t(val) : 0;
+            return;
+        }
+    }
+
+    if (name == "efConstruction") {
+        if (DC(IndexBinaryHNSW)) {
+            ix->hnsw.efConstruction = int(val);
+            return;
+        }
+        if (DC(IndexBinaryIVF)) {
+            if (IndexBinaryHNSW* cq =
+                        dynamic_cast<IndexBinaryHNSW*>(ix->quantizer)) {
+                cq->hnsw.efConstruction = int(val);
+                return;
+            }
+        }
+    }
+
+    if (name == "efSearch") {
+        if (DC(IndexBinaryHNSW)) {
+            ix->hnsw.efSearch = int(val);
+            return;
+        }
+        if (DC(IndexBinaryIVF)) {
+            if (IndexBinaryHNSW* cq =
+                        dynamic_cast<IndexBinaryHNSW*>(ix->quantizer)) {
+                cq->hnsw.efSearch = int(val);
+                return;
+            }
+        }
+    }
+
+    if (name.find("quantizer_") == 0) {
+        if (DC(IndexBinaryIVF)) {
+            std::string sub_name = name.substr(strlen("quantizer_"));
+            set_index_parameter(ix->quantizer, sub_name, val);
+            return;
+        }
+    }
+
+    FAISS_THROW_FMT(
+            "ParameterSpace::set_index_parameter:"
+            "could not set parameter %s on binary index",
             name.c_str());
 }
 
@@ -707,7 +858,7 @@ void ParameterSpace::explore(
 
         do {
             if (thread_over_batches) {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
                 for (idx_t q0 = 0; q0 < nq; q0 += batchsize) {
                     size_t q1 = q0 + batchsize;
                     if (q1 > nq) {

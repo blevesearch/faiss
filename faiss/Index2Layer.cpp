@@ -320,7 +320,7 @@ void Index2Layer::sa_encode(idx_t n, const float* x, uint8_t* bytes) const {
 }
 
 void Index2Layer::sa_decode(idx_t n, const uint8_t* bytes, float* x) const {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 

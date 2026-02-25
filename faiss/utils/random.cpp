@@ -99,7 +99,7 @@ void float_rand(float* x, size_t n, int64_t seed) {
     RandomGenerator rng0(seed);
     int a0 = rng0.rand_int(), b0 = rng0.rand_int();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t j = 0; j < nblock; j++) {
         RandomGenerator rng(a0 + j * b0);
 
@@ -119,7 +119,7 @@ void float_randn(float* x, size_t n, int64_t seed) {
     RandomGenerator rng0(seed);
     int a0 = rng0.rand_int(), b0 = rng0.rand_int();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t j = 0; j < nblock; j++) {
         RandomGenerator rng(a0 + j * b0);
 
@@ -154,7 +154,7 @@ void int64_rand(int64_t* x, size_t n, int64_t seed) {
     RandomGenerator rng0(seed);
     int a0 = rng0.rand_int(), b0 = rng0.rand_int();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t j = 0; j < nblock; j++) {
         RandomGenerator rng(a0 + j * b0);
 
@@ -173,7 +173,7 @@ void int64_rand_max(int64_t* x, size_t n, uint64_t max, int64_t seed) {
     RandomGenerator rng0(seed);
     int a0 = rng0.rand_int(), b0 = rng0.rand_int();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t j = 0; j < nblock; j++) {
         RandomGenerator rng(a0 + j * b0);
 
@@ -218,7 +218,7 @@ void byte_rand(uint8_t* x, size_t n, int64_t seed) {
     RandomGenerator rng0(seed);
     int a0 = rng0.rand_int(), b0 = rng0.rand_int();
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t j = 0; j < nblock; j++) {
         RandomGenerator rng(a0 + j * b0);
 
@@ -260,7 +260,7 @@ void rand_smooth_vectors(size_t n, size_t d, float* x, int64_t seed) {
     std::vector<float> scales(d);
     float_rand(scales.data(), d, seed + 2);
 
-#pragma omp parallel for if (n * d > 10000)
+#pragma omp parallel for if (n * d > 10000) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         for (size_t j = 0; j < d; j++) {
             x[i * d + j] = sinf(x[i * d + j] * (scales[j] * 4 + 0.1));

@@ -71,7 +71,7 @@ static void reorder_2_heaps(
         idx_t k_base,
         const idx_t* __restrict base_labels,
         const float* __restrict base_distances) {
-#pragma omp parallel for if (n > 1)
+#pragma omp parallel for if (n > 1) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         idx_t* idxo = labels + i * k;
         float* diso = distances + i * k;
@@ -134,7 +134,7 @@ void IndexRefine::search(
     }
 
     // parallelize over queries
-#pragma omp parallel if (n > 1)
+#pragma omp parallel if (n > 1) num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> dc(
                 refine_index->get_distance_computer());

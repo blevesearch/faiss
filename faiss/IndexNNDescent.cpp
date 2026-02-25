@@ -9,6 +9,8 @@
 
 #include <faiss/IndexNNDescent.h>
 
+#include <omp.h>
+
 #include <cinttypes>
 #include <cstdio>
 #include <cstdlib>
@@ -118,7 +120,7 @@ void IndexNNDescent::search(
     for (idx_t i0 = 0; i0 < n; i0 += check_period) {
         idx_t i1 = std::min(i0 + check_period, n);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
         {
             VisitedTable vt(ntotal);
 

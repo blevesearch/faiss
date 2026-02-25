@@ -8,6 +8,7 @@
 // -*- c++ -*-
 
 #include <faiss/MetaIndexes.h>
+#include <faiss/OMPConfig.h>
 
 #include <cinttypes>
 #include <cstdint>
@@ -189,7 +190,7 @@ void IndexRandom::search(
     FAISS_THROW_IF_NOT_MSG(
             !params, "search params not supported for this index");
     FAISS_THROW_IF_NOT(k <= ntotal);
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         RandomGenerator rng(
                 seed + ivec_checksum(d, (const int32_t*)(x + i * d)));

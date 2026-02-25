@@ -16,6 +16,7 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <numeric>
 
 #include <faiss/utils/Heap.h>
 #include <faiss/utils/distances.h>
@@ -196,7 +197,7 @@ void IndexIVFPQ::decode_vectors(
 void IndexIVFPQ::sa_decode(idx_t n, const uint8_t* codes, float* x) const {
     size_t coarse_size = coarse_code_size();
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> residual(d);
 
@@ -577,6 +578,7 @@ struct QueryTables {
         }
     }
 
+
     /*****************************************************
      * When inverted list is known: prepare computations
      *****************************************************/
@@ -759,6 +761,33 @@ struct QueryTables {
         }
 
         return dis0;
+    }
+
+
+    void init_sim_table(const float* qi, const float* table) {
+        this->qi = qi;
+
+        if (metric_type == METRIC_INNER_PRODUCT) {
+            memcpy(sim_table, table, pq.ksub * pq.M * sizeof(float));
+	} else {
+            if (!by_residual) {
+                memcpy(sim_table, table, pq.ksub * pq.M * sizeof(float));
+	    } else {
+                memcpy(sim_table_2, table, pq.ksub * pq.M * sizeof(float));
+	    }
+	}
+    }
+
+    void copy_sim_table(float* table) const {
+        if (metric_type == METRIC_INNER_PRODUCT) {
+            memcpy(table, sim_table, pq.ksub * pq.M * sizeof(float));
+        } else {
+            if (!by_residual) {
+                memcpy(table, sim_table, pq.ksub * pq.M * sizeof(float));
+            } else {
+                memcpy(table, sim_table_2, pq.ksub * pq.M * sizeof(float));
+            }
+        }
     }
 };
 
@@ -1401,6 +1430,78 @@ size_t IndexIVFPQ::find_duplicates(idx_t* dup_ids, size_t* lims) const {
         }
     }
     return ngroup;
+}
+
+void IndexIVFPQ::compute_distance_to_codes_for_list(
+        const idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        float* dist_table) const {
+
+    std::unique_ptr<InvertedListScanner> scanner(
+        get_InvertedListScanner(true, nullptr, nullptr));
+
+
+    if (dist_table) {
+        if (auto* pqscanner = dynamic_cast<QueryTables*>(scanner.get())) {
+            pqscanner->init_sim_table(x, dist_table);
+        }
+    } else {
+        scanner->set_query(x);
+    }
+
+    // Initialize distances with default values
+    std::vector<float> dist_out(n, metric_type == METRIC_L2 ? HUGE_VAL : -HUGE_VAL);
+
+
+    //find the centroid corresponding to the input list_no
+    //and compute its distance from the query vector
+    std::vector<float> centroid(d);
+    quantizer->reconstruct(list_no, centroid.data());
+
+    float coarse_dis = quantizer->metric_type == faiss::METRIC_L2
+                         ? faiss::fvec_L2sqr(x, centroid.data(), d)
+                         : faiss::fvec_inner_product(x, centroid.data(), d);
+
+
+    scanner->set_list(list_no, coarse_dis);
+
+    // Initialize ids_in as sequential numbers to allow mapping with output distances.
+    std::vector<idx_t> ids_in(n);
+    std::iota(ids_in.begin(), ids_in.end(), 0);
+
+    //ids_out contain the order of distances in dist_out after scan_codes returns.
+    std::vector<idx_t> ids_out(n, 0);
+
+    scanner->scan_codes(n, codes, ids_in.data(), dist_out.data(), ids_out.data(), n);
+
+    // Reorder the returned distances in dist_out based on ids_out.
+    // This function needs to return the distances in the same order as input codes.
+    for (int j = 0; j < n; j++) {
+       int k = ids_out[j];
+       dists[k] = dist_out[j];
+    }
+
+    return;
+}
+
+//This function computes the distance table for the input vector x and returns it in dtable.
+void IndexIVFPQ::compute_distance_table(
+        const float* x,
+        float* dist_table) const {
+
+    std::unique_ptr<InvertedListScanner> scanner(
+        get_InvertedListScanner(true, nullptr, nullptr));
+
+    scanner->set_query(x);
+
+    if (auto* pqscanner = dynamic_cast<QueryTables*>(scanner.get())) {
+        pqscanner->copy_sim_table(dist_table);
+    }
+
+    return;
 }
 
 } // namespace faiss

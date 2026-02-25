@@ -53,6 +53,7 @@ set(FAISS_SRC
   IndexNeuralNetCodec.cpp
   MatrixStats.cpp
   MetaIndexes.cpp
+  OMPConfig.cpp
   VectorTransform.cpp
   clone_index.cpp
   index_factory.cpp
@@ -169,6 +170,7 @@ set(FAISS_HEADERS
   MatrixStats.h
   MetaIndexes.h
   MetricType.h
+  OMPConfig.h
   VectorTransform.h
   clone_index.h
   index_factory.h
@@ -286,6 +288,20 @@ endif()
 set(FAISS_HEADERS ${FAISS_HEADERS} PARENT_SCOPE)
 
 add_library(faiss ${FAISS_SRC})
+if(NOT FAISS_OPT_LEVEL STREQUAL "generic")
+  set_target_properties(faiss PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(
+    faiss PRIVATE
+    "-Wno-sign-compare"
+    "-Wno-unused-function"
+    "-Wno-unused-variable"
+    "-Wno-redundant-decls"
+    "-Wno-maybe-uninitialized"
+    "-Wno-format"
+  )
+endif()
 
 add_library(faiss_avx2 ${FAISS_SRC})
 if(NOT FAISS_OPT_LEVEL STREQUAL "avx2" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512_spr")
@@ -473,16 +489,20 @@ else()
   target_link_libraries(faiss_sve PRIVATE ${LAPACK_LIBRARIES})
 endif()
 
-install(TARGETS faiss
-  EXPORT faiss-targets
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+
+if(FAISS_OPT_LEVEL STREQUAL "generic")
+  install(TARGETS faiss
+    EXPORT faiss-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
 if(FAISS_OPT_LEVEL STREQUAL "avx2")
   install(TARGETS faiss_avx2
     EXPORT faiss-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
@@ -490,6 +510,7 @@ endif()
 if(FAISS_OPT_LEVEL STREQUAL "avx512")
   install(TARGETS faiss_avx2 faiss_avx512
     EXPORT faiss-targets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )

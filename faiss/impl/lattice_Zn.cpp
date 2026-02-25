@@ -269,7 +269,7 @@ void Repeats::decode(uint64_t code, float* c) const {
 
 void EnumeratedVectors::encode_multi(size_t n, const float* c, uint64_t* codes)
         const {
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
 #pragma omp for
         for (int i = 0; i < n; i++) {
@@ -280,7 +280,7 @@ void EnumeratedVectors::encode_multi(size_t n, const float* c, uint64_t* codes)
 
 void EnumeratedVectors::decode_multi(size_t n, const uint64_t* codes, float* c)
         const {
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
 #pragma omp for
         for (int i = 0; i < n; i++) {
@@ -378,7 +378,7 @@ void ZnSphereSearch::search_multi(
         const float* x,
         float* c_out,
         float* dp_out) {
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
 #pragma omp for
         for (int i = 0; i < n; i++) {

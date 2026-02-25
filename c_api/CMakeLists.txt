@@ -13,14 +13,17 @@ set(FAISS_C_SRC
   AutoTune_c.cpp
   Clustering_c.cpp
   IndexFlat_c.cpp
+  IndexHNSW_c.cpp
   IndexIVFFlat_c.cpp
   IndexIVF_c.cpp
+  IndexIVF_c_ex.cpp
   IndexLSH_c.cpp
   IndexPreTransform_c.cpp
   VectorTransform_c.cpp
   IndexShards_c.cpp
   IndexReplicas_c.cpp
   Index_c.cpp
+  Index_c_ex.cpp
   IndexBinary_c.cpp
   IndexBinaryIVF_c.cpp
   IndexScalarQuantizer_c.cpp
@@ -29,6 +32,7 @@ set(FAISS_C_SRC
   error_impl.cpp
   index_factory_c.cpp
   index_io_c.cpp
+  index_io_c_ex.cpp
   impl/AuxIndexStructures_c.cpp
   impl/io_c.cpp
   utils/distances_c.cpp
@@ -36,7 +40,13 @@ set(FAISS_C_SRC
 )
 
 add_library(faiss_c ${FAISS_C_SRC})
-target_link_libraries(faiss_c PRIVATE faiss)
+if(FAISS_OPT_LEVEL STREQUAL "generic")
+  target_link_libraries(faiss_c PRIVATE faiss)
+elseif(FAISS_OPT_LEVEL STREQUAL "avx2")
+  target_link_libraries(faiss_c PRIVATE faiss_avx2)
+elseif(FAISS_OPT_LEVEL STREQUAL "avx512")
+  target_link_libraries(faiss_c PRIVATE faiss_avx512)
+endif()
 
 add_library(faiss_c_avx2 ${FAISS_C_SRC})
 target_link_libraries(faiss_c_avx2 PRIVATE faiss_avx2)
@@ -124,8 +134,10 @@ faiss_install_headers("${FAISS_C_API_HEADERS}" c_api)
 
 install(TARGETS faiss_c
   EXPORT faiss-targets
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 if(FAISS_OPT_LEVEL STREQUAL "avx2")
   install(TARGETS faiss_c_avx2

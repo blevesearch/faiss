@@ -8,6 +8,7 @@
 // -*- c++ -*-
 
 #include <faiss/Index.h>
+#include <faiss/OMPConfig.h>
 
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/DistanceComputer.h>
@@ -57,7 +58,7 @@ void Index::reconstruct(idx_t, float*) const {
 void Index::reconstruct_batch(idx_t n, const idx_t* keys, float* recons) const {
     std::mutex exception_mutex;
     std::string exception_string;
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         try {
             reconstruct(keys[i], &recons[i * d]);
@@ -72,7 +73,7 @@ void Index::reconstruct_batch(idx_t n, const idx_t* keys, float* recons) const {
 }
 
 void Index::reconstruct_n(idx_t i0, idx_t ni, float* recons) const {
-#pragma omp parallel for if (ni > 1000)
+#pragma omp parallel for if (ni > 1000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < ni; i++) {
         reconstruct(i0 + i, recons + i * d);
     }
@@ -127,7 +128,7 @@ void Index::compute_residual_n(
         const float* xs,
         float* residuals,
         const idx_t* keys) const {
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; ++i) {
         compute_residual(&xs[i * d], &residuals[i * d], keys[i]);
     }

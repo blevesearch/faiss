@@ -10,10 +10,12 @@
 #include <faiss/IndexBinaryIVF.h>
 
 #include <omp.h>
+
 #include <cinttypes>
 #include <cstdio>
 
 #include <algorithm>
+#include <limits>
 #include <memory>
 
 #include <faiss/IndexFlat.h>
@@ -120,25 +122,46 @@ void IndexBinaryIVF::search(
         idx_t k,
         int32_t* distances,
         idx_t* labels,
-        const SearchParameters* params) const {
-    FAISS_THROW_IF_NOT_MSG(
-            !params, "search params not supported for this index");
+        const SearchParameters* params_in) const {
     FAISS_THROW_IF_NOT(k > 0);
+    const IVFSearchParameters* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const IVFSearchParameters*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(
+                params, "IndexBinaryIVF params have incorrect type");
+        FAISS_THROW_IF_MSG(
+                params->sel, "IDSelector is not supported for IndexBinaryIVF");
+    }
+    const size_t nprobe =
+            std::min(nlist, params ? params->nprobe : this->nprobe);
     FAISS_THROW_IF_NOT(nprobe > 0);
 
-    const size_t nprobe_2 = std::min(nlist, this->nprobe);
-    std::unique_ptr<idx_t[]> idx(new idx_t[n * nprobe_2]);
-    std::unique_ptr<int32_t[]> coarse_dis(new int32_t[n * nprobe_2]);
+    std::unique_ptr<idx_t[]> idx(new idx_t[n * nprobe]);
+    std::unique_ptr<int32_t[]> coarse_dis(new int32_t[n * nprobe]);
 
     double t0 = getmillisecs();
-    quantizer->search(n, x, nprobe_2, coarse_dis.get(), idx.get());
+    quantizer->search(
+            n,
+            x,
+            nprobe,
+            coarse_dis.get(),
+            idx.get(),
+            params ? params->quantizer_params : nullptr);
     indexIVF_stats.quantization_time += getmillisecs() - t0;
 
     t0 = getmillisecs();
-    invlists->prefetch_lists(idx.get(), n * nprobe_2);
+    invlists->prefetch_lists(idx.get(), n * nprobe);
 
     search_preassigned(
-            n, x, k, idx.get(), coarse_dis.get(), distances, labels, false);
+            n,
+            x,
+            k,
+            idx.get(),
+            coarse_dis.get(),
+            distances,
+            labels,
+            false,
+            params);
     indexIVF_stats.search_time += getmillisecs() - t0;
 }
 
@@ -389,6 +412,10 @@ void search_knn_hamming_heap(
     idx_t nprobe = params ? params->nprobe : ivf->nprobe;
     nprobe = std::min((idx_t)ivf->nlist, nprobe);
     idx_t max_codes = params ? params->max_codes : ivf->max_codes;
+    const idx_t unlimited_list_size = std::numeric_limits<idx_t>::max();
+    if (max_codes == 0) {
+        max_codes = unlimited_list_size;
+    }
     MetricType metric_type = ivf->metric_type;
 
     // almost verbatim copy from IndexIVF::search_preassigned
@@ -397,7 +424,7 @@ void search_knn_hamming_heap(
     using HeapForIP = CMin<int32_t, idx_t>;
     using HeapForL2 = CMax<int32_t, idx_t>;
 
-#pragma omp parallel if (n > 1) reduction(+ : nlistv, ndis, nheap)
+#pragma omp parallel if (n > 1) reduction(+ : nlistv, ndis, nheap) num_threads(num_omp_threads)
     {
         std::unique_ptr<BinaryInvertedListScanner> scanner(
                 ivf->get_InvertedListScanner(store_pairs));
@@ -437,6 +464,10 @@ void search_knn_hamming_heap(
                 nlistv++;
 
                 size_t list_size = ivf->invlists->list_size(key);
+                size_t list_size_max = max_codes - nscan;
+                if (list_size > list_size_max) {
+                    list_size = list_size_max;
+                }
                 InvertedLists::ScopedCodes scodes(ivf->invlists, key);
                 std::unique_ptr<InvertedLists::ScopedIds> sids;
                 const idx_t* ids = nullptr;
@@ -451,7 +482,7 @@ void search_knn_hamming_heap(
                         list_size, scodes.get(), ids, simi, idxi, k);
 
                 nscan += list_size;
-                if (max_codes && nscan >= max_codes) {
+                if (nscan >= max_codes) {
                     break;
                 }
             }
@@ -503,7 +534,7 @@ void search_knn_hamming_count(
 
     size_t nlistv = 0, ndis = 0;
 
-#pragma omp parallel for reduction(+ : nlistv, ndis)
+#pragma omp parallel for reduction(+ : nlistv, ndis) num_threads(num_omp_threads)
     for (int64_t i = 0; i < nx; i++) {
         const idx_t* keysi = keys + i * nprobe;
         HCounterState<HammingComputer>& csi = cs[i];
@@ -525,6 +556,10 @@ void search_knn_hamming_count(
 
             nlistv++;
             size_t list_size = ivf->invlists->list_size(key);
+            size_t list_size_max = max_codes - nscan;
+            if (list_size > list_size_max) {
+                list_size = list_size_max;
+            }
             InvertedLists::ScopedCodes scodes(ivf->invlists, key);
             const uint8_t* list_vecs = scodes.get();
             const idx_t* ids =
@@ -541,7 +576,7 @@ void search_knn_hamming_count(
             }
 
             nscan += list_size;
-            if (max_codes && nscan >= max_codes) {
+            if (nscan >= max_codes) {
                 break;
             }
         }
@@ -849,7 +884,7 @@ void IndexBinaryIVF::range_search_preassigned(
 
     std::vector<RangeSearchPartialResult*> all_pres(omp_get_max_threads());
 
-#pragma omp parallel reduction(+ : nlistv, ndis)
+#pragma omp parallel reduction(+ : nlistv, ndis) num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(res);
         std::unique_ptr<BinaryInvertedListScanner> scanner(

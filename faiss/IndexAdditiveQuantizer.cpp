@@ -128,7 +128,7 @@ void search_with_decompress(
     using SingleResultHandler =
             typename BlockResultHandler::SingleResultHandler;
 
-#pragma omp parallel for if (res.nq > 100)
+#pragma omp parallel for if(res.nq > 100) num_threads(num_omp_threads)
     for (int64_t q = 0; q < res.nq; q++) {
         SingleResultHandler resi(res);
         resi.begin(q);
@@ -164,7 +164,7 @@ void search_with_LUT(
 
     aq.compute_LUT(nq, xq, LUT.get());
 
-#pragma omp parallel for if (nq > 100)
+#pragma omp parallel for if(nq > 100) num_threads(num_omp_threads)
     for (int64_t q = 0; q < nq; q++) {
         SingleResultHandler resi(res);
         resi.begin(q);
@@ -585,7 +585,7 @@ void ResidualCoarseQuantizer::search(
             n, 1, x, beam_size, codes.data(), nullptr, beam_distances.data());
 
     // pack int32 table
-#pragma omp parallel for if (n > 4000)
+#pragma omp parallel for if (n > 4000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         memcpy(distances + i * k,
                beam_distances.data() + beam_size * i,

@@ -76,6 +76,11 @@ option(FAISS_ENABLE_SVS "Enable SVS (Intel(R) Scalable Vector Search) integratio
 set(FAISS_SVS_RUNTIME_VERSION "v0" CACHE STRING "Version of the SVS runtime API to use")
 set_property(CACHE FAISS_SVS_RUNTIME_VERSION PROPERTY STRINGS "v0")
 
+# Force FAISS_OPT_LEVEL to "generic" if not building on x86_64.
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  set(FAISS_OPT_LEVEL "generic" CACHE STRING "No AVX since not building on x86_64" FORCE)
+endif()
+
 if(FAISS_ENABLE_GPU)
   if(FAISS_ENABLE_ROCM)
     enable_language(HIP)

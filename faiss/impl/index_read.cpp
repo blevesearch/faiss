@@ -331,6 +331,9 @@ static void read_ArrayInvertedLists_sizes(
 InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
     uint32_t h;
     READ1(h);
+    bool load_mem = !((io_flags & IO_FLAG_READ_MMAP) ||
+                      (io_flags & IO_FLAG_SKIP_IVF_DATA));
+
     if (h == fourcc("il00")) {
         fprintf(stderr,
                 "read_InvertedLists:"
@@ -364,7 +367,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
             }
         }
         return ailp;
-    } else if (h == fourcc("ilar") && !(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
+    } else if (h == fourcc("ilar") && load_mem) {
         auto ails = new ArrayInvertedLists(0, 0);
         READ1(ails->nlist);
         READ1(ails->code_size);
@@ -372,13 +375,12 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         ails->codes.resize(ails->nlist);
         std::vector<size_t> sizes(ails->nlist);
         read_ArrayInvertedLists_sizes(f, sizes);
+
         for (size_t i = 0; i < ails->nlist; i++) {
-            ails->ids[i].resize(sizes[i]);
-            ails->codes[i].resize(sizes[i] * ails->code_size);
-        }
-        for (size_t i = 0; i < ails->nlist; i++) {
-            size_t n = ails->ids[i].size();
+            size_t n = sizes[i];
             if (n > 0) {
+                ails->ids[i].resize(n);
+                ails->codes[i].resize(n * ails->code_size);
                 read_vector_with_known_size(
                         ails->codes[i], f, n * ails->code_size);
                 read_vector_with_known_size(ails->ids[i], f, n);
@@ -386,7 +388,7 @@ InvertedLists* read_InvertedLists(IOReader* f, int io_flags) {
         }
         return ails;
 
-    } else if (h == fourcc("ilar") && (io_flags & IO_FLAG_SKIP_IVF_DATA)) {
+    } else if (h == fourcc("ilar") && !load_mem) {
         // code is always ilxx where xx is specific to the type of invlists we
         // want so we get the 16 high bits from the io_flag and the 16 low bits
         // as "il"
@@ -754,9 +756,10 @@ Index* read_index(IOReader* f, int io_flags) {
         }
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
+
         read_xb_vector(idxf->codes, f);
         FAISS_THROW_IF_NOT(
-                idxf->codes.size() == idxf->ntotal * idxf->code_size);
+            idxf->codes.size() == idxf->ntotal * idxf->code_size);
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
