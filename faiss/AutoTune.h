@@ -177,22 +177,9 @@ struct ParameterSpace {
     /// set a combination of parameters described by a string
     void set_index_parameters(Index* index, const char* param_string) const;
 
-    /// set one of the parameters
+    /// set one of the parameters, returns whether setting was successful
     virtual void set_index_parameter(
             Index* index,
-            const std::string& name,
-            double val) const;
-
-    /// set a combination of parameters on a binary index
-    void set_index_parameters(IndexBinary* index, size_t cno) const;
-
-    /// set a combination of parameters described by a string on a binary index
-    void set_index_parameters(IndexBinary* index, const char* param_string)
-            const;
-
-    /// set one of the parameters on a binary index
-    virtual void set_index_parameter(
-            IndexBinary* index,
             const std::string& name,
             double val) const;
 

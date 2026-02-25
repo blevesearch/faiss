@@ -206,14 +206,10 @@ void IndexBinaryHNSW::search(
         idx_t k,
         int32_t* distances,
         idx_t* labels,
-        const SearchParameters* params_in) const {
+        const SearchParameters* params) const {
+    FAISS_THROW_IF_NOT_MSG(
+            !params, "search params not supported for this index");
     FAISS_THROW_IF_NOT(k > 0);
-    const SearchParametersHNSW* params = nullptr;
-    if (params_in) {
-        params = dynamic_cast<const SearchParametersHNSW*>(params_in);
-        FAISS_THROW_IF_NOT_MSG(
-                params, "IndexBinaryHNSW params have incorrect type");
-    }
 
     // we use the buffer for distances as float but convert them back
     // to int in the end
@@ -236,7 +232,7 @@ void IndexBinaryHNSW::search(
             // as the index parameter. This state does not get used in the
             // search function, as it is merely there to to enable Panorama
             // execution for IndexHNSWFlatPanorama.
-            hnsw.search(*dis, nullptr, res, vt, params_in);
+            hnsw.search(*dis, nullptr, res, vt);
             res.end();
         }
     }
