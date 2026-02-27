@@ -30,6 +30,21 @@ int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
 size_t faiss_Index_size(FaissIndex* index);
 
+/** Compute distances between a query vector and a set of vectors 
+ *
+ * @param index       opaque pointer to index object
+ * @param query       query vector, size d
+ * @param ids         array of vector ids to compute distances to
+ * @param n_ids       number of ids in the array
+ * @param distances   output distances, size n_ids
+ */
+int faiss_Index_dist_compute(
+        const FaissIndex* index,
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* distances);
+
 #ifdef __cplusplus
 }
 #endif

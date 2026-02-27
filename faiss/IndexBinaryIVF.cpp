@@ -121,25 +121,28 @@ void IndexBinaryIVF::search(
         idx_t k,
         int32_t* distances,
         idx_t* labels,
-        const SearchParameters* params) const {
-    FAISS_THROW_IF_NOT_MSG(
-            !params, "search params not supported for this index");
+        const SearchParameters* params_in) const {
     FAISS_THROW_IF_NOT(k > 0);
     FAISS_THROW_IF_NOT(nprobe > 0);
+    const IVFSearchParameters* params = nullptr;
+    if (params_in) {
+        params = dynamic_cast<const IVFSearchParameters*>(params_in);
+        FAISS_THROW_IF_NOT_MSG(params, "IndexIVF params have incorrect type");
+    }
+    const size_t nprobe_2 = std::min(nlist, params ? params->nprobe : this->nprobe);
 
-    const size_t nprobe_2 = std::min(nlist, this->nprobe);
     std::unique_ptr<idx_t[]> idx(new idx_t[n * nprobe_2]);
     std::unique_ptr<int32_t[]> coarse_dis(new int32_t[n * nprobe_2]);
 
     double t0 = getmillisecs();
-    quantizer->search(n, x, nprobe_2, coarse_dis.get(), idx.get());
+    quantizer->search(n, x, nprobe_2, coarse_dis.get(), idx.get(), params ? params->quantizer_params : nullptr);
     indexIVF_stats.quantization_time += getmillisecs() - t0;
 
     t0 = getmillisecs();
     invlists->prefetch_lists(idx.get(), n * nprobe_2);
 
     search_preassigned(
-            n, x, k, idx.get(), coarse_dis.get(), distances, labels, false);
+            n, x, k, idx.get(), coarse_dis.get(), distances, labels, false, params);
     indexIVF_stats.search_time += getmillisecs() - t0;
 }
 
@@ -225,6 +228,66 @@ void IndexBinaryIVF::reconstruct_from_offset(
         idx_t offset,
         uint8_t* recons) const {
     memcpy(recons, invlists->get_single_code(list_no, offset), code_size);
+}
+
+void IndexBinaryIVF::list_vector_count(
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const faiss::SearchParameters* params) const {
+    FAISS_ASSERT(list_counts != nullptr);
+    FAISS_ASSERT(list_counts_size > 0);
+    FAISS_ASSERT(list_counts_size == nlist);
+    FAISS_ASSERT(params != nullptr && params->sel != nullptr);
+    FAISS_ASSERT(direct_map.type != DirectMap::NoMap);
+    const IDSelector* sel = params->sel;
+    // Optimized for bitmap selectors and batch selectors only
+    const IDSelectorBitmap* bitmap_sel = dynamic_cast<const IDSelectorBitmap*>(sel);
+    if (bitmap_sel) {
+        const uint8_t* bitmap = bitmap_sel->bitmap;
+        const size_t nbytes = bitmap_sel->n;
+        // Iterate over bitmap bytes
+        for (size_t byte_idx = 0; byte_idx < nbytes; ++byte_idx) {
+            uint8_t byte = bitmap[byte_idx];
+            if (byte == 0) {
+                continue; // fast skip
+            }
+            size_t base_idx = byte_idx << 3;
+            // Iterate over bits in the byte
+            for (uint8_t bit = 0; bit < 8; ++bit) {
+                if ((byte & (1 << bit)) == 0) {
+                    continue;
+                }
+                idx_t id = base_idx + bit;
+                if (id >= ntotal) {
+                    continue; // Safety check: skip invalid ids
+                }
+                uint64_t list_no = lo_listno(direct_map.get(id));
+                if (list_no >= nlist) {
+                    continue; // Safety check: skip invalid list numbers
+                }
+                list_counts[list_no]++;
+            }
+        }
+        return;
+    }
+    // With batch selector, the direct map must be of hash type, as the IDs may be
+    // arbitrary, but it would still work with array type if the IDs are sequential
+    // Hence we do not enforce that check here.
+    const IDSelectorBatch* batch_sel = dynamic_cast<const IDSelectorBatch*>(sel);
+    if (batch_sel) {
+        const auto& ids_set = batch_sel->set;
+        // iterate over ids_set and get the list number from direct map
+        for (const auto& id : ids_set) {
+            uint64_t list_no = lo_listno(direct_map.get(id));
+            if (list_no >= nlist) {
+                continue; // Safety check: skip invalid list numbers
+            }
+            list_counts[list_no]++;
+        }
+        return;
+    }
+    FAISS_THROW_MSG("list_vector_count only supports "
+                     "IDSelectorBitmap and IDSelectorBatch");
 }
 
 void IndexBinaryIVF::reset() {
@@ -313,16 +376,44 @@ void IndexBinaryIVF::replace_invlists(InvertedLists* il, bool own) {
     own_invlists = own;
 }
 
+void IndexBinaryIVF::get_centroids_and_cardinality(
+        uint8_t* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) const {
+    FAISS_THROW_IF_NOT(quantizer != nullptr);
+    FAISS_THROW_IF_NOT(quantizer->is_trained);
+
+    // Get centroid vectors from quantizer
+    for (size_t i = 0; i < nlist; i++) {
+        quantizer->reconstruct(i, centroid_vectors + i * d);
+    }
+
+    // Get cardinalities from inverted lists
+    for (size_t i = 0; i < nlist; i++) {
+        cardinalities[i] = invlists->list_size(i);
+    }
+
+    // Get centroid IDs if requested
+    if (centroid_ids != nullptr) {
+        for (size_t i = 0; i < nlist; i++) {
+            centroid_ids[i] = i;
+        }
+    }
+}
+
 namespace {
 
 template <class HammingComputer>
 struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
     HammingComputer hc;
     size_t code_size;
-    bool store_pairs;
 
-    IVFBinaryScannerL2(size_t code_size, bool store_pairs)
-            : code_size(code_size), store_pairs(store_pairs) {}
+    IVFBinaryScannerL2(
+            size_t code_size,
+            bool store_pairs,
+            const IDSelector* sel = nullptr)
+            : BinaryInvertedListScanner(store_pairs, sel),
+              code_size(code_size) {}
 
     void set_query(const uint8_t* query_vector) override {
         hc.set(query_vector, code_size);
@@ -351,8 +442,11 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             uint32_t dis = hc.hamming(codes);
             if (dis < simi[0]) {
                 idx_t id = store_pairs ? lo_build(list_no, j) : ids[j];
-                heap_replace_top<C>(k, simi, idxi, dis, id);
-                nup++;
+                // Add selector check
+                if (!sel || sel->is_member(id)) {
+                    heap_replace_top<C>(k, simi, idxi, dis, id);
+                    nup++;
+                }
             }
             codes += code_size;
         }
@@ -369,7 +463,10 @@ struct IVFBinaryScannerL2 : BinaryInvertedListScanner {
             uint32_t dis = hc.hamming(codes);
             if (dis < radius) {
                 int64_t id = store_pairs ? lo_build(list_no, j) : ids[j];
-                result.add(dis, id);
+                // Add selector check
+                if (!sel || sel->is_member(id)) {
+                    result.add(dis, id);
+                }
             }
             codes += code_size;
         }
@@ -391,6 +488,7 @@ void search_knn_hamming_heap(
     nprobe = std::min((idx_t)ivf->nlist, nprobe);
     idx_t max_codes = params ? params->max_codes : ivf->max_codes;
     MetricType metric_type = ivf->metric_type;
+    const IDSelector* sel = params ? params->sel : nullptr;
 
     // almost verbatim copy from IndexIVF::search_preassigned
 
@@ -401,7 +499,7 @@ void search_knn_hamming_heap(
 #pragma omp parallel if (n > 1) reduction(+ : nlistv, ndis, nheap) num_threads(num_omp_threads)
     {
         std::unique_ptr<BinaryInvertedListScanner> scanner(
-                ivf->get_InvertedListScanner(store_pairs));
+                ivf->get_InvertedListScanner(store_pairs, sel));
 
 #pragma omp for
         for (idx_t i = 0; i < n; i++) {
@@ -769,17 +867,19 @@ struct BuildScanner {
     using T = BinaryInvertedListScanner*;
 
     template <class HammingComputer>
-    T f(size_t code_size, bool store_pairs) {
-        return new IVFBinaryScannerL2<HammingComputer>(code_size, store_pairs);
+    T f(size_t code_size, bool store_pairs, const IDSelector* sel) {
+        return new IVFBinaryScannerL2<HammingComputer>(
+                code_size, store_pairs, sel);
     }
 };
 
 } // anonymous namespace
 
 BinaryInvertedListScanner* IndexBinaryIVF::get_InvertedListScanner(
-        bool store_pairs) const {
+        bool store_pairs,
+        const IDSelector* sel) const {
     BuildScanner bs;
-    return dispatch_HammingComputer(code_size, bs, code_size, store_pairs);
+    return dispatch_HammingComputer(code_size, bs, code_size, store_pairs, sel);
 }
 
 void IndexBinaryIVF::search_preassigned(

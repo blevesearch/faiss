@@ -23,7 +23,7 @@ int faiss_IndexIVF_set_direct_map(FaissIndexIVF* index, int direct_map_type) {
     CATCH_AND_HANDLE
 }
 
-int faiss_ivf_list_vector_count(
+int faiss_IndexIVF_list_vector_count(
         const FaissIndexIVF* index,
         idx_t* list_counts,
         size_t list_counts_size,
@@ -37,7 +37,7 @@ int faiss_ivf_list_vector_count(
     CATCH_AND_HANDLE
 }
 
-int faiss_Search_closest_eligible_centroids(
+int faiss_IndexIVF_search_closest_eligible_centroids(
         const FaissIndexIVF* index,
         idx_t n,
         const float* query,

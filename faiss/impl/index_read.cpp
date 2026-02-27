@@ -721,6 +721,17 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
     return ivpq;
 }
 
+void read_sq8_codes_mmaped(IndexScalarQuantizer* idxs, IOReader* f) {
+    size_t size;
+    READANDCHECK(&size, 1);
+    FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
+    idxs->codes_ptr = const_cast<uint8_t*>(reader->buf + reader->rp);
+    reader->rp += size*4;
+}
+
 int read_old_fmt_hack = 0;
 
 Index* read_index(IOReader* f, int io_flags) {
@@ -1008,8 +1019,12 @@ Index* read_index(IOReader* f, int io_flags) {
         IndexScalarQuantizer* idxs = new IndexScalarQuantizer();
         read_index_header(idxs, f);
         read_ScalarQuantizer(&idxs->sq, f);
-        read_vector(idxs->codes, f);
         idxs->code_size = idxs->sq.code_size;
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_sq8_codes_mmaped(idxs, f);
+        } else {
+            read_vector(idxs->codes, f);
+        }
         idx = idxs;
     } else if (h == fourcc("IxLa")) {
         int d, nsq, scale_nbit, r2;
