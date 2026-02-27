@@ -61,10 +61,10 @@ int faiss_Index_dist_compute(
             return 0;
         }
 
-        // Try to cast to IndexIVFScalarQuantizer
-        if (auto ivfsq =
-                    dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
-            ivfsq->dist_compute(query, ids, n_ids, distances);
+        // Try to cast to IndexScalarQuantizer
+        if (auto isq =
+                    dynamic_cast<const faiss::IndexScalarQuantizer*>(idx)) {
+            isq->dist_compute(query, ids, n_ids, distances);
             return 0;
         }
 

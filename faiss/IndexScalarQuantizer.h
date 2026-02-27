@@ -26,6 +26,9 @@ struct IndexScalarQuantizer : IndexFlatCodes {
     /// Used to encode the vectors
     ScalarQuantizer sq;
 
+    /// Pointer for mmaped codes if enabled
+    uint8_t* codes_ptr = nullptr;
+
     /** Constructor.
      *
      * @param d      dimensionality of the input vectors
@@ -48,6 +51,16 @@ struct IndexScalarQuantizer : IndexFlatCodes {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
+
+    /// Compute distances between a query vector and a set of vectors
+    void dist_compute(
+            const float* query,
+            const idx_t* ids,
+            size_t n_ids,
+            float* dists) const;
+
+    /// Reconstruct the quantised vector represented by the key
+    void reconstruct(idx_t key, float* recons) const override;
 
     FlatCodesDistanceComputer* get_FlatCodesDistanceComputer() const override;
 
@@ -111,8 +124,6 @@ struct IndexIVFScalarQuantizer : IndexIVF {
 
     /* standalone codec interface */
     void sa_decode(idx_t n, const uint8_t* bytes, float* x) const override;
-
-    void dist_compute(const float* query, const idx_t* ids, size_t n_ids, float* dists) const;
     
     void compute_distance_to_codes_for_list(
             const idx_t list_no,

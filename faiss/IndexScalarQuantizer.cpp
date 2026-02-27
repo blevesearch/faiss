@@ -93,6 +93,40 @@ void IndexScalarQuantizer::search(
     }
 }
 
+void IndexScalarQuantizer::dist_compute(
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* dists) const {
+
+    FAISS_THROW_IF_NOT(is_trained);
+    FAISS_THROW_IF_NOT(
+            metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
+
+    FlatCodesDistanceComputer* dc = get_FlatCodesDistanceComputer();
+
+    dc->set_query(query);
+
+    const uint8_t* base = (codes_ptr != nullptr) ? codes_ptr : codes.data();
+    for (size_t i = 0; i < n_ids; i++) {
+        idx_t id = ids[i];
+        const uint8_t* code = base + id * code_size;
+        dists[i] = dc->distance_to_code(code);
+    }
+}
+
+void IndexScalarQuantizer::reconstruct(idx_t key, float* recons) const {
+    const uint8_t* code;
+
+    if (codes_ptr != nullptr) {
+        code = codes_ptr + key * code_size;
+    } else {
+        code = codes.data() + key * code_size;
+    }
+
+    sq.decode(code, recons, 1);
+}
+
 FlatCodesDistanceComputer* IndexScalarQuantizer::get_FlatCodesDistanceComputer()
         const {
     ScalarQuantizer::SQDistanceComputer* dc =
@@ -136,49 +170,6 @@ IndexIVFScalarQuantizer::IndexIVFScalarQuantizer(
         invlists->code_size = code_size;
     }
     is_trained = false;
-}
-
-void IndexIVFScalarQuantizer::dist_compute(
-        const float* query,
-        const idx_t* ids,
-        size_t n_ids,
-        float* dists) const {
-    // Get the distance computer
-    std::unique_ptr<ScalarQuantizer::SQDistanceComputer> dc(
-            sq.get_distance_computer(metric_type));
-    dc->code_size = sq.code_size;
-
-    // Set up the query if not using residuals
-    if (!by_residual) {
-        dc->set_query(query);
-    }
-
-    idx_t prev_list_no = -1;
-    std::vector<float> tmp;
-    if (by_residual) {
-        tmp.resize(d);
-    }
-
-    // Process each ID
-    for (size_t i = 0; i < n_ids; i++) {
-        idx_t id = ids[i];
-        idx_t lo = direct_map.get(id);
-        idx_t list_no = lo_listno(lo);
-        idx_t offset = lo_offset(lo);
-
-        // Get the code for the vector
-        const uint8_t* code = invlists->get_single_code(list_no, offset);
-
-        if (by_residual && prev_list_no != list_no) {
-            // Compute residual for this list_no
-            quantizer->compute_residual(query, tmp.data(), list_no);
-            prev_list_no = list_no;
-            dc->set_query(tmp.data());
-        }
-
-        // Compute the distance
-        dists[i] = dc->query_to_code(code);
-    }
 }
 
 IndexIVFScalarQuantizer::IndexIVFScalarQuantizer() : IndexIVF() {
