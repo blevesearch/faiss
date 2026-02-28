@@ -721,7 +721,7 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
     return ivpq;
 }
 
-void read_sq8_codes_mmaped(IndexScalarQuantizer* idxs, IOReader* f) {
+void read_flat_codes_mmaped(IndexFlat* idxs, IOReader* f) {
     size_t size;
     READANDCHECK(&size, 1);
     FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
@@ -768,9 +768,13 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
 
-        read_xb_vector(idxf->codes, f);
-        FAISS_THROW_IF_NOT(
-            idxf->codes.size() == idxf->ntotal * idxf->code_size);
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_flat_codes_mmaped(idxf, f);
+        } else {
+            read_xb_vector(idxf->codes, f);
+            FAISS_THROW_IF_NOT(
+                idxf->codes.size() == idxf->ntotal * idxf->code_size);
+        }
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
@@ -1020,11 +1024,7 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(idxs, f);
         read_ScalarQuantizer(&idxs->sq, f);
         idxs->code_size = idxs->sq.code_size;
-        if (io_flags & IO_FLAG_READ_MMAP) {
-            read_sq8_codes_mmaped(idxs, f);
-        } else {
-            read_vector(idxs->codes, f);
-        }
+        read_vector(idxs->codes, f);
         idx = idxs;
     } else if (h == fourcc("IxLa")) {
         int d, nsq, scale_nbit, r2;
