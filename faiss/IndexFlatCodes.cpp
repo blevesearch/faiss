@@ -20,7 +20,7 @@ namespace faiss {
 IndexFlatCodes::IndexFlatCodes(size_t code_size, idx_t d, MetricType metric)
         : Index(d, metric), code_size(code_size) {}
 
-IndexFlatCodes::IndexFlatCodes() : code_size(0) {}
+IndexFlatCodes::IndexFlatCodes() : code_size(0), codes_ptr(nullptr) {}
 
 IndexFlatCodes::~IndexFlatCodes() {}
 
