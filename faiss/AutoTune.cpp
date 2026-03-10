@@ -24,6 +24,7 @@
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexIVFPQ.h>
 #include <faiss/IndexIVFPQR.h>
+#include <faiss/IndexIVFRaBitQ.h>
 #include <faiss/IndexPQ.h>
 #include <faiss/IndexPreTransform.h>
 #include <faiss/IndexRefine.h>
@@ -406,6 +407,12 @@ void ParameterSpace::initialize(const Index* index) {
             pr.values.push_back(1 << i);
         }
     }
+    if (dynamic_cast<const IndexIVFRaBitQ*>(index)) {
+        ParameterRange& pr = add_range("qb");
+        for (int i = 0; i <= 8; i++) {
+            pr.values.push_back(i);
+        }
+    }
 }
 
 #undef DC
@@ -501,6 +508,14 @@ void ParameterSpace::set_index_parameter(
             ix->nprobe = int(val);
             return;
         }
+    }
+
+    if (name == "qb") {
+        if (DC(IndexIVFRaBitQ)) {
+            ix->qb = int(val);
+            return;
+        }
+        FAISS_THROW_MSG("qb parameter is only supported for IndexIVFRaBitQ");
     }
 
     if (name == "ht") {

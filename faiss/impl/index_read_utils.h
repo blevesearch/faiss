@@ -31,6 +31,7 @@ ArrayInvertedLists* set_array_invlist(
         std::vector<std::vector<idx_t>>& ids);
 void read_ProductQuantizer(ProductQuantizer* pq, IOReader* f);
 void read_ScalarQuantizer(ScalarQuantizer* ivsc, IOReader* f);
+void read_codes_mmaped(uint8_t** codes_ptr, IOReader* f);
 
 } // namespace faiss
 

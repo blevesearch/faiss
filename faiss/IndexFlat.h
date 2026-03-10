@@ -57,9 +57,15 @@ struct IndexFlat : IndexFlatCodes {
 
     // get pointer to the floating point data
     float* get_xb() {
+        if (codes_ptr != nullptr) {
+            return (float*)codes_ptr;
+        }
         return (float*)codes.data();
     }
     const float* get_xb() const {
+        if (codes_ptr != nullptr) {
+            return (const float*)codes_ptr;
+        }
         return (const float*)codes.data();
     }
 
@@ -140,6 +146,15 @@ struct IndexFlatPanorama : IndexFlat {
             float radius,
             RangeSearchResult* result,
             const SearchParameters* params = nullptr) const override;
+
+    void search_subset(
+            idx_t n,
+            const float* x,
+            idx_t k_base,
+            const idx_t* base_labels,
+            idx_t k,
+            float* distances,
+            idx_t* labels) const override;
 
     void reset() override;
 

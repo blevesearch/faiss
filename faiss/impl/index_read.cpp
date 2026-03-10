@@ -48,6 +48,13 @@
 #include <faiss/IndexRaBitQFastScan.h>
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexRowwiseMinMax.h>
+#ifdef FAISS_ENABLE_SVS
+#include <faiss/impl/svs_io.h>
+#include <faiss/svs/IndexSVSFlat.h>
+#include <faiss/svs/IndexSVSVamana.h>
+#include <faiss/svs/IndexSVSVamanaLVQ.h>
+#include <faiss/svs/IndexSVSVamanaLeanVec.h>
+#endif
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/MetaIndexes.h>
 #include <faiss/VectorTransform.h>
@@ -612,8 +619,7 @@ ProductQuantizer* read_ProductQuantizer(IOReader* reader) {
 static void read_RaBitQuantizer(
         RaBitQuantizer* rabitq,
         IOReader* f,
-        bool multi_bit) {
-    // don't care about rabitq->centroid
+        bool multi_bit = true) {
     READ1(rabitq->d);
     READ1(rabitq->code_size);
     READ1(rabitq->metric_type);
@@ -715,6 +721,17 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
     return ivpq;
 }
 
+void read_codes_mmaped(uint8_t** codes_ptr, IOReader* f) {
+    size_t size;
+    READANDCHECK(&size, 1);
+    FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
+    *codes_ptr = const_cast<uint8_t*>(reader->buf + reader->rp);
+    reader->rp += size*4;
+}
+
 int read_old_fmt_hack = 0;
 
 Index* read_index(IOReader* f, int io_flags) {
@@ -751,9 +768,13 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(idxf, f);
         idxf->code_size = idxf->d * sizeof(float);
 
-        read_xb_vector(idxf->codes, f);
-        FAISS_THROW_IF_NOT(
-            idxf->codes.size() == idxf->ntotal * idxf->code_size);
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_codes_mmaped(&idxf->codes_ptr, f);
+        } else {
+            read_xb_vector(idxf->codes, f);
+            FAISS_THROW_IF_NOT(
+                idxf->codes.size() == idxf->ntotal * idxf->code_size);
+        }
         // leak!
         idx = idxf;
     } else if (h == fourcc("IxHE") || h == fourcc("IxHe")) {
@@ -1002,8 +1023,12 @@ Index* read_index(IOReader* f, int io_flags) {
         IndexScalarQuantizer* idxs = new IndexScalarQuantizer();
         read_index_header(idxs, f);
         read_ScalarQuantizer(&idxs->sq, f);
-        read_vector(idxs->codes, f);
         idxs->code_size = idxs->sq.code_size;
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_codes_mmaped(&idxs->codes_ptr, f);
+        } else {
+            read_vector(idxs->codes, f);
+        }
         idx = idxs;
     } else if (h == fourcc("IxLa")) {
         int d, nsq, scale_nbit, r2;
@@ -1123,13 +1148,19 @@ Index* read_index(IOReader* f, int io_flags) {
         read_index_header(imiq, f);
         read_ProductQuantizer(&imiq->pq, f);
         idx = imiq;
-    } else if (h == fourcc("IxRF")) {
+    } else if (h == fourcc("IxRF") || h == fourcc("IxRP")) {
         IndexRefine* idxrf = new IndexRefine();
         read_index_header(idxrf, f);
         idxrf->base_index = read_index(f, io_flags);
         idxrf->refine_index = read_index(f, io_flags);
         READ1(idxrf->k_factor);
-        if (dynamic_cast<IndexFlat*>(idxrf->refine_index)) {
+        if (h == fourcc("IxRP")) {
+            // then make a RefineFlatPanorama with it
+            IndexRefine* idxrf_old = idxrf;
+            idxrf = new IndexRefinePanorama();
+            *idxrf = *idxrf_old;
+            delete idxrf_old;
+        } else if (dynamic_cast<IndexFlat*>(idxrf->refine_index)) {
             // then make a RefineFlat with it
             IndexRefine* idxrf_old = idxrf;
             idxrf = new IndexRefineFlat();
@@ -1164,10 +1195,14 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = idxp;
     } else if (
             h == fourcc("IHNf") || h == fourcc("IHNp") || h == fourcc("IHNs") ||
-            h == fourcc("IHN2") || h == fourcc("IHNc") || h == fourcc("IHc2")) {
+            h == fourcc("IHN2") || h == fourcc("IHNc") || h == fourcc("IHc2") ||
+            h == fourcc("IHfP")) {
         IndexHNSW* idxhnsw = nullptr;
         if (h == fourcc("IHNf")) {
             idxhnsw = new IndexHNSWFlat();
+        }
+        if (h == fourcc("IHfP")) {
+            idxhnsw = new IndexHNSWFlatPanorama();
         }
         if (h == fourcc("IHNp")) {
             idxhnsw = new IndexHNSWPQ();
@@ -1185,6 +1220,15 @@ Index* read_index(IOReader* f, int io_flags) {
             idxhnsw = new IndexHNSWCagra();
         }
         read_index_header(idxhnsw, f);
+        if (h == fourcc("IHfP")) {
+            auto idx_panorama = dynamic_cast<IndexHNSWFlatPanorama*>(idxhnsw);
+            size_t nlevels;
+            READ1(nlevels);
+            const_cast<size_t&>(idx_panorama->num_panorama_levels) = nlevels;
+            const_cast<size_t&>(idx_panorama->panorama_level_width) =
+                    (idx_panorama->d + nlevels - 1) / nlevels;
+            READVECTOR(idx_panorama->cum_sums);
+        }
         if (h == fourcc("IHNc") || h == fourcc("IHc2")) {
             READ1(idxhnsw->keep_max_size_level0);
             auto idx_hnsw_cagra = dynamic_cast<IndexHNSWCagra*>(idxhnsw);
@@ -1197,6 +1241,7 @@ Index* read_index(IOReader* f, int io_flags) {
             }
         }
         read_HNSW(&idxhnsw->hnsw, f);
+        idxhnsw->hnsw.is_panorama = (h == fourcc("IHfP"));
         idxhnsw->storage = read_index(f, io_flags);
         idxhnsw->own_fields = idxhnsw->storage != nullptr;
         if (h == fourcc("IHNp") && !(io_flags & IO_FLAG_PQ_SKIP_SDC_TABLE)) {
@@ -1292,16 +1337,16 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (h == fourcc("Irfs")) {
         IndexRaBitQFastScan* idxqfs = new IndexRaBitQFastScan();
         read_index_header(idxqfs, f);
-        read_RaBitQuantizer(&idxqfs->rabitq, f, false);
+        read_RaBitQuantizer(&idxqfs->rabitq, f, true);
         READVECTOR(idxqfs->center);
         READ1(idxqfs->qb);
-        READVECTOR(idxqfs->factors_storage);
+        READVECTOR(idxqfs->flat_storage);
+
         READ1(idxqfs->bbs);
         READ1(idxqfs->ntotal2);
         READ1(idxqfs->M2);
         READ1(idxqfs->code_size);
 
-        // Need to initialize the FastScan base class fields
         const size_t M_fastscan = (idxqfs->d + 3) / 4;
         constexpr size_t nbits_fastscan = 4;
         idxqfs->M = M_fastscan;
@@ -1362,10 +1407,69 @@ Index* read_index(IOReader* f, int io_flags) {
         ivrq->code_size = ivrq->rabitq.code_size;
         read_InvertedLists(ivrq, f, io_flags);
         idx = ivrq;
-    } else if (h == fourcc("Iwrf")) {
+    }
+#ifdef FAISS_ENABLE_SVS
+    else if (
+            h == fourcc("ILVQ") || h == fourcc("ISVL") || h == fourcc("ISVD")) {
+        IndexSVSVamana* svs;
+        if (h == fourcc("ILVQ")) {
+            svs = new IndexSVSVamanaLVQ();
+        } else if (h == fourcc("ISVL")) {
+            svs = new IndexSVSVamanaLeanVec();
+        } else if (h == fourcc("ISVD")) {
+            svs = new IndexSVSVamana();
+        }
+
+        read_index_header(svs, f);
+        READ1(svs->graph_max_degree);
+        READ1(svs->alpha);
+        READ1(svs->search_window_size);
+        READ1(svs->search_buffer_capacity);
+        READ1(svs->construction_window_size);
+        READ1(svs->max_candidate_pool_size);
+        READ1(svs->prune_to);
+        READ1(svs->use_full_search_history);
+        READ1(svs->storage_kind);
+        if (h == fourcc("ISVL")) {
+            READ1(dynamic_cast<IndexSVSVamanaLeanVec*>(svs)->leanvec_d);
+        }
+
+        bool initialized;
+        READ1(initialized);
+        if (initialized) {
+            faiss::svs_io::ReaderStreambuf rbuf(f);
+            std::istream is(&rbuf);
+            svs->deserialize_impl(is);
+        }
+        if (h == fourcc("ISVL")) {
+            bool trained;
+            READ1(trained);
+            if (trained) {
+                faiss::svs_io::ReaderStreambuf rbuf(f);
+                std::istream is(&rbuf);
+                dynamic_cast<IndexSVSVamanaLeanVec*>(svs)
+                        ->deserialize_training_data(is);
+            }
+        }
+        idx = svs;
+    } else if (h == fourcc("ISVF")) {
+        IndexSVSFlat* svs = new IndexSVSFlat();
+        read_index_header(svs, f);
+
+        bool initialized;
+        READ1(initialized);
+        if (initialized) {
+            faiss::svs_io::ReaderStreambuf rbuf(f);
+            std::istream is(&rbuf);
+            svs->deserialize_impl(is);
+            idx = svs;
+        }
+    }
+#endif // FAISS_ENABLE_SVS
+    else if (h == fourcc("Iwrf")) {
         IndexIVFRaBitQFastScan* ivrqfs = new IndexIVFRaBitQFastScan();
         read_ivf_header(ivrqfs, f);
-        read_RaBitQuantizer(&ivrqfs->rabitq, f, false);
+        read_RaBitQuantizer(&ivrqfs->rabitq, f);
         READ1(ivrqfs->by_residual);
         READ1(ivrqfs->code_size);
         READ1(ivrqfs->bbs);
@@ -1374,7 +1478,7 @@ Index* read_index(IOReader* f, int io_flags) {
         READ1(ivrqfs->implem);
         READ1(ivrqfs->qb);
         READ1(ivrqfs->centered);
-        READVECTOR(ivrqfs->factors_storage);
+        READVECTOR(ivrqfs->flat_storage);
 
         // Initialize FastScan base class fields
         const size_t M_fastscan = (ivrqfs->d + 3) / 4;
@@ -1540,6 +1644,7 @@ IndexBinary* read_index_binary(IOReader* f, int io_flags) {
         IndexBinaryHNSW* idxhnsw = new IndexBinaryHNSW();
         read_index_binary_header(idxhnsw, f);
         read_HNSW(&idxhnsw->hnsw, f);
+        idxhnsw->hnsw.is_panorama = false;
         idxhnsw->storage = read_index_binary(f, io_flags);
         idxhnsw->own_fields = true;
         idx = idxhnsw;
@@ -1550,6 +1655,7 @@ IndexBinary* read_index_binary(IOReader* f, int io_flags) {
         READ1(idxhnsw->base_level_only);
         READ1(idxhnsw->num_base_level_search_entrypoints);
         read_HNSW(&idxhnsw->hnsw, f);
+        idxhnsw->hnsw.is_panorama = false;
         idxhnsw->storage = read_index_binary(f, io_flags);
         idxhnsw->own_fields = true;
         idx = idxhnsw;
