@@ -128,7 +128,34 @@ struct IndexBinaryIVF : IndexBinary {
             const IVFSearchParameters* params = nullptr) const;
 
     virtual BinaryInvertedListScanner* get_InvertedListScanner(
-            bool store_pairs = false) const;
+            bool store_pairs = false,
+            const IDSelector* sel = nullptr) const;
+    /** Count vectors per IVF list (cluster) for a given selector.
+     *
+     * This function iterates over the vectors selected by the provided
+     * search parameters and increments a counter for each IVF inverted
+     * list (cluster) they belong to. The result is a per-list vector
+     * count for the IVF index.
+     *
+     * @param list_counts      - Output array of size list_counts_size (must be == nlist).
+     *                          On return, list_counts[i] contains the number
+     *                          of selected vectors assigned to IVF list i.
+     *                          Precondition: every element of list_counts must
+     *                          be initialized to 0 by the caller before
+     *                          calling this function; otherwise the resulting
+     *                          per-list counts will be incorrect.
+     * @param list_counts_size - Size of list_counts array (must equal nlist)
+     * @param params           - Search parameters containing the selector
+     *                          that defines which vectors are included.
+     *                          Currently only IDSelectorBitmap and
+     *                          IDSelectorBatch are supported.
+     *
+     * @note Requires direct_map to be set (not NoMap)
+     */
+    void list_vector_count(
+        idx_t* list_counts,
+        size_t list_counts_size,
+        const faiss::SearchParameters* params) const;
 
     /** assign the vectors, then call search_preassign */
     void search(
@@ -219,9 +246,23 @@ struct IndexBinaryIVF : IndexBinary {
     void set_direct_map_type(DirectMap::Type type);
 
     void replace_invlists(InvertedLists* il, bool own = false);
+
+    void get_centroids_and_cardinality(
+        uint8_t* centroid_vectors,
+        size_t* cardinalities,
+        idx_t* centroid_ids) const;
 };
 
 struct BinaryInvertedListScanner {
+    bool store_pairs;
+    const IDSelector* sel;
+
+    BinaryInvertedListScanner(
+            bool store_pairs = false,
+            const IDSelector* sel = nullptr)
+            : store_pairs(store_pairs),
+              sel(sel) {}
+
     /// from now on we handle this query.
     virtual void set_query(const uint8_t* query_vector) = 0;
 

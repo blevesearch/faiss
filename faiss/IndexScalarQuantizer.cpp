@@ -93,6 +93,40 @@ void IndexScalarQuantizer::search(
     }
 }
 
+void IndexScalarQuantizer::dist_compute(
+        const float* query,
+        const idx_t* ids,
+        size_t n_ids,
+        float* dists) const {
+
+    FAISS_THROW_IF_NOT(is_trained);
+    FAISS_THROW_IF_NOT(
+            metric_type == METRIC_L2 || metric_type == METRIC_INNER_PRODUCT);
+
+    FlatCodesDistanceComputer* dc = get_FlatCodesDistanceComputer();
+
+    dc->set_query(query);
+
+    const uint8_t* base = (codes_ptr != nullptr) ? codes_ptr : codes.data();
+    for (size_t i = 0; i < n_ids; i++) {
+        idx_t id = ids[i];
+        const uint8_t* code = base + id * code_size;
+        dists[i] = dc->distance_to_code(code);
+    }
+}
+
+void IndexScalarQuantizer::reconstruct(idx_t key, float* recons) const {
+    const uint8_t* code;
+
+    if (codes_ptr != nullptr) {
+        code = codes_ptr + key * code_size;
+    } else {
+        code = codes.data() + key * code_size;
+    }
+
+    sq.decode(code, recons, 1);
+}
+
 FlatCodesDistanceComputer* IndexScalarQuantizer::get_FlatCodesDistanceComputer()
         const {
     ScalarQuantizer::SQDistanceComputer* dc =

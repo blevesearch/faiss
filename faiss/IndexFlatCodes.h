@@ -25,6 +25,8 @@ struct IndexFlatCodes : Index {
     /// encoded dataset, size ntotal * code_size
     MaybeOwnedVector<uint8_t> codes;
 
+    uint8_t* codes_ptr = nullptr;
+
     IndexFlatCodes();
 
     ~IndexFlatCodes() override;
