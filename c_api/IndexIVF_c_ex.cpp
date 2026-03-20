@@ -59,15 +59,15 @@ int faiss_IndexIVF_search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
-int faiss_Set_coarse_quantizers(FaissIndex* index, FaissIndex* srcIndex) {
+int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
     try {
-        faiss::IndexIVFScalarQuantizer* index_ivfsq_src = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(srcIndex);
+        faiss::IndexIVFScalarQuantizer* index_ivfsq_src = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(source);
         assert(index_ivfsq_src);
 
-        faiss::IndexIVFScalarQuantizer* index_ivfsq = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(index);
+        faiss::IndexIVFScalarQuantizer* index_ivfsq = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(target);
         assert(index_ivfsq);
         
-        index_ivfsq->quantizer = faiss::clone_index(reinterpret_cast<const faiss::Index*>(index_ivfsq_src->quantizer));
+        index_ivfsq->quantizer = index_ivfsq_src->quantizer;
         index_ivfsq->is_trained = true;
         index_ivfsq->sq = index_ivfsq_src->sq;
 

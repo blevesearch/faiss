@@ -145,9 +145,19 @@ int faiss_IndexIVF_compute_distance_table(
         const float* x,
         float* dist_table);
 
-int faiss_Set_coarse_quantizers(
-        FaissIndex* index,
-        FaissIndex* srcIndex);
+/*
+        Given a source index, clone the 
+          coarse quantizer having the centroid layout information,
+          quantizer having details specific to how the codes themselves were encoded (PQ, SQ etc.)
+        and set them in the target index
+
+        @param target - the target index to set the quantizers
+        @param source - the source index to clone the quantizers from
+*/
+
+int faiss_Set_quantizers(
+        FaissIndex* target,
+        FaissIndex* source);
 
 #ifdef __cplusplus
 }
