@@ -820,7 +820,10 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     auto ails = new OnDiskInvertedLists();
     ails->nlist = nlist;
     ails->code_size = code_size;
-    ails->read_only = true;
+    // currently this is set to true only when reading
+    if (io_flags & IO_FLAG_READ_ONLY) {
+        ails->read_only = true;
+    }
     ails->lists.resize(nlist);
     if (io_flags & IO_FLAG_SKIP_PREFETCH) {
         ails->skip_prefetch = true;

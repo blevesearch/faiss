@@ -145,6 +145,18 @@ int faiss_IndexIVF_compute_distance_table(
         const float* x,
         float* dist_table);
 
+/*
+        Given a srcIndex, clone and set the coarse quantizer and also the SQ quantizer
+        in the targe index.
+
+        @param target - the target index to set the quantizers
+        @param source - the source index to clone the quantizers from
+*/
+
+int faiss_Set_SQ_quantizers(
+        FaissIndex* target,
+        FaissIndex* source);
+
 #ifdef __cplusplus
 }
 #endif
