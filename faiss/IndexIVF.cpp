@@ -1282,7 +1282,8 @@ void IndexIVF::check_compatible_for_merge(const Index& otherIndex) const {
             "can only merge indexes of the same type");
 
     // merging only the direct map type array and no map
-    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array && this->direct_map.type == DirectMap::Array)||
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array && 
+        other->direct_map.type == DirectMap::Array)||
     (this->direct_map.no() && other->direct_map.no());
     FAISS_THROW_IF_NOT_MSG(
             merge_direct_map_cond,
