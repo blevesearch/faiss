@@ -61,7 +61,8 @@ GpuIndex::GpuIndex(
         : Index(dims, metric),
           resources_(resources),
           config_(config),
-          minPagedSize_(kMinPageSize) {
+          minPagedSize_(kMinPageSize),
+          pageSize_(kNonPinnedPageSize) {
     FAISS_THROW_IF_NOT_FMT(
             config_.device < getNumDevices(),
             "Invalid GPU device %d",
@@ -483,7 +484,7 @@ void GpuIndex::searchFromCpuPaged_ex_(
     if (!pinnedAlloc.first || pageSizeInVecs < 1) {
         // Just page without overlapping copy with compute
         idx_t batchSize = utils::nextHighestPowerOf2(
-                (kNonPinnedPageSize /
+                (pageSize_ /
                  (get_numeric_type_size(numeric_type) * this->d)));
 
         for (idx_t cur = 0; cur < n; cur += batchSize) {
