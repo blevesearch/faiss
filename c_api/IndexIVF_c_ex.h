@@ -155,6 +155,15 @@ int faiss_IndexIVF_compute_distance_table(
         @param source - the source index to clone the quantizers from
 */
 
+int faiss_IndexIVF_has_RaBitQ(
+        FaissIndex* index);
+
+int faiss_SearchParametersRaBitQ_new_with(
+        FaissSearchParametersIVF** p_sp,
+        FaissIDSelector* sel,
+        size_t nprobe,
+        size_t max_codes);
+
 int faiss_Set_quantizers(
         FaissIndex* target,
         FaissIndex* source);

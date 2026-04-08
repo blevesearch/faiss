@@ -10,6 +10,7 @@
 #include "IndexIVF_c_ex.h"
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexScalarQuantizer.h>
+#include <faiss/IndexRaBitQ.h>
 #include <faiss/clone_index.h>
 #include "macros_impl.h"
 
@@ -137,6 +138,44 @@ int faiss_IndexIVF_compute_distance_table(
         reinterpret_cast<IndexIVF*>(index)->compute_distance_table(
                 x, dist_table);
         return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVF_has_RaBitQ(FaissIndex* index) {
+    try {
+        IndexIVF* ivf = dynamic_cast<IndexIVF*>(
+            reinterpret_cast<faiss::Index*>(index));
+        if (!ivf) {
+            return -1;
+        }
+
+        faiss::IndexRaBitQ* rq = dynamic_cast<faiss::IndexRaBitQ*>(ivf->quantizer);
+        if (!rq) {
+            return -1;
+        }
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_SearchParametersRaBitQ_new_with(
+        FaissSearchParametersIVF** p_sp,
+        FaissIDSelector* sel,
+        size_t nprobe,
+        size_t max_codes) {
+    try {
+        SearchParametersIVF* sp = new SearchParametersIVF;
+        sp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
+        sp->nprobe = nprobe;
+        sp->max_codes = max_codes;
+        
+        faiss::RaBitQSearchParameters* rqsp = new faiss::RaBitQSearchParameters;
+        rqsp->centered = true;
+        rqsp->qb = 4;
+        sp->quantizer_params = rqsp;
+
+        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(sp);
     }
     CATCH_AND_HANDLE
 }
