@@ -350,8 +350,13 @@ void IndexBinaryIVF::check_compatible_for_merge(
     FAISS_THROW_IF_NOT(other->d == d);
     FAISS_THROW_IF_NOT(other->nlist == nlist);
     FAISS_THROW_IF_NOT(other->code_size == code_size);
+
+    // merging only the direct map type array and no map
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array && 
+        other->direct_map.type == DirectMap::Array)||
+        (this->direct_map.no() && other->direct_map.no());
     FAISS_THROW_IF_NOT_MSG(
-            direct_map.no() && other->direct_map.no(),
+            merge_direct_map_cond,
             "direct map copy not implemented");
     FAISS_THROW_IF_NOT_MSG(
             typeid(*this) == typeid(*other),
@@ -362,9 +367,27 @@ void IndexBinaryIVF::merge_from(IndexBinary& otherIndex, idx_t add_id) {
     // minimal sanity checks
     check_compatible_for_merge(otherIndex);
     auto other = static_cast<IndexBinaryIVF*>(&otherIndex);
+
+    // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
+    // while merging, we need to update those values, which are encoded.
+    // high 32 bits are list_no and low 32 bits are offset
+    if (direct_map.type == DirectMap::Array && 
+        other->direct_map.type == DirectMap::Array) {
+        auto other_map = other->direct_map.array;
+        for (int i = 0; i < other_map.size(); i++) {
+            idx_t other_value = other_map[i];
+            idx_t list_no = lo_listno(other_value);
+
+            size_t new_offset =  invlists->list_size(list_no) + lo_offset(other_value);
+            direct_map.add_single_id(add_id + i, list_no, new_offset);
+        }
+    }
+
     invlists->merge_from(other->invlists, add_id);
     ntotal += other->ntotal;
     other->ntotal = 0;
+    printf("merged!\n");
+    fflush(stdout);
 }
 
 void IndexBinaryIVF::replace_invlists(InvertedLists* il, bool own) {

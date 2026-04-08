@@ -1307,7 +1307,6 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     check_compatible_for_merge(otherIndex);
     IndexIVF* other = static_cast<IndexIVF*>(&otherIndex);
 
-    // direct_map.merge_from(other->direct_map);
     // hashtable maps id_of_the_vec -> specific_offset_within_the_invlist
     // while merging, we need to update those values, which are encoded.
     // high 32 bits are list_no and low 32 bits are offset
