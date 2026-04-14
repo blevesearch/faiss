@@ -271,6 +271,9 @@ class GpuIndex : public faiss::Index {
 
     /// Size above which we page copies from the CPU to GPU
     size_t minPagedSize_;
+
+    /// Size of the pages we use to page copies from the CPU to GPU
+    size_t pageSize_;
 };
 
 /// If the given index is a GPU index, this returns the index instance

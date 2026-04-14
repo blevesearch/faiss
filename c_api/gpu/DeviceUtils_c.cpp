@@ -44,3 +44,12 @@ int faiss_gpu_sync_all_devices() {
     }
     CATCH_AND_HANDLE
 }
+
+/// Returns the free memory (in bytes) on the specified device
+int faiss_gpu_free_memory(int device, size_t* p_free_bytes) {
+    try {
+        size_t freeBytes = faiss::gpu::getFreeMemory(device);
+        *p_free_bytes = freeBytes;
+    }
+    CATCH_AND_HANDLE
+}

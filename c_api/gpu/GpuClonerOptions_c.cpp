@@ -14,6 +14,7 @@
 using faiss::gpu::GpuClonerOptions;
 using faiss::gpu::GpuMultipleClonerOptions;
 using faiss::gpu::IndicesOptions;
+using faiss::gpu::MemorySpace;
 
 int faiss_GpuClonerOptions_new(FaissGpuClonerOptions** p) {
     try {
@@ -40,6 +41,7 @@ DEFINE_GETTER(GpuClonerOptions, int, usePrecomputed)
 DEFINE_GETTER(GpuClonerOptions, long, reserveVecs)
 DEFINE_GETTER(GpuClonerOptions, int, storeTransposed)
 DEFINE_GETTER(GpuClonerOptions, int, verbose)
+DEFINE_GETTER(GpuClonerOptions, int, memorySpace)
 DEFINE_GETTER(GpuMultipleClonerOptions, int, shard)
 DEFINE_GETTER(GpuMultipleClonerOptions, int, shard_type)
 
@@ -54,5 +56,6 @@ DEFINE_SETTER_STATIC(GpuClonerOptions, bool, int, usePrecomputed)
 DEFINE_SETTER(GpuClonerOptions, long, reserveVecs)
 DEFINE_SETTER_STATIC(GpuClonerOptions, bool, int, storeTransposed)
 DEFINE_SETTER_STATIC(GpuClonerOptions, bool, int, verbose)
+DEFINE_SETTER_STATIC(GpuClonerOptions, MemorySpace, int, memorySpace)
 DEFINE_SETTER_STATIC(GpuMultipleClonerOptions, bool, int, shard)
 DEFINE_SETTER(GpuMultipleClonerOptions, int, shard_type)
