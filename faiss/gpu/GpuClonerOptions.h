@@ -8,6 +8,7 @@
 #pragma once
 
 #include <faiss/gpu/GpuIndicesOptions.h>
+#include <faiss/gpu/GpuResources.h>
 
 namespace faiss {
 namespace gpu {
@@ -51,6 +52,12 @@ struct GpuClonerOptions {
     /// throw an exception for indices not implemented on GPU. When set to
     /// true, it will fallback to a CPU implementation.
     bool allowCpuCoarseQuantizer = false;
+
+    /// What memory space to use for primary storage.
+    /// On Pascal and above (CC 6+) architectures, MemorySpace::Unified
+    /// allows GPUs to use more memory than is available on the GPU via
+    /// automatic paging.
+    MemorySpace memorySpace = MemorySpace::Device;
 };
 
 struct GpuMultipleClonerOptions : public GpuClonerOptions {
