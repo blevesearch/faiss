@@ -10,6 +10,7 @@
 #include "IndexIVF_c_ex.h"
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexScalarQuantizer.h>
+#include <faiss/IndexIVFRaBitQ.h>
 #include <faiss/clone_index.h>
 #include "macros_impl.h"
 
@@ -61,16 +62,35 @@ int faiss_IndexIVF_search_closest_eligible_centroids(
 
 int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
     try {
-        faiss::IndexIVFScalarQuantizer* index_ivfsq_src = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(source);
-        assert(index_ivfsq_src);
+        auto* tgt = reinterpret_cast<faiss::Index*>(target);
+        auto* src = reinterpret_cast<faiss::Index*>(source);
 
-        faiss::IndexIVFScalarQuantizer* index_ivfsq = reinterpret_cast<faiss::IndexIVFScalarQuantizer*>(target);
-        assert(index_ivfsq);
-        
-        index_ivfsq->quantizer = index_ivfsq_src->quantizer;
-        index_ivfsq->is_trained = true;
-        index_ivfsq->sq = index_ivfsq_src->sq;
+        assert(tgt && src);
 
+        // -------- IndexIVFScalarQuantizer --------
+        if (auto* tgt_ivfsq = dynamic_cast<faiss::IndexIVFScalarQuantizer*>(tgt)) {
+            auto* src_ivfsq = dynamic_cast<faiss::IndexIVFScalarQuantizer*>(src);
+            assert(src_ivfsq);
+
+            tgt_ivfsq->quantizer = src_ivfsq->quantizer;
+            tgt_ivfsq->is_trained = true;
+            tgt_ivfsq->sq = src_ivfsq->sq;
+            return 0;
+        }
+
+        // -------- IndexIVFRaBitQ --------
+        if (auto* tgt_rabitq = dynamic_cast<faiss::IndexIVFRaBitQ*>(tgt)) {
+            auto* src_rabitq = dynamic_cast<faiss::IndexIVFRaBitQ*>(src);
+            assert(src_rabitq);
+
+            tgt_rabitq->quantizer = src_rabitq->quantizer;
+            tgt_rabitq->is_trained = true;
+            tgt_rabitq->rabitq = src_rabitq->rabitq;
+            return 0;
+        }
+
+        // Unsupported type
+        return -1;
     }
     CATCH_AND_HANDLE
 }
@@ -136,6 +156,41 @@ int faiss_IndexIVF_compute_distance_table(
     try {
         reinterpret_cast<IndexIVF*>(index)->compute_distance_table(
                 x, dist_table);
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVF_has_RaBitQ(FaissIndex* index) {
+    try {
+        faiss::Index* idx = reinterpret_cast<faiss::Index*>(index);
+
+        faiss::IndexIVFRaBitQ* ivf_rq =
+            dynamic_cast<faiss::IndexIVFRaBitQ*>(idx);
+
+        if (ivf_rq) {
+            return 0;
+        }
+
+        return -1;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_SearchParametersRaBitQ_new_with(
+        FaissSearchParametersIVF** p_sp,
+        FaissIDSelector* sel,
+        size_t nprobe,
+        size_t max_codes) {
+    try {
+        faiss::IVFRaBitQSearchParameters* rqsp = new faiss::IVFRaBitQSearchParameters;
+        rqsp->centered = true;
+        rqsp->qb = 4;
+        rqsp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
+        rqsp->nprobe = nprobe;
+        rqsp->max_codes = max_codes;
+
+        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(rqsp);
         return 0;
     }
     CATCH_AND_HANDLE
