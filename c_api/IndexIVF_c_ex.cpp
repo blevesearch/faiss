@@ -195,38 +195,3 @@ int faiss_SearchParametersRaBitQ_new_with(
     }
     CATCH_AND_HANDLE
 }
-
-int faiss_IndexIVF_has_RaBitQ(FaissIndex* index) {
-    try {
-        faiss::Index* idx = reinterpret_cast<faiss::Index*>(index);
-
-        faiss::IndexIVFRaBitQ* ivf_rq =
-            dynamic_cast<faiss::IndexIVFRaBitQ*>(idx);
-
-        if (ivf_rq) {
-            return 0;
-        }
-
-        return -1;
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_SearchParametersRaBitQ_new_with(
-        FaissSearchParametersIVF** p_sp,
-        FaissIDSelector* sel,
-        size_t nprobe,
-        size_t max_codes) {
-    try {
-        faiss::IVFRaBitQSearchParameters* rqsp = new faiss::IVFRaBitQSearchParameters;
-        rqsp->centered = true;
-        rqsp->qb = 4;
-        rqsp->sel = reinterpret_cast<faiss::IDSelector*>(sel);
-        rqsp->nprobe = nprobe;
-        rqsp->max_codes = max_codes;
-
-        *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(rqsp);
-        return 0;
-    }
-    CATCH_AND_HANDLE
-}
