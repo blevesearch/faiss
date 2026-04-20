@@ -50,6 +50,11 @@ FAISS_DECLARE_GETTER_SETTER(GpuClonerOptions, int, storeTransposed)
 /// (boolean) Set verbose options on the index
 FAISS_DECLARE_GETTER_SETTER(GpuClonerOptions, int, verbose)
 
+/// What memory space to use for primary storage.
+/// 0 = Temporary, 1 = Device (default), 2 = Unified (cudaMallocManaged).
+/// Unified memory allows the GPU index to exceed GPU memory on CC 6.0+.
+FAISS_DECLARE_GETTER_SETTER(GpuClonerOptions, int, memorySpace)
+
 FAISS_DECLARE_CLASS_INHERITED(GpuMultipleClonerOptions, GpuClonerOptions)
 
 FAISS_DECLARE_DESTRUCTOR(GpuMultipleClonerOptions)

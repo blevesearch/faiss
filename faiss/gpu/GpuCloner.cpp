@@ -140,6 +140,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
     if (auto ifl = dynamic_cast<const IndexFlat*>(index)) {
         GpuIndexFlatConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         config.useFloat16 = useFloat16;
         config.use_cuvs = use_cuvs;
         return new GpuIndexFlat(provider, ifl, config);
@@ -149,6 +150,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
                     ScalarQuantizer::QT_fp16) {
         GpuIndexFlatConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         config.useFloat16 = true;
         FAISS_THROW_IF_NOT_MSG(
                 !use_cuvs, "this type of index is not implemented for cuVS");
@@ -167,6 +169,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
     } else if (auto ifl = dynamic_cast<const faiss::IndexIVFFlat*>(index)) {
         GpuIndexIVFFlatConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         config.use_cuvs = use_cuvs;
@@ -185,6 +188,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
                     index)) {
         GpuIndexIVFScalarQuantizerConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         FAISS_THROW_IF_NOT_MSG(
@@ -217,6 +221,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         }
         GpuIndexIVFPQConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         config.useFloat16LookupTables = useFloat16;
@@ -237,6 +242,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
     else if (auto icg = dynamic_cast<const faiss::IndexHNSWCagra*>(index)) {
         GpuIndexCagraConfig config;
         config.device = device;
+        config.memorySpace = memorySpace;
         GpuIndexCagra* res =
                 new GpuIndexCagra(provider, icg->d, icg->metric_type, config);
         res->copyFrom_ex(icg, icg->get_numeric_type());

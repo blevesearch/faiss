@@ -317,34 +317,94 @@ void GpuIndexFlat::compute_residual_n(
         const float* xs,
         float* residuals,
         const idx_t* keys) const {
-    DeviceScope scope(config_.device);
-    auto stream = resources_->getDefaultStream(config_.device);
-
     if (n == 0) {
         // nothing to do
         return;
     }
+    FAISS_ASSERT(data_);
+    DeviceScope scope(config_.device);
+    auto stream = resources_->getDefaultStream(config_.device);
+    // first check if we need to page the device transfers 
+    // since n*d may exceed device memory, so we call compute_residual in pages 
+    // use paged mode if
+    // - data_size >= minPagedSize_ AND
+    // - atleast one of xs or residuals is on host
+    size_t dataSize = (size_t)n * d * sizeof(float);
+    bool xsOnHost  = getDeviceForAddress(xs) == -1;
+    bool resOnHost = getDeviceForAddress(residuals) == -1;
+    bool usePaged =
+        dataSize >= minPagedSize_ && (xsOnHost || resOnHost);
+    if (!usePaged) {
+        compute_residual_n_batch(
+                n,
+                xs,
+                residuals,
+                keys,
+                stream);
+        return;
+    }
+
+    // Paged path
+    compute_residual_n_paged(
+            n,
+            xs,
+            residuals,
+            keys,
+            stream);
+}
+
+void GpuIndexFlat::compute_residual_n_batch(
+        idx_t batchSize,
+        const float* xs,
+        float* residuals,
+        const idx_t* keys,
+        cudaStream_t stream) const {
 
     auto vecsDevice = toDeviceTemporary<float, 2>(
             resources_.get(),
             config_.device,
             const_cast<float*>(xs),
             stream,
-            {n, this->d});
+            {batchSize, d});
+
     auto idsDevice = toDeviceTemporary<idx_t, 1>(
             resources_.get(),
             config_.device,
             const_cast<idx_t*>(keys),
             stream,
-            {n});
+            {batchSize});
+
     auto residualDevice = toDeviceTemporary<float, 2>(
-            resources_.get(), config_.device, residuals, stream, {n, this->d});
+            resources_.get(),
+            config_.device,
+            residuals,
+            stream,
+            {batchSize, d});
 
-    FAISS_ASSERT(data_);
     data_->computeResidual(vecsDevice, idsDevice, residualDevice);
-
-    // If the output is on the host, copy back if needed
     fromDevice<float, 2>(residualDevice, residuals, stream);
+}
+
+void GpuIndexFlat::compute_residual_n_paged(
+        idx_t n,
+        const float* xs,
+        float* residuals,
+        const idx_t* keys,
+        cudaStream_t stream) const {
+
+    idx_t batchSize = utils::nextHighestPowerOf2(
+            pageSize_ / (d * sizeof(float)));
+            
+    for (idx_t cur = 0; cur < n; cur += batchSize) {
+        idx_t thisBatch = std::min(batchSize, n - cur);
+
+        compute_residual_n_batch(
+                thisBatch,
+                xs + cur * d,
+                residuals + cur * d,
+                keys + cur,
+                stream);
+    }
 }
 
 //
