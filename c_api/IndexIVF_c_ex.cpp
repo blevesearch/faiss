@@ -11,6 +11,7 @@
 #include <faiss/IndexIVF.h>
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/IndexIVFRaBitQ.h>
+#include <faiss/IndexBinaryIVF.h>
 #include <faiss/clone_index.h>
 #include "macros_impl.h"
 
@@ -75,6 +76,16 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
             tgt_ivfsq->quantizer = src_ivfsq->quantizer;
             tgt_ivfsq->is_trained = true;
             tgt_ivfsq->sq = src_ivfsq->sq;
+            return 0;
+        }
+
+        // --------- IndexSQ ---------
+        if (auto* tgt_sq = dynamic_cast<faiss::IndexScalarQuantizer*>(tgt)) {
+            auto* src_sq = dynamic_cast<faiss::IndexScalarQuantizer*>(src);
+            assert(src_sq);
+
+            tgt_sq->is_trained = true;
+            tgt_sq->sq = src_sq->sq;
             return 0;
         }
 
