@@ -350,8 +350,12 @@ void IndexBinaryIVF::check_compatible_for_merge(
     FAISS_THROW_IF_NOT(other->d == d);
     FAISS_THROW_IF_NOT(other->nlist == nlist);
     FAISS_THROW_IF_NOT(other->code_size == code_size);
+
+    bool merge_direct_map_cond = (this->direct_map.type == DirectMap::Array &&
+        other->direct_map.type == DirectMap::Array)||
+    (this->direct_map.no() && other->direct_map.no());
     FAISS_THROW_IF_NOT_MSG(
-            direct_map.no() && other->direct_map.no(),
+            merge_direct_map_cond,
             "direct map copy not implemented");
     FAISS_THROW_IF_NOT_MSG(
             typeid(*this) == typeid(*other),
