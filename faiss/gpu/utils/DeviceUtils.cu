@@ -29,10 +29,10 @@ void setCurrentDevice(int device) {
 
 int getNumDevices() {
     int numDev = -1;
-    cudaGetDeviceCount(&numDev);
-    auto lastError = cudaGetLastError();
-    if (lastError != cudaSuccess || numDev < 0) {
+    auto err = cudaGetDeviceCount(&numDev);
+    if (err != cudaSuccess) {
         numDev = 0;
+        cudaGetLastError();
     }
     FAISS_ASSERT(numDev >= 0);
 
