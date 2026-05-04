@@ -30,10 +30,8 @@ void setCurrentDevice(int device) {
 int getNumDevices() {
     int numDev = -1;
     cudaError_t err = cudaGetDeviceCount(&numDev);
-    if (cudaErrorNoDevice == err || cudaErrorInsufficientDriver == err) {
+    if (err != cudaSuccess) {
         numDev = 0;
-    } else {
-        CUDA_VERIFY(err);
     }
     FAISS_ASSERT(numDev != -1);
 
