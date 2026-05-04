@@ -30,7 +30,7 @@ void setCurrentDevice(int device) {
 int getNumDevices() {
     int numDev = -1;
     auto err = cudaGetDeviceCount(&numDev);
-    if (err != cudaSuccess) {
+    if (err != cudaSuccess || numDev < 0) {
         numDev = 0;
         cudaGetLastError();
     }
