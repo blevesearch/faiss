@@ -35,7 +35,7 @@ int getNumDevices() {
         // clear the error status for the current thread
         cudaGetLastError();
     }
-    FAISS_ASSERT(numDev != -1);
+    FAISS_ASSERT(numDev >= 0);
 
     return numDev;
 }
