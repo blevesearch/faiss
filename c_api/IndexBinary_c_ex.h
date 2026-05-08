@@ -38,11 +38,16 @@ int faiss_IndexBinary_search_with_params(
         int32_t* distances,
         idx_t* labels);
 
-/** return the size in bytes that the binary index occupies in memory.
- * For IVF-based binary indices, this includes centroid and stored ID overhead.
+/** return an approximate size estimate in bytes for the binary index.
+ * The estimate accounts for stored codes and, for IVF-based binary indices,
+ * includes centroid and stored ID overhead.
+ *
+ * This is not a complete in-memory footprint: it does not attempt to include
+ * all internal allocations such as inverted-list container overhead,
+ * direct_map, or quantizer internals beyond centroid storage.
  *
  * @param index     opaque pointer to index object
- * @param p_size    output size in bytes
+ * @param p_size    output approximate size in bytes
  */
 int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size);
 

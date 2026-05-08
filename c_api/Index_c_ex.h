@@ -28,12 +28,16 @@ int faiss_Index_reconstruct_batch(
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
-/** Compute the size of the index in bytes, this includes the 
- *  size of the raw vector codes and any additional overhead 
- * (e.g. centroids, stored IDs) for IVF indices.
+/** Estimate the size of the index in bytes.
+ *
+ * The returned value is an approximation based on the stored vector
+ * codes and any additional known overhead (for example centroids and
+ * stored IDs for IVF indices). It does not imply an exact total memory
+ * footprint, and may not be available for index types that do not
+ * support this estimate.
  *
  * @param index       opaque pointer to index object
- * @param p_size      pointer to size_t to store the size
+ * @param p_size      pointer to size_t to store the estimated size
  */
 int faiss_Index_size(const FaissIndex* index, size_t* p_size);
 

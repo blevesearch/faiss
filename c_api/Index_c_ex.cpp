@@ -54,7 +54,6 @@ int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
             size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
         }
         *p_size = size;
-        return 0;
     }
     CATCH_AND_HANDLE
 }

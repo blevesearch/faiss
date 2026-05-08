@@ -51,7 +51,6 @@ int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
         }
 
         *p_size = size;
-        return 0;
     }
     CATCH_AND_HANDLE
 }
