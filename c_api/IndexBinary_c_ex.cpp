@@ -34,7 +34,7 @@ int faiss_IndexBinary_search_with_params(
     CATCH_AND_HANDLE
 }
 
-int faiss_IndexBinary_size(FaissIndexBinary* index, size_t* p_size) {
+int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
     try {
         const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
 

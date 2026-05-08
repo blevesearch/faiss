@@ -40,7 +40,7 @@ int faiss_Index_merge_from(
     CATCH_AND_HANDLE
 }
 
-int faiss_Index_size(FaissIndex* index, size_t* p_size) {
+int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
     try {
         const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
         // Base: raw vector codes (works for Flat, SQ, and all other types).

@@ -44,7 +44,7 @@ int faiss_IndexBinary_search_with_params(
  * @param index     opaque pointer to index object
  * @param p_size    output size in bytes
  */
-int faiss_IndexBinary_size(FaissIndexBinary* index, size_t* p_size);
+int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size);
 
 #ifdef __cplusplus
 }
