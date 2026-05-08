@@ -50,7 +50,9 @@ int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
         //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
         if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
             auto ivfQuantizer = ivf->quantizer;
-            size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+            if (ivfQuantizer != nullptr) {
+                size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+            }
             size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
         }
         *p_size = size;
