@@ -28,7 +28,14 @@ int faiss_Index_reconstruct_batch(
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
-size_t faiss_Index_size(FaissIndex* index);
+/** Compute the size of the index in bytes, this includes the 
+ *  size of the raw vector codes and any additional overhead 
+ * (e.g. centroids, stored IDs) for IVF indices.
+ *
+ * @param index       opaque pointer to index object
+ * @param p_size      pointer to size_t to store the size
+ */
+int faiss_Index_size(FaissIndex* index, size_t* p_size);
 
 /** Compute distances between a query vector and a set of vectors 
  *

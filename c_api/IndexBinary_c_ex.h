@@ -38,11 +38,13 @@ int faiss_IndexBinary_search_with_params(
         int32_t* distances,
         idx_t* labels);
 
-/** return the size of the binary index
- * 
+/** return the size in bytes that the binary index occupies in memory.
+ * For IVF-based binary indices, this includes centroid and stored ID overhead.
+ *
  * @param index     opaque pointer to index object
+ * @param p_size    output size in bytes
  */
-size_t faiss_IndexBinary_size(FaissIndexBinary* index);
+int faiss_IndexBinary_size(FaissIndexBinary* index, size_t* p_size);
 
 #ifdef __cplusplus
 }

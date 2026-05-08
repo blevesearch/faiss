@@ -13,6 +13,7 @@
 #include "macros_impl.h"
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexScalarQuantizer.h>
+#include <faiss/IndexIVF.h>
 
 extern "C" {
 
@@ -39,10 +40,23 @@ int faiss_Index_merge_from(
     CATCH_AND_HANDLE
 }
 
-size_t faiss_Index_size(FaissIndex* index) {
-    auto xIndex = reinterpret_cast<faiss::Index*>(index);
-    size_t rv = sizeof(xIndex);
-    return rv;
+int faiss_Index_size(FaissIndex* index, size_t* p_size) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+        // Base: raw vector codes (works for Flat, SQ, and all other types).
+        size_t size = (size_t)idx->ntotal * idx->sa_code_size();
+        // IVF-specific overhead not captured by sa_code_size():
+        //   centroids: quantizer->ntotal * quantizer->sa_code_size()
+        //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
+        if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
+            auto ivfQuantizer = ivf->quantizer;
+            size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+            size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
+        }
+        *p_size = size;
+        return 0;
+    }
+    CATCH_AND_HANDLE
 }
 
 int faiss_Index_dist_compute(
