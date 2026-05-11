@@ -37,19 +37,18 @@ int faiss_IndexBinary_search_with_params(
 int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
     try {
         const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
-
         // Base: raw binary codes (d / 8 bytes per vector).
         size_t size = (size_t)idx->ntotal * idx->code_size;
-
         // IVF-specific overhead not captured by code_size:
         //   centroids: quantizer->ntotal * quantizer->sa_code_size()
         //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
         if (auto ivf = dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
             auto ivfQuantizer = ivf->quantizer;
-            size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+            if (ivfQuantizer != nullptr) {
+                size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+            }
             size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
         }
-
         *p_size = size;
     }
     CATCH_AND_HANDLE
