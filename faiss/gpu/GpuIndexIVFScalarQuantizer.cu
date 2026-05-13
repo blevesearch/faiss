@@ -12,6 +12,7 @@
 #include <faiss/gpu/impl/GpuScalarQuantizer.cuh>
 #include <faiss/gpu/impl/IVFFlat.cuh>
 #include <faiss/gpu/utils/CopyUtils.cuh>
+#include <faiss/utils/utils.h>
 #include <limits>
 
 namespace faiss {
@@ -219,14 +220,19 @@ void GpuIndexIVFScalarQuantizer::reset() {
 
 void GpuIndexIVFScalarQuantizer::trainResiduals_(idx_t n, const float* x) {
     // The input is already guaranteed to be on the CPU
+    idx_t max_nt = train_encoder_num_vectors();
+    if (max_nt <= 0) {
+        max_nt = (size_t)1 << 35;
+    }
+    TransformedVectors tv(x, fvecs_maybe_subsample(d, (size_t*)&n, max_nt, x, verbose));
     if (!by_residual) {
-        sq.train(n, x);
+        sq.train(n, tv.x);
     } else {
         std::vector<idx_t> assign(n);
-        quantizer->assign(n, x, assign.data());
+        quantizer->assign(n, tv.x, assign.data());
 
         std::vector<float> residuals(n * d);
-        quantizer->compute_residual_n(n, x, residuals.data(), assign.data());
+        quantizer->compute_residual_n(n, tv.x, residuals.data(), assign.data());
 
         sq.train(n, residuals.data());
     }

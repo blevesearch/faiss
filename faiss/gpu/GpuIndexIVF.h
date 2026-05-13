@@ -81,6 +81,10 @@ class GpuIndexIVF : public GpuIndex, public IndexIVFInterface {
     /// Returns the number of inverted lists we're managing
     virtual idx_t getNumLists() const;
 
+    /// can be redefined by subclasses to indicate how many training vectors
+    /// they need
+    virtual idx_t train_encoder_num_vectors() const;
+
     /// Returns the number of vectors present in a particular inverted list
     virtual idx_t getListLength(idx_t listId) const;
 
@@ -148,6 +152,9 @@ class GpuIndexIVF : public GpuIndex, public IndexIVFInterface {
 
     /// For a trained/initialized index, this is a reference to the base class
     std::shared_ptr<IVFBase> baseIndex_;
+
+    /// Number of vectors to use to train the encoder (if applicable)
+    idx_t encoderTrainingVecs_ = 0;
 };
 
 } // namespace gpu
