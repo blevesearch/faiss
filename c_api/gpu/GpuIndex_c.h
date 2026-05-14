@@ -41,6 +41,26 @@ int faiss_GpuIndex_train(FaissGpuIndex* index, idx_t n, const float* x);
  */
 int faiss_GpuIndex_add(FaissGpuIndex* index, idx_t n, const float* x);
 
+/** Query n vectors of dimension d to the index.
+ *
+ * @param index       opaque pointer to GPU index object
+ * @param n           number of vectors to search
+ * @param x           input vectors to search, size n * d
+ * @param k           number of nearest neighbors to return
+ * @param distances   output pairwise distances, size n * k
+ * @param labels      output labels of the NNs, size n * k
+ */
+int faiss_GpuIndex_search(
+        const FaissGpuIndex* index,
+        idx_t n,
+        const float* x,
+        idx_t k,
+        float* distances,
+        idx_t* labels);
+
+/// Free the GPU index
+FAISS_DECLARE_DESTRUCTOR(GpuIndex)
+
 #ifdef __cplusplus
 }
 #endif

@@ -31,3 +31,19 @@ int faiss_GpuIndex_add(FaissGpuIndex* index, idx_t n, const float* x) {
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_GpuIndex_search(
+        const FaissGpuIndex* index,
+        idx_t n,
+        const float* x,
+        idx_t k,
+        float* distances,
+        idx_t* labels) {
+    try {
+        reinterpret_cast<const GpuIndex*>(index)->search(
+                n, x, k, distances, labels);
+    }
+    CATCH_AND_HANDLE
+}
+
+DEFINE_DESTRUCTOR(GpuIndex)
