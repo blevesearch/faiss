@@ -50,8 +50,3 @@ int faiss_GpuIndex_search(
 }
 
 DEFINE_DESTRUCTOR(GpuIndex)
-
-FaissGpuIndexIVF* faiss_GpuIndexIVF_cast(FaissGpuIndex* index) {
-    return reinterpret_cast<FaissGpuIndexIVF*>(
-            dynamic_cast<GpuIndexIVF*>(reinterpret_cast<GpuIndex*>(index)));
-}

@@ -14,6 +14,7 @@
 #include <faiss/gpu/GpuIndexIVFScalarQuantizer.h>
 #include "macros_impl.h"
 
+using faiss::gpu::GpuIndex;
 using faiss::gpu::GpuIndexIVF;
 using faiss::gpu::GpuIndexIVFFlat;
 using faiss::gpu::GpuIndexIVFPQ;
@@ -36,4 +37,9 @@ int faiss_GpuIndexIVF_reserve_memory(
         }
     }
     CATCH_AND_HANDLE
+}
+
+FaissGpuIndexIVF* faiss_GpuIndexIVF_cast(FaissGpuIndex* index) {
+    return reinterpret_cast<FaissGpuIndexIVF*>(
+            dynamic_cast<GpuIndexIVF*>(reinterpret_cast<GpuIndex*>(index)));
 }

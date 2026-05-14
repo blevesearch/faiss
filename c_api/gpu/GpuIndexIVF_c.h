@@ -20,9 +20,13 @@ extern "C" {
 
 FAISS_DECLARE_CLASS_INHERITED(GpuIndexIVF, GpuIndex)
 
+/// Reserve memory for a given number of vectors, before adding them to the index.
 int faiss_GpuIndexIVF_reserve_memory(
         FaissGpuIndexIVF* index,
         size_t num_vectors);
+
+/// Downcast a GpuIndex to GpuIndexIVF (returns NULL if not a GpuIndexIVF)
+FaissGpuIndexIVF* faiss_GpuIndexIVF_cast(FaissGpuIndex* index);
 
 #ifdef __cplusplus
 }
