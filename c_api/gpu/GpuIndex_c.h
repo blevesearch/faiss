@@ -22,6 +22,25 @@ FAISS_DECLARE_GETTER(GpuIndexConfig, int, device)
 
 FAISS_DECLARE_CLASS_INHERITED(GpuIndex, Index)
 
+/// Getter for d (dimension)
+FAISS_DECLARE_GETTER(GpuIndex, int, d)
+
+/** Perform training on a representative set of vectors
+ *
+ * @param index  opaque pointer to GPU index object
+ * @param n      nb of training vectors
+ * @param x      training vectors, size n * d
+ */
+int faiss_GpuIndex_train(FaissGpuIndex* index, idx_t n, const float* x);
+
+/** Add n vectors of dimension d to the index.
+ *
+ * @param index  opaque pointer to GPU index object
+ * @param n      nb of vectors to add
+ * @param x      input vectors, size n * d
+ */
+int faiss_GpuIndex_add(FaissGpuIndex* index, idx_t n, const float* x);
+
 #ifdef __cplusplus
 }
 #endif
