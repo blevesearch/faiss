@@ -61,6 +61,9 @@ int faiss_GpuIndex_search(
 /// Free the GPU index
 FAISS_DECLARE_DESTRUCTOR(GpuIndex)
 
+/// Downcast a GpuIndex to GpuIndexIVF (returns NULL if not a GpuIndexIVF)
+FaissGpuIndexIVF* faiss_GpuIndexIVF_cast(FaissGpuIndex* index);
+
 #ifdef __cplusplus
 }
 #endif

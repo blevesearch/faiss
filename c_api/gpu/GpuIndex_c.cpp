@@ -8,11 +8,14 @@
 // -*- c++ -*-
 
 #include "GpuIndex_c.h"
+#include "GpuIndexIVF_c.h"
 #include <faiss/gpu/GpuIndex.h>
+#include <faiss/gpu/GpuIndexIVF.h>
 #include "macros_impl.h"
 
 using faiss::gpu::GpuIndex;
 using faiss::gpu::GpuIndexConfig;
+using faiss::gpu::GpuIndexIVF;
 
 DEFINE_GETTER(GpuIndexConfig, int, device)
 
@@ -47,3 +50,8 @@ int faiss_GpuIndex_search(
 }
 
 DEFINE_DESTRUCTOR(GpuIndex)
+
+FaissGpuIndexIVF* faiss_GpuIndexIVF_cast(FaissGpuIndex* index) {
+    return reinterpret_cast<FaissGpuIndexIVF*>(
+            dynamic_cast<GpuIndexIVF*>(reinterpret_cast<GpuIndex*>(index)));
+}
