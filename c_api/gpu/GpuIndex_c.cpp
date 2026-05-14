@@ -16,9 +16,7 @@ using faiss::gpu::GpuIndexConfig;
 
 DEFINE_GETTER(GpuIndexConfig, int, device)
 
-int faiss_GpuIndex_d(const FaissGpuIndex* index) {
-    return reinterpret_cast<const GpuIndex*>(index)->d;
-}
+DEFINE_GETTER(GpuIndex, int, d)
 
 int faiss_GpuIndex_train(FaissGpuIndex* index, idx_t n, const float* x) {
     try {
