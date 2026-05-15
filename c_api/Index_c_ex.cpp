@@ -14,6 +14,8 @@
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexIVFFlat.h>
+#include <faiss/IndexIVFRaBitQ.h>
 
 extern "C" {
 
@@ -45,13 +47,17 @@ int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
         const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
         // Base: raw vector codes (works for Flat, SQ, and all other types).
         size_t size = (size_t)idx->ntotal * idx->sa_code_size();
+        // Static struct footprint
+        size += faiss_index_static_size(idx);
         // IVF-specific overhead not captured by sa_code_size():
         //   centroids: quantizer->ntotal * quantizer->sa_code_size()
         //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
+        //   quantizer struct footprint
         if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
             auto ivfQuantizer = ivf->quantizer;
             if (ivfQuantizer != nullptr) {
                 size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
+                size += faiss_index_static_size(ivfQuantizer);
             }
             size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
         }
@@ -88,4 +94,52 @@ int faiss_Index_dist_compute(
     }
     CATCH_AND_HANDLE
 }
+
+static size_t faiss_index_static_size(const faiss::Index* idx) {
+    if (idx == nullptr) {
+        return 0;
+    }
+    // Flat Index
+    if (dynamic_cast<const faiss::IndexFlat*>(idx)) {
+        return sizeof(faiss::IndexFlat);
+    }
+    // SQ Index
+    if (dynamic_cast<const faiss::IndexScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexScalarQuantizer);
+    }
+    // IVF,SQ Index
+    if (dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexIVFScalarQuantizer);
+    }
+    // IVF,Flat Index
+    if (dynamic_cast<const faiss::IndexIVFFlat*>(idx)) {
+        return sizeof(faiss::IndexIVFFlat);
+    }
+    // IVF,RaBitQ Index
+    if (dynamic_cast<const faiss::IndexIVFRaBitQ*>(idx)) {
+        return sizeof(faiss::IndexIVFRaBitQ);
+    }
+    // IVF Index
+    if (dynamic_cast<const faiss::IndexIVF*>(idx)) {
+        return sizeof(faiss::IndexIVF);
+    }
+    // Base Index
+    return sizeof(faiss::Index);
+}
+
+int faiss_Index_static_size(const FaissIndex* index, size_t* p_size) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+        size_t size = faiss_index_static_size(idx);
+        // For IVF indices, include quantizer struct footprint
+        if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
+            if (ivf->quantizer != nullptr) {
+                size += faiss_index_static_size(ivf->quantizer);
+            }
+        }
+        *p_size = size;
+    }
+    CATCH_AND_HANDLE
+}
+
 }
