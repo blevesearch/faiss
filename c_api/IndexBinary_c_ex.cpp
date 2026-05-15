@@ -35,6 +35,22 @@ int faiss_IndexBinary_search_with_params(
     CATCH_AND_HANDLE
 }
 
+static size_t faiss_index_binary_static_size(const faiss::IndexBinary* idx) {
+    if (idx == nullptr) {
+        return 0;
+    }
+    // BFlat
+    if (dynamic_cast<const faiss::IndexBinaryFlat*>(idx)) {
+        return sizeof(faiss::IndexBinaryFlat);
+    }
+    // BIVF
+    if (dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
+        return sizeof(faiss::IndexBinaryIVF);
+    }
+    // Base
+    return sizeof(faiss::IndexBinary);
+}
+
 int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
     try {
         const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
@@ -57,22 +73,6 @@ int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
         *p_size = size;
     }
     CATCH_AND_HANDLE
-}
-
-static size_t faiss_index_binary_static_size(const faiss::IndexBinary* idx) {
-    if (idx == nullptr) {
-        return 0;
-    }
-    // BFlat
-    if (dynamic_cast<const faiss::IndexBinaryFlat*>(idx)) {
-        return sizeof(faiss::IndexBinaryFlat);
-    }
-    // BIVF
-    if (dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
-        return sizeof(faiss::IndexBinaryIVF);
-    }
-    // Base
-    return sizeof(faiss::IndexBinary);
 }
 
 int faiss_IndexBinary_static_size(const FaissIndexBinary* index, size_t* p_size) {

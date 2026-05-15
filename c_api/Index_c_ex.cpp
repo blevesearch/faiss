@@ -42,6 +42,38 @@ int faiss_Index_merge_from(
     CATCH_AND_HANDLE
 }
 
+static size_t faiss_index_static_size(const faiss::Index* idx) {
+    if (idx == nullptr) {
+        return 0;
+    }
+    // Flat Index
+    if (dynamic_cast<const faiss::IndexFlat*>(idx)) {
+        return sizeof(faiss::IndexFlat);
+    }
+    // SQ Index
+    if (dynamic_cast<const faiss::IndexScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexScalarQuantizer);
+    }
+    // IVF,SQ Index
+    if (dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexIVFScalarQuantizer);
+    }
+    // IVF,Flat Index
+    if (dynamic_cast<const faiss::IndexIVFFlat*>(idx)) {
+        return sizeof(faiss::IndexIVFFlat);
+    }
+    // IVF,RaBitQ Index
+    if (dynamic_cast<const faiss::IndexIVFRaBitQ*>(idx)) {
+        return sizeof(faiss::IndexIVFRaBitQ);
+    }
+    // IVF Index
+    if (dynamic_cast<const faiss::IndexIVF*>(idx)) {
+        return sizeof(faiss::IndexIVF);
+    }
+    // Base Index
+    return sizeof(faiss::Index);
+}
+
 int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
     try {
         const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
@@ -93,38 +125,6 @@ int faiss_Index_dist_compute(
         return -1;
     }
     CATCH_AND_HANDLE
-}
-
-static size_t faiss_index_static_size(const faiss::Index* idx) {
-    if (idx == nullptr) {
-        return 0;
-    }
-    // Flat Index
-    if (dynamic_cast<const faiss::IndexFlat*>(idx)) {
-        return sizeof(faiss::IndexFlat);
-    }
-    // SQ Index
-    if (dynamic_cast<const faiss::IndexScalarQuantizer*>(idx)) {
-        return sizeof(faiss::IndexScalarQuantizer);
-    }
-    // IVF,SQ Index
-    if (dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
-        return sizeof(faiss::IndexIVFScalarQuantizer);
-    }
-    // IVF,Flat Index
-    if (dynamic_cast<const faiss::IndexIVFFlat*>(idx)) {
-        return sizeof(faiss::IndexIVFFlat);
-    }
-    // IVF,RaBitQ Index
-    if (dynamic_cast<const faiss::IndexIVFRaBitQ*>(idx)) {
-        return sizeof(faiss::IndexIVFRaBitQ);
-    }
-    // IVF Index
-    if (dynamic_cast<const faiss::IndexIVF*>(idx)) {
-        return sizeof(faiss::IndexIVF);
-    }
-    // Base Index
-    return sizeof(faiss::Index);
 }
 
 int faiss_Index_static_size(const FaissIndex* index, size_t* p_size) {
