@@ -9,6 +9,8 @@
 
 #include <omp.h>
 
+#include <faiss/OMPConfig.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -58,7 +60,7 @@ void IndexIVFRaBitQ::encode_vectors(
     size_t coarse_size = include_listnos ? coarse_code_size() : 0;
     memset(codes, 0, (code_size + coarse_size) * n);
 
-#pragma omp parallel if (n > 1000)
+#pragma omp parallel if (n > 1000) num_threads(num_omp_threads)
     {
         std::vector<float> centroid(d);
 
@@ -87,7 +89,7 @@ void IndexIVFRaBitQ::decode_vectors(
         const uint8_t* codes,
         const idx_t* listnos,
         float* x) const {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> centroid(d);
 
@@ -113,7 +115,7 @@ void IndexIVFRaBitQ::add_core(
 
     DirectMapAdd dm_add(direct_map, n, xids);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<uint8_t> one_code(code_size);
         std::vector<float> centroid(d);
@@ -322,7 +324,7 @@ void IndexIVFRaBitQ::reconstruct_from_offset(
 void IndexIVFRaBitQ::sa_decode(idx_t n, const uint8_t* codes, float* x) const {
     size_t coarse_size = coarse_code_size();
 
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         std::vector<float> centroid(d);
 
