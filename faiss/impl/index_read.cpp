@@ -1397,7 +1397,7 @@ Index* read_index(IOReader* f, int io_flags) {
         idx = idxq;
     } else if (h == fourcc("Iwrq")) {
         IndexIVFRaBitQ* ivrq = new IndexIVFRaBitQ();
-        read_ivf_header(ivrq, f);
+        read_ivf_header(ivrq, f, io_flags);
         read_RaBitQuantizer(&ivrq->rabitq, f, false);
         READ1(ivrq->code_size);
         READ1(ivrq->by_residual);
@@ -1413,7 +1413,7 @@ Index* read_index(IOReader* f, int io_flags) {
     } else if (h == fourcc("Iwrr")) {
         // Iwrr = multi-bit format (new)
         IndexIVFRaBitQ* ivrq = new IndexIVFRaBitQ();
-        read_ivf_header(ivrq, f);
+        read_ivf_header(ivrq, f, io_flags);
         read_RaBitQuantizer(&ivrq->rabitq, f, true); // Reads nb_bits from file
         READ1(ivrq->code_size);
         READ1(ivrq->by_residual);
