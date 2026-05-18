@@ -12,6 +12,7 @@
 
 #include <faiss/IndexIVF.h>
 #include <faiss/impl/io.h>
+#include <faiss/impl/maybe_owned_vector.h>
 
 #pragma once
 
@@ -25,13 +26,18 @@ void read_ivf_header(
         IndexIVF* ivf,
         IOReader* f,
         std::vector<std::vector<idx_t>>* ids = nullptr);
+void read_ivf_header(
+        IndexIVF* ivf,
+        IOReader* f,
+        int io_flags,
+        std::vector<std::vector<idx_t>>* ids = nullptr);
 void read_InvertedLists(IndexIVF* ivf, IOReader* f, int io_flags);
 ArrayInvertedLists* set_array_invlist(
         IndexIVF* ivf,
         std::vector<std::vector<idx_t>>& ids);
 void read_ProductQuantizer(ProductQuantizer* pq, IOReader* f);
 void read_ScalarQuantizer(ScalarQuantizer* ivsc, IOReader* f);
-void read_codes_mmaped(uint8_t** codes_ptr, IOReader* f);
+void read_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f);
 
 } // namespace faiss
 

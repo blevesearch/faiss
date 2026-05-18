@@ -20,13 +20,9 @@ namespace faiss {
 IndexFlatCodes::IndexFlatCodes(size_t code_size, idx_t d, MetricType metric)
         : Index(d, metric), code_size(code_size) {}
 
-IndexFlatCodes::IndexFlatCodes() : code_size(0), codes_ptr(nullptr) {}
+IndexFlatCodes::IndexFlatCodes() : code_size(0) {}
 
-IndexFlatCodes::~IndexFlatCodes() {
-    // always let go for the codes_ptr when exiting faiss to make it safe
-    // to be free'd/GC'd at the application layer
-    codes_ptr = nullptr;
-}
+IndexFlatCodes::~IndexFlatCodes() {}
 
 void IndexFlatCodes::add(idx_t n, const float* x) {
     FAISS_THROW_IF_NOT(is_trained);
@@ -105,9 +101,7 @@ void IndexFlatCodes::merge_from(Index& otherIndex, idx_t add_id) {
     IndexFlatCodes* other = static_cast<IndexFlatCodes*>(&otherIndex);
     codes.resize((ntotal + other->ntotal) * code_size);
 
-    // the SQ8 index maybe be mmaped underneath the hood, so we need to check where
-    // the codes are actually stored before copying
-    uint8_t* src = (other->codes_ptr != nullptr) ? other->codes_ptr : other->codes.data();
+    uint8_t* src = other->codes.data();
     memcpy(codes.data() + (ntotal * code_size),
            src,
            other->ntotal * code_size);
