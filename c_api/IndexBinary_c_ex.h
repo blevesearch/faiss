@@ -38,10 +38,8 @@ int faiss_IndexBinary_search_with_params(
         int32_t* distances,
         idx_t* labels);
 
-/** Return an approximate size estimate in bytes for the binary index.
+/** Return an approximate size estimate in bytes for the index.
  * 
- * The estimate accounts for stored codes, the base struct size, and for
- * IVF-based binary indices, includes centroid and stored ID overhead.
  *
  * @param index     opaque pointer to index object
  * @param p_size    output approximate size in bytes
