@@ -40,7 +40,7 @@ void read_ScalarQuantizer(ScalarQuantizer* ivsc, IOReader* f);
 void read_codes_mmaped(
         MaybeOwnedVector<uint8_t>& codes,
         IOReader* f,
-        size_t element_size = 1);
+        size_t element_size);
 
 } // namespace faiss
 

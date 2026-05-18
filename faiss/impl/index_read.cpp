@@ -1047,7 +1047,7 @@ Index* read_index(IOReader* f, int io_flags) {
         read_ScalarQuantizer(&idxs->sq, f);
         idxs->code_size = idxs->sq.code_size;
         if (io_flags & IO_FLAG_READ_MMAP) {
-            read_codes_mmaped(idxs->codes, f);
+            read_codes_mmaped(idxs->codes, f, 1);
         } else {
             read_vector(idxs->codes, f);
         }
@@ -1666,7 +1666,7 @@ IndexBinary* read_index_binary(IOReader* f, int io_flags) {
         IndexBinaryFlat* idxf = new IndexBinaryFlat();
         read_index_binary_header(idxf, f);
         if (io_flags & IO_FLAG_READ_MMAP) {
-            read_codes_mmaped(idxf->xb, f);
+            read_codes_mmaped(idxf->xb, f, 1);
         } else {
             read_vector(idxf->xb, f);
         }
