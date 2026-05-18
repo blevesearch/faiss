@@ -739,7 +739,10 @@ static IndexIVFPQ* read_ivfpq(IOReader* f, uint32_t h, int io_flags) {
     return ivpq;
 }
 
-void read_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f) {
+void read_codes_mmaped(
+        MaybeOwnedVector<uint8_t>& codes,
+        IOReader* f,
+        size_t element_size) {
     size_t size;
     READANDCHECK(&size, 1);
     FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
@@ -747,8 +750,9 @@ void read_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f) {
     FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
     FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
     uint8_t* ptr = const_cast<uint8_t*>(reader->buf + reader->rp);
-    codes = MaybeOwnedVector<uint8_t>::create_view(ptr, size * 4, nullptr);
-    reader->rp += size * 4;
+    size_t nbytes = size * element_size;
+    codes = MaybeOwnedVector<uint8_t>::create_view(ptr, nbytes, nullptr);
+    reader->rp += nbytes;
 }
 
 int read_old_fmt_hack = 0;
@@ -788,7 +792,7 @@ Index* read_index(IOReader* f, int io_flags) {
         idxf->code_size = idxf->d * sizeof(float);
 
         if (io_flags & IO_FLAG_READ_MMAP) {
-            read_codes_mmaped(idxf->codes, f);
+            read_codes_mmaped(idxf->codes, f, 4);
         } else {
             read_xb_vector(idxf->codes, f);
         }
@@ -1654,18 +1658,6 @@ static void read_binary_multi_hash_map(
     }
 }
 
-static void read_binary_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f) {
-    size_t size;
-    READANDCHECK(&size, 1);
-    FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
-    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
-    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
-    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
-    uint8_t* ptr = const_cast<uint8_t*>(reader->buf + reader->rp);
-    codes = MaybeOwnedVector<uint8_t>::create_view(ptr, size, nullptr);
-    reader->rp += size;
-}
-
 IndexBinary* read_index_binary(IOReader* f, int io_flags) {
     IndexBinary* idx = nullptr;
     uint32_t h;
@@ -1674,7 +1666,7 @@ IndexBinary* read_index_binary(IOReader* f, int io_flags) {
         IndexBinaryFlat* idxf = new IndexBinaryFlat();
         read_index_binary_header(idxf, f);
         if (io_flags & IO_FLAG_READ_MMAP) {
-            read_binary_codes_mmaped(idxf->xb, f);
+            read_codes_mmaped(idxf->xb, f);
         } else {
             read_vector(idxf->xb, f);
         }
