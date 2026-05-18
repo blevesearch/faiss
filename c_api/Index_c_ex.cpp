@@ -77,21 +77,16 @@ static size_t faiss_index_static_size(const faiss::Index* idx) {
 int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
     try {
         const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
-        // Base: raw vector codes (works for Flat, SQ, and all other types).
-        size_t size = (size_t)idx->ntotal * idx->sa_code_size();
-        // Static struct footprint
-        size += faiss_index_static_size(idx);
-        // IVF-specific overhead not captured by sa_code_size():
-        //   centroids: quantizer->ntotal * quantizer->sa_code_size()
-        //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
-        //   quantizer struct footprint
+        size_t size = faiss_index_static_size(idx);
         if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
             auto ivfQuantizer = ivf->quantizer;
             if (ivfQuantizer != nullptr) {
-                size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
                 size += faiss_index_static_size(ivfQuantizer);
             }
-            size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
+            // Only include direct_map memory size if present
+            if (!ivf->direct_map.no()) {
+                size += ivf->ntotal * sizeof(idx_t);
+            }
         }
         *p_size = size;
     }
@@ -123,21 +118,6 @@ int faiss_Index_dist_compute(
 
         // If we get here, the index type doesn't support dist_compute
         return -1;
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_Index_static_size(const FaissIndex* index, size_t* p_size) {
-    try {
-        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
-        size_t size = faiss_index_static_size(idx);
-        // For IVF indices, include quantizer struct footprint
-        if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
-            if (ivf->quantizer != nullptr) {
-                size += faiss_index_static_size(ivf->quantizer);
-            }
-        }
-        *p_size = size;
     }
     CATCH_AND_HANDLE
 }

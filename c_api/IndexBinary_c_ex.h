@@ -48,16 +48,6 @@ int faiss_IndexBinary_search_with_params(
  */
 int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size);
 
-/** Return the static struct size of the binary index in bytes.
- *
- * This returns only the base struct footprint 
- * without accounting for any stored data
- *
- * @param index     opaque pointer to index object
- * @param p_size    output static size in bytes
- */
-int faiss_IndexBinary_static_size(const FaissIndexBinary* index, size_t* p_size);
-
 #ifdef __cplusplus
 }
 #endif

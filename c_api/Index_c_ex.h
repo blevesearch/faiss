@@ -30,23 +30,11 @@ int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
 /** Return an approximate size estimate in bytes for the index.
  * 
- * The estimate accounts for stored codes, the base struct size, and for
- * IVF-based indices, includes centroid and stored ID overhead.
  *
  * @param index     opaque pointer to index object
  * @param p_size    output approximate size in bytes
  */
 int faiss_Index_size(const FaissIndex* index, size_t* p_size);
-
-/** Return the static struct size of the index in bytes.
- *
- * This returns only the base struct footprint 
- * without accounting for any stored data
- *
- * @param index     opaque pointer to index object
- * @param p_size    output static size in bytes
- */
-int faiss_Index_static_size(const FaissIndex* index, size_t* p_size);
 
 /** Compute distances between a query vector and a set of vectors 
  *

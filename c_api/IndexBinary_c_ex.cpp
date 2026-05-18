@@ -54,35 +54,15 @@ static size_t faiss_index_binary_static_size(const faiss::IndexBinary* idx) {
 int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
     try {
         const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
-        // Base: raw binary codes (d / 8 bytes per vector).
-        size_t size = (size_t)idx->ntotal * idx->code_size;
-        // Static struct footprint
-        size += faiss_index_binary_static_size(idx);
-        // IVF-specific overhead not captured by code_size:
-        //   centroids: quantizer->ntotal * quantizer->sa_code_size()
-        //   stored IDs: ntotal * sizeof(idx_t)  (per-vector ID in each inverted list)
-        //   quantizer struct footprint
+        size_t size = faiss_index_binary_static_size(idx);
         if (auto ivf = dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
             auto ivfQuantizer = ivf->quantizer;
             if (ivfQuantizer != nullptr) {
-                size += (size_t)ivfQuantizer->ntotal * ivfQuantizer->sa_code_size();
                 size += faiss_index_binary_static_size(ivfQuantizer);
             }
-            size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
-        }
-        *p_size = size;
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_IndexBinary_static_size(const FaissIndexBinary* index, size_t* p_size) {
-    try {
-        const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
-        size_t size = faiss_index_binary_static_size(idx);
-        // For IVF indices, include quantizer struct footprint
-        if (auto ivf = dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
-            if (ivf->quantizer != nullptr) {
-                size += faiss_index_binary_static_size(ivf->quantizer);
+            // Only include direct_map memory size if present
+            if (!ivf->direct_map.no()) {
+                size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
             }
         }
         *p_size = size;
