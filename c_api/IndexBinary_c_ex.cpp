@@ -60,7 +60,6 @@ int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
             if (ivfQuantizer != nullptr) {
                 size += faiss_index_binary_static_size(ivfQuantizer);
             }
-            // Only include direct_map memory size if present
             if (!ivf->direct_map.no()) {
                 size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
             }

@@ -83,7 +83,6 @@ int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
             if (ivfQuantizer != nullptr) {
                 size += faiss_index_static_size(ivfQuantizer);
             }
-            // Only include direct_map memory size if present
             if (!ivf->direct_map.no()) {
                 size += ivf->ntotal * sizeof(idx_t);
             }
@@ -121,5 +120,4 @@ int faiss_Index_dist_compute(
     }
     CATCH_AND_HANDLE
 }
-
 }
