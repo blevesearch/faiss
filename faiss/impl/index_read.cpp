@@ -751,6 +751,19 @@ void read_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f) {
     reader->rp += size * 4;
 }
 
+// For binary indexes where size is already in bytes (not floats)
+void read_binary_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f) {
+    size_t size;
+    READANDCHECK(&size, 1);
+    FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40));
+    BufIOReader* reader = dynamic_cast<BufIOReader*>(f);
+    FAISS_THROW_IF_NOT_MSG(reader, "reading over mmap'd region is supported only with BufIOReader");
+    FAISS_THROW_IF_NOT_MSG(reader->buf, "reader buffer is null");
+    uint8_t* ptr = const_cast<uint8_t*>(reader->buf + reader->rp);
+    codes = MaybeOwnedVector<uint8_t>::create_view(ptr, size, nullptr);
+    reader->rp += size;
+}
+
 int read_old_fmt_hack = 0;
 
 Index* read_index(IOReader* f, int io_flags) {
@@ -1588,6 +1601,24 @@ static void read_binary_ivf_header(
     read_direct_map(&ivf->direct_map, f);
 }
 
+static void read_binary_ivf_header(
+        IndexBinaryIVF* ivf,
+        IOReader* f,
+        int io_flags,
+        std::vector<std::vector<idx_t>>* ids = nullptr) {
+    read_index_binary_header(ivf, f);
+    READ1(ivf->nlist);
+    READ1(ivf->nprobe);
+    ivf->quantizer = read_index_binary(f, io_flags);
+    ivf->own_fields = true;
+    if (ids) { // used in legacy "Iv" formats
+        ids->resize(ivf->nlist);
+        for (size_t i = 0; i < ivf->nlist; i++)
+            READVECTOR((*ids)[i]);
+    }
+    read_direct_map(&ivf->direct_map, f);
+}
+
 static void read_binary_hash_invlists(
         IndexBinaryHash::InvertedListMap& invlists,
         int b,
@@ -1643,13 +1674,17 @@ IndexBinary* read_index_binary(IOReader* f, int io_flags) {
     if (h == fourcc("IBxF")) {
         IndexBinaryFlat* idxf = new IndexBinaryFlat();
         read_index_binary_header(idxf, f);
-        read_vector(idxf->xb, f);
+        if (io_flags & IO_FLAG_READ_MMAP) {
+            read_binary_codes_mmaped(idxf->xb, f);
+        } else {
+            read_vector(idxf->xb, f);
+        }
         FAISS_THROW_IF_NOT(idxf->xb.size() == idxf->ntotal * idxf->code_size);
         // leak!
         idx = idxf;
     } else if (h == fourcc("IBwF")) {
         IndexBinaryIVF* ivf = new IndexBinaryIVF();
-        read_binary_ivf_header(ivf, f);
+        read_binary_ivf_header(ivf, f, io_flags);
         read_InvertedLists(ivf, f, io_flags);
         idx = ivf;
     } else if (h == fourcc("IBFf")) {

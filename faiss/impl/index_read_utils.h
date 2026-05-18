@@ -38,6 +38,7 @@ ArrayInvertedLists* set_array_invlist(
 void read_ProductQuantizer(ProductQuantizer* pq, IOReader* f);
 void read_ScalarQuantizer(ScalarQuantizer* ivsc, IOReader* f);
 void read_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f);
+void read_binary_codes_mmaped(MaybeOwnedVector<uint8_t>& codes, IOReader* f);
 
 } // namespace faiss
 
