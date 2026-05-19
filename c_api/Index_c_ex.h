@@ -28,16 +28,11 @@ int faiss_Index_reconstruct_batch(
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
-/** Estimate the size of the index in bytes.
+/** Return an approximate size estimate in bytes for the index.
+ * 
  *
- * The returned value is an approximation based on the stored vector
- * codes and any additional known overhead (for example centroids and
- * stored IDs for IVF indices). It does not imply an exact total memory
- * footprint, and may not be available for index types that do not
- * support this estimate.
- *
- * @param index       opaque pointer to index object
- * @param p_size      pointer to size_t to store the estimated size
+ * @param index     opaque pointer to index object
+ * @param p_size    output approximate size in bytes
  */
 int faiss_Index_size(const FaissIndex* index, size_t* p_size);
 
