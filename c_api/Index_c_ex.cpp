@@ -13,6 +13,9 @@
 #include "macros_impl.h"
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexScalarQuantizer.h>
+#include <faiss/IndexIVF.h>
+#include <faiss/IndexIVFFlat.h>
+#include <faiss/IndexIVFRaBitQ.h>
 
 extern "C" {
 
@@ -39,10 +42,54 @@ int faiss_Index_merge_from(
     CATCH_AND_HANDLE
 }
 
-size_t faiss_Index_size(FaissIndex* index) {
-    auto xIndex = reinterpret_cast<faiss::Index*>(index);
-    size_t rv = sizeof(xIndex);
-    return rv;
+static size_t faiss_index_static_size(const faiss::Index* idx) {
+    if (idx == nullptr) {
+        return 0;
+    }
+    // Flat Index
+    if (dynamic_cast<const faiss::IndexFlat*>(idx)) {
+        return sizeof(faiss::IndexFlat);
+    }
+    // SQ Index
+    if (dynamic_cast<const faiss::IndexScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexScalarQuantizer);
+    }
+    // IVF,SQ Index
+    if (dynamic_cast<const faiss::IndexIVFScalarQuantizer*>(idx)) {
+        return sizeof(faiss::IndexIVFScalarQuantizer);
+    }
+    // IVF,Flat Index
+    if (dynamic_cast<const faiss::IndexIVFFlat*>(idx)) {
+        return sizeof(faiss::IndexIVFFlat);
+    }
+    // IVF,RaBitQ Index
+    if (dynamic_cast<const faiss::IndexIVFRaBitQ*>(idx)) {
+        return sizeof(faiss::IndexIVFRaBitQ);
+    }
+    // IVF Index
+    if (dynamic_cast<const faiss::IndexIVF*>(idx)) {
+        return sizeof(faiss::IndexIVF);
+    }
+    // Base Index
+    return sizeof(faiss::Index);
+}
+
+int faiss_Index_size(const FaissIndex* index, size_t* p_size) {
+    try {
+        const faiss::Index* idx = reinterpret_cast<const faiss::Index*>(index);
+        size_t size = faiss_index_static_size(idx);
+        if (auto ivf = dynamic_cast<const faiss::IndexIVF*>(idx)) {
+            auto ivfQuantizer = ivf->quantizer;
+            if (ivfQuantizer != nullptr) {
+                size += faiss_index_static_size(ivfQuantizer);
+            }
+            if (!ivf->direct_map.no()) {
+                size += ivf->ntotal * sizeof(idx_t);
+            }
+        }
+        *p_size = size;
+    }
+    CATCH_AND_HANDLE
 }
 
 int faiss_Index_dist_compute(
