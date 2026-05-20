@@ -31,9 +31,6 @@ int faiss_GpuIndexIVF_reserve_memory(
             pq->reserveMemory(num_vectors);
         } else if (auto sq = dynamic_cast<GpuIndexIVFScalarQuantizer*>(ivf)) {
             sq->reserveMemory(num_vectors);
-        } else {
-            throw std::runtime_error(
-                    "reserve_memory not supported for this GpuIndexIVF subtype");
         }
     }
     CATCH_AND_HANDLE
