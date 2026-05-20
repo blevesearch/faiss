@@ -29,7 +29,11 @@ size_t adjustStackSize(size_t sz) {
 
 } // namespace
 
-StackDeviceMemory::Stack::Stack(GpuResources* res, int d, size_t sz)
+StackDeviceMemory::Stack::Stack(
+        GpuResources* res,
+        int d,
+        size_t sz,
+        MemorySpace space)
         : res_(res),
           device_(d),
           alloc_(nullptr),
@@ -46,7 +50,7 @@ StackDeviceMemory::Stack::Stack(GpuResources* res, int d, size_t sz)
     auto req = AllocRequest(
             AllocType::TemporaryMemoryBuffer,
             device_,
-            MemorySpace::Device,
+            space,
             res_->getDefaultStream(device_),
             allocSize_);
 
@@ -170,8 +174,9 @@ std::string StackDeviceMemory::Stack::toString() const {
 StackDeviceMemory::StackDeviceMemory(
         GpuResources* res,
         int device,
-        size_t allocPerDevice)
-        : device_(device), stack_(res, device, allocPerDevice) {}
+        size_t allocPerDevice,
+        MemorySpace space)
+        : device_(device), stack_(res, device, allocPerDevice, space) {}
 
 StackDeviceMemory::~StackDeviceMemory() {}
 

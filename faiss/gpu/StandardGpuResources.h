@@ -62,11 +62,11 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// To avoid any temporary memory allocation, pass 0.
     void setTempMemory(size_t size);
 
-    /// Set memory space for temporary memory overflow allocations.
-    /// When the temp pool is exhausted, overflow allocations will use this
-    /// memory space. Default is MemorySpace::Device (cudaMalloc).
+    /// Set memory space for all temporary memory allocations (both the
+    /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
     /// Set to MemorySpace::Unified for cudaMallocManaged.
-    void setTempMemoryOverflowSpace(MemorySpace space);
+    /// Must be called before any device is initialized.
+    void setTempMemorySpace(MemorySpace space);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
@@ -196,8 +196,8 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Whether or not we log every GPU memory allocation and deallocation
     bool allocLogging_;
 
-    /// Memory space for temp overflow allocations (default: Device)
-    MemorySpace tempOverflowSpace_;
+    /// Memory space for temp allocations - pool and overflow (default: Device)
+    MemorySpace tempMemorySpace_;
 };
 
 /// Default implementation of GpuResources that allocates a cuBLAS
@@ -228,11 +228,11 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// To avoid any temporary memory allocation, pass 0.
     void setTempMemory(size_t size);
 
-    /// Set memory space for temporary memory overflow allocations.
-    /// When the temp pool is exhausted, overflow allocations will use this
-    /// memory space. Default is MemorySpace::Device (cudaMalloc).
+    /// Set memory space for all temporary memory allocations (both the
+    /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
     /// Set to MemorySpace::Unified for cudaMallocManaged.
-    void setTempMemoryOverflowSpace(MemorySpace space);
+    /// Must be called before any device is initialized.
+    void setTempMemorySpace(MemorySpace space);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers

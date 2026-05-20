@@ -22,7 +22,11 @@ namespace gpu {
 class StackDeviceMemory {
    public:
     /// Allocate a new region of memory that we manage
-    StackDeviceMemory(GpuResources* res, int device, size_t allocPerDevice);
+    StackDeviceMemory(
+            GpuResources* res,
+            int device,
+            size_t allocPerDevice,
+            MemorySpace space = MemorySpace::Device);
 
     /// Manage a region of memory for a particular device, with or
     /// without ownership
@@ -53,8 +57,8 @@ class StackDeviceMemory {
     };
 
     struct Stack {
-        /// Constructor that allocates memory via cudaMalloc
-        Stack(GpuResources* res, int device, size_t size);
+        /// Constructor that allocates memory via the specified memory space
+        Stack(GpuResources* res, int device, size_t size, MemorySpace space);
 
         ~Stack();
 
