@@ -28,10 +28,6 @@ class StackDeviceMemory {
             size_t allocPerDevice,
             MemorySpace space = MemorySpace::Device);
 
-    /// Manage a region of memory for a particular device, with or
-    /// without ownership
-    StackDeviceMemory(int device, void* p, size_t size, bool isOwner);
-
     ~StackDeviceMemory();
 
     int getDevice() const;
