@@ -82,6 +82,9 @@ class StackDeviceMemory {
         /// Device this allocation is on
         int device_;
 
+        /// Memory space used for this allocation
+        MemorySpace tempMemorySpace_;
+
         /// Where our temporary memory buffer is allocated; we allocate starting
         /// 16 bytes into this
         char* alloc_;

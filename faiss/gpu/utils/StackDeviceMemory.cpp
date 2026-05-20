@@ -36,6 +36,7 @@ StackDeviceMemory::Stack::Stack(
         MemorySpace space)
         : res_(res),
           device_(d),
+          tempMemorySpace_(space),
           alloc_(nullptr),
           allocSize_(adjustStackSize(sz)),
           start_(nullptr),
@@ -50,7 +51,7 @@ StackDeviceMemory::Stack::Stack(
     auto req = AllocRequest(
             AllocType::TemporaryMemoryBuffer,
             device_,
-            space,
+            tempMemorySpace_,
             res_->getDefaultStream(device_),
             allocSize_);
 
