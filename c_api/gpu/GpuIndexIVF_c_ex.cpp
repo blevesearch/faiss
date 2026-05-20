@@ -7,7 +7,7 @@
 
 // -*- c++ -*-
 
-#include "GpuIndexIVF_c.h"
+#include "GpuIndexIVF_c_ex.h"
 #include <faiss/gpu/GpuIndexIVF.h>
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>

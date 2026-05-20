@@ -8,45 +8,9 @@
 // -*- c++ -*-
 
 #include "GpuIndex_c.h"
-#include "GpuIndexIVF_c.h"
 #include <faiss/gpu/GpuIndex.h>
-#include <faiss/gpu/GpuIndexIVF.h>
 #include "macros_impl.h"
 
-using faiss::gpu::GpuIndex;
 using faiss::gpu::GpuIndexConfig;
-using faiss::gpu::GpuIndexIVF;
 
 DEFINE_GETTER(GpuIndexConfig, int, device)
-
-DEFINE_GETTER(GpuIndex, int, d)
-
-int faiss_GpuIndex_train(FaissGpuIndex* index, idx_t n, const float* x) {
-    try {
-        reinterpret_cast<GpuIndex*>(index)->train(n, x);
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_GpuIndex_add(FaissGpuIndex* index, idx_t n, const float* x) {
-    try {
-        reinterpret_cast<GpuIndex*>(index)->add(n, x);
-    }
-    CATCH_AND_HANDLE
-}
-
-int faiss_GpuIndex_search(
-        const FaissGpuIndex* index,
-        idx_t n,
-        const float* x,
-        idx_t k,
-        float* distances,
-        idx_t* labels) {
-    try {
-        reinterpret_cast<const GpuIndex*>(index)->search(
-                n, x, k, distances, labels);
-    }
-    CATCH_AND_HANDLE
-}
-
-DEFINE_DESTRUCTOR(GpuIndex)

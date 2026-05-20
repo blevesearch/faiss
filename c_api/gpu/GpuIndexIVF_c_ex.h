@@ -7,8 +7,8 @@
 
 // -*- c -*-
 
-#ifndef FAISS_GPU_INDEX_IVF_C_H
-#define FAISS_GPU_INDEX_IVF_C_H
+#ifndef FAISS_GPU_INDEX_IVF_C_EX_H
+#define FAISS_GPU_INDEX_IVF_C_EX_H
 
 #include <stddef.h>
 
