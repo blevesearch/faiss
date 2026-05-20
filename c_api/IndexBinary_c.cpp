@@ -23,7 +23,6 @@ DEFINE_GETTER(IndexBinary, idx_t, ntotal)
 
 DEFINE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
-DEFINE_GETTER(IndexBinary, int, code_size)
 
 DEFINE_GETTER(IndexBinary, int, verbose);
 DEFINE_SETTER(IndexBinary, int, verbose);

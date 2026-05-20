@@ -40,9 +40,6 @@ FAISS_DECLARE_GETTER(IndexBinary, idx_t, ntotal)
 /// Getter for metric_type
 FAISS_DECLARE_GETTER(IndexBinary, FaissMetricType, metric_type)
 
-/// Getter for code_size (number of bytes per vector = d / 8)
-FAISS_DECLARE_GETTER(IndexBinary, int, code_size)
-
 FAISS_DECLARE_GETTER_SETTER(IndexBinary, int, verbose)
 
 /** Perform training on a representative set of vectors
