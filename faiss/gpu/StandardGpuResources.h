@@ -62,6 +62,12 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// To avoid any temporary memory allocation, pass 0.
     void setTempMemory(size_t size);
 
+    /// Set memory space for temporary memory overflow allocations.
+    /// When the temp pool is exhausted, overflow allocations will use this
+    /// memory space. Default is MemorySpace::Device (cudaMalloc).
+    /// Set to MemorySpace::Unified for cudaMallocManaged.
+    void setTempMemoryOverflowSpace(MemorySpace space);
+
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
     void setPinnedMemory(size_t size);
@@ -189,6 +195,9 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Whether or not we log every GPU memory allocation and deallocation
     bool allocLogging_;
+
+    /// Memory space for temp overflow allocations (default: Device)
+    MemorySpace tempOverflowSpace_;
 };
 
 /// Default implementation of GpuResources that allocates a cuBLAS
@@ -218,6 +227,12 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// smaller GPUs (with <= 4 GiB or <= 8 GiB) will use less memory than that.
     /// To avoid any temporary memory allocation, pass 0.
     void setTempMemory(size_t size);
+
+    /// Set memory space for temporary memory overflow allocations.
+    /// When the temp pool is exhausted, overflow allocations will use this
+    /// memory space. Default is MemorySpace::Device (cudaMalloc).
+    /// Set to MemorySpace::Unified for cudaMallocManaged.
+    void setTempMemoryOverflowSpace(MemorySpace space);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers

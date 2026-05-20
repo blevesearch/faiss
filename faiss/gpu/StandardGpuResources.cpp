@@ -103,7 +103,8 @@ StandardGpuResourcesImpl::StandardGpuResourcesImpl()
                   -1,
                   std::numeric_limits<size_t>::max())),
           pinnedMemSize_(kDefaultPinnedMemoryAllocation),
-          allocLogging_(false) {
+          allocLogging_(false),
+          tempOverflowSpace_(MemorySpace::Device) {
 }
 
 StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
@@ -239,6 +240,10 @@ void StandardGpuResourcesImpl::setTempMemory(size_t size) {
                     getDefaultTempMemForGPU(device, tempMemSize_));
         }
     }
+}
+
+void StandardGpuResourcesImpl::setTempMemoryOverflowSpace(MemorySpace space) {
+    tempOverflowSpace_ = space;
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -528,14 +533,16 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
         if (adjReq.size > tempMem->getSizeAvailable()) {
             // We need to allocate this ourselves
             AllocRequest newReq = adjReq;
-            newReq.space = MemorySpace::Device;
+            newReq.space = tempOverflowSpace_;
             newReq.type = AllocType::TemporaryMemoryOverflow;
 
             if (allocLogging_) {
                 std::cout
                         << "StandardGpuResources: alloc fail "
                         << adjReq.toString()
-                        << " (no temp space); retrying as MemorySpace::Device\n";
+                        << " (no temp space); retrying as MemorySpace::"
+                        << (tempOverflowSpace_ == MemorySpace::Unified ? "Unified" : "Device")
+                        << "\n";
             }
 
             return allocMemory(newReq);
@@ -722,6 +729,10 @@ void StandardGpuResources::noTempMemory() {
 
 void StandardGpuResources::setTempMemory(size_t size) {
     res_->setTempMemory(size);
+}
+
+void StandardGpuResources::setTempMemoryOverflowSpace(MemorySpace space) {
+    res_->setTempMemoryOverflowSpace(space);
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {

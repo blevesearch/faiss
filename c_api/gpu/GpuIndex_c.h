@@ -58,6 +58,14 @@ int faiss_GpuIndex_search(
         float* distances,
         idx_t* labels);
 
+/** Return an approximate size estimate in bytes for the index.
+ * 
+ *
+ * @param index     opaque pointer to index object
+ * @param p_size    output approximate size in bytes
+ */
+int faiss_GpuIndex_size(const FaissGpuIndex* index, size_t* p_size);
+
 /// Free the GPU index
 FAISS_DECLARE_DESTRUCTOR(GpuIndex)
 
