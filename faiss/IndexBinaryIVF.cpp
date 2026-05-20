@@ -368,7 +368,6 @@ void IndexBinaryIVF::merge_from(IndexBinary& otherIndex, idx_t add_id) {
     auto other = static_cast<IndexBinaryIVF*>(&otherIndex);
     invlists->merge_from(other->invlists, add_id);
     ntotal += other->ntotal;
-    other->ntotal = 0;
 }
 
 void IndexBinaryIVF::replace_invlists(InvertedLists* il, bool own) {

@@ -1325,7 +1325,6 @@ void IndexIVF::merge_from(Index& otherIndex, idx_t add_id) {
     invlists->merge_from(other->invlists, add_id);
 
     ntotal += other->ntotal;
-    other->ntotal = 0;
 }
 
 CodePacker* IndexIVF::get_CodePacker() const {
