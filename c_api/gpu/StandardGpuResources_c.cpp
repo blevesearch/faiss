@@ -11,6 +11,7 @@
 #include <faiss/gpu/StandardGpuResources.h>
 #include "macros_impl.h"
 
+using faiss::gpu::MemorySpace;
 using faiss::gpu::StandardGpuResources;
 
 DEFINE_DESTRUCTOR(StandardGpuResources)
@@ -35,6 +36,16 @@ int faiss_StandardGpuResources_setTempMemory(
         size_t size) {
     try {
         reinterpret_cast<StandardGpuResources*>(res)->setTempMemory(size);
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_StandardGpuResources_setTempMemorySpace(
+        FaissStandardGpuResources* res,
+        int space) {
+    try {
+        reinterpret_cast<StandardGpuResources*>(res)->setTempMemorySpace(
+                static_cast<MemorySpace>(space));
     }
     CATCH_AND_HANDLE
 }
