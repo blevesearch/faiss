@@ -68,4 +68,12 @@ int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_IndexBinary_sa_code_size(const FaissIndexBinary* index, size_t* size) {
+    try {
+        *size = reinterpret_cast<const faiss::IndexBinary*>(index)->sa_code_size();
+    }
+    CATCH_AND_HANDLE
+}
+
 }
