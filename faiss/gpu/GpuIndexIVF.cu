@@ -207,6 +207,8 @@ void GpuIndexIVF::copyFrom(const faiss::IndexIVF* index) {
                 "that already contains a GPU coarse (level 1) quantizer "
                 "is not currently supported");
     }
+    // copy the num vectors to use to train the encoder from the source index
+    encoderTrainingVecs_ = index->train_encoder_num_vectors();
 
     // Validate equality
     FAISS_ASSERT(is_trained == index->is_trained);
@@ -252,6 +254,10 @@ void GpuIndexIVF::copyTo(faiss::IndexIVF* index) const {
     index->quantizer_trains_alone = 0;
     index->cp = this->cp;
     index->make_direct_map(false);
+}
+
+idx_t GpuIndexIVF::train_encoder_num_vectors() const {
+    return encoderTrainingVecs_;
 }
 
 idx_t GpuIndexIVF::getNumLists() const {
