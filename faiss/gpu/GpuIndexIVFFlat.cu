@@ -108,6 +108,38 @@ void GpuIndexIVFFlat::reserveMemory(size_t numVecs) {
     }
 }
 
+void GpuIndexIVFFlat::reserveAssignedMemory(size_t nlist, const idx_t* x) {
+    DeviceScope scope(config_.device);
+
+    if (should_use_cuvs(config_)) {
+        FAISS_THROW_MSG(
+                "Pre-allocation of IVF lists is not supported with cuVS enabled.");
+    }
+
+    for (size_t i = 0; i < nlist; i++) {
+        reserveMemoryVecs_ += x[i];
+    }
+
+    if (index_) {
+        index_->reserveAssignedMemory(nlist, x);
+    }
+}
+
+void GpuIndexIVFFlat::computeRequiredMemory(size_t nlist, const idx_t* x, size_t* out) {
+    DeviceScope scope(config_.device);
+
+    if (should_use_cuvs(config_)) {
+        FAISS_THROW_MSG(
+                "Pre-allocation of IVF lists is not supported with cuVS enabled.");
+    }
+
+    if (index_) {
+        index_->computeRequiredMemory(nlist, x, out);
+    } else {
+        *out = 0;
+    }
+}
+
 void GpuIndexIVFFlat::copyFrom(const faiss::IndexIVFFlat* index) {
     DeviceScope scope(config_.device);
 
