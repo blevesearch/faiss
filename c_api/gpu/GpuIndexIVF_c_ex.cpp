@@ -20,18 +20,51 @@ using faiss::gpu::GpuIndexIVFFlat;
 using faiss::gpu::GpuIndexIVFPQ;
 using faiss::gpu::GpuIndexIVFScalarQuantizer;
 
-int faiss_GpuIndexIVF_reserve_memory(
+
+DEFINE_GETTER(GpuIndexIVF, size_t, nlist)
+
+int faiss_GpuIndexIVF_reserve_assigned_memory(
         FaissGpuIndexIVF* index,
-        size_t num_vectors) {
+        size_t n,
+        const idx_t* x) {
     try {
         auto ivf = reinterpret_cast<GpuIndexIVF*>(index);
-        if (auto flat = dynamic_cast<GpuIndexIVFFlat*>(ivf)) {
-            flat->reserveMemory(num_vectors);
+        if (auto sq = dynamic_cast<GpuIndexIVFScalarQuantizer*>(ivf)) {
+            sq->reserveAssignedMemory(n, x);
         } else if (auto pq = dynamic_cast<GpuIndexIVFPQ*>(ivf)) {
-            pq->reserveMemory(num_vectors);
-        } else if (auto sq = dynamic_cast<GpuIndexIVFScalarQuantizer*>(ivf)) {
-            sq->reserveMemory(num_vectors);
+            pq->reserveAssignedMemory(n, x);
+        } else if (auto flat = dynamic_cast<GpuIndexIVFFlat*>(ivf)) {
+            flat->reserveAssignedMemory(n, x);
         }
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_GpuIndexIVF_compute_required_memory(
+        FaissGpuIndexIVF* index, 
+        size_t n,
+        const idx_t* x,
+        size_t* out) {
+    try {
+        auto ivf = reinterpret_cast<GpuIndexIVF*>(index);
+        if (auto sq = dynamic_cast<GpuIndexIVFScalarQuantizer*>(ivf)) {
+            sq->computeRequiredMemory(n, x, out);
+        } else if (auto pq = dynamic_cast<GpuIndexIVFPQ*>(ivf)) {
+            pq->computeRequiredMemory(n, x, out);
+        } else if (auto flat = dynamic_cast<GpuIndexIVFFlat*>(ivf)) {
+            flat->computeRequiredMemory(n, x, out);
+        }
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_GpuIndexIVF_assign(
+        const FaissGpuIndexIVF* index, 
+        idx_t n, 
+        const float* x, 
+        idx_t* labels) {
+    try {
+        reinterpret_cast<const GpuIndexIVF*>(index)->quantizer->assign(n, x, labels);
     }
     CATCH_AND_HANDLE
 }

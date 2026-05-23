@@ -105,6 +105,51 @@ void IVFBase::reserveMemory(idx_t numVecs) {
     updateDeviceListInfo_(stream);
 }
 
+void IVFBase::reserveAssignedMemory(size_t nlist, const idx_t* x) { 
+    FAISS_ASSERT(nlist == deviceListData_.size());
+    FAISS_ASSERT(nlist == deviceListIndices_.size());
+
+    auto stream = resources_->getDefaultStreamCurrentDevice();
+    for (size_t i = 0; i < nlist; ++i) {
+        auto bytesPerDataList = getGpuVectorsEncodingSize_(x[i]);
+        deviceListData_[i]->data.reserve(bytesPerDataList, stream);
+    }
+
+    if ((indicesOptions_ == INDICES_32_BIT) ||
+        (indicesOptions_ == INDICES_64_BIT)) {
+        // Reserve for index lists as well
+        size_t idxSize = indicesOptions_ == INDICES_32_BIT ? sizeof(int) : sizeof(idx_t);
+        for (size_t i = 0; i < nlist; ++i) {
+            auto bytesPerIndexList = x[i] * idxSize;
+            deviceListIndices_[i]->data.reserve(bytesPerIndexList, stream);
+        }
+    }
+
+    // Update device info for all lists, since the base pointers may
+    // have changed
+    updateDeviceListInfo_(stream);
+}
+
+void IVFBase::computeRequiredMemory(size_t nlist, const idx_t* x, size_t* out) {
+    FAISS_ASSERT(nlist == deviceListData_.size());
+    FAISS_ASSERT(nlist == deviceListIndices_.size());
+
+    size_t total = 0;
+
+    for (size_t i = 0; i < nlist; ++i) {
+        total += getGpuVectorsEncodingSize_(x[i]);
+    }
+
+    if (indicesOptions_ == INDICES_32_BIT || indicesOptions_ == INDICES_64_BIT) {
+        size_t idxSize = indicesOptions_ == INDICES_32_BIT ? sizeof(int) : sizeof(idx_t);
+        for (size_t i = 0; i < nlist; ++i) {
+            total += x[i] * idxSize;
+        }
+    }
+
+    *out = total;
+}
+
 void IVFBase::reset() {
     auto stream = resources_->getDefaultStreamCurrentDevice();
 
