@@ -20,7 +20,6 @@ using faiss::gpu::GpuIndexIVFFlat;
 using faiss::gpu::GpuIndexIVFPQ;
 using faiss::gpu::GpuIndexIVFScalarQuantizer;
 
-
 DEFINE_GETTER(GpuIndexIVF, size_t, nlist)
 
 int faiss_GpuIndexIVF_reserve_assigned_memory(
@@ -41,7 +40,7 @@ int faiss_GpuIndexIVF_reserve_assigned_memory(
 }
 
 int faiss_GpuIndexIVF_compute_required_memory(
-        FaissGpuIndexIVF* index, 
+        FaissGpuIndexIVF* index,
         size_t n,
         const idx_t* x,
         size_t* out) {
@@ -59,12 +58,13 @@ int faiss_GpuIndexIVF_compute_required_memory(
 }
 
 int faiss_GpuIndexIVF_assign(
-        const FaissGpuIndexIVF* index, 
-        idx_t n, 
-        const float* x, 
+        const FaissGpuIndexIVF* index,
+        idx_t n,
+        const float* x,
         idx_t* labels) {
     try {
-        reinterpret_cast<const GpuIndexIVF*>(index)->quantizer->assign(n, x, labels);
+        reinterpret_cast<const GpuIndexIVF*>(index)->quantizer->assign(
+                n, x, labels);
     }
     CATCH_AND_HANDLE
 }
