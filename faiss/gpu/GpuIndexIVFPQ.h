@@ -97,6 +97,12 @@ class GpuIndexIVFPQ : public GpuIndexIVF {
     /// Reserve GPU memory in our inverted lists for this number of vectors
     void reserveMemory(size_t numVecs);
 
+    /// Reserve GPU memory in our inverted lists for this number of vectors per list
+    void reserveAssignedMemory(size_t nlist, const idx_t* x);
+
+    /// Compute the amount of memory required for a given set of assignments
+    void computeRequiredMemory(size_t nlist, const idx_t* x, size_t* out);
+
     /// Enable or disable pre-computed codes
     void setPrecomputedCodes(bool enable);
 

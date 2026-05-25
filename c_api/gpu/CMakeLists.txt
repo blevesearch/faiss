@@ -8,6 +8,8 @@ target_sources(faiss_c PRIVATE
   GpuAutoTune_c.cpp
   GpuClonerOptions_c.cpp
   GpuIndex_c.cpp
+  GpuIndex_c_ex.cpp
+  GpuIndexIVF_c_ex.cpp
   GpuResources_c.cpp
   StandardGpuResources_c.cpp
 )
