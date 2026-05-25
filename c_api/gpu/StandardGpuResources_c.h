@@ -37,6 +37,14 @@ int faiss_StandardGpuResources_setTempMemory(
         FaissStandardGpuResources*,
         size_t size);
 
+/// Set memory space for all temporary memory allocations (both the
+/// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
+/// Set to MemorySpace::Unified for cudaMallocManaged.
+/// Must be called before any device is initialized.
+int faiss_StandardGpuResources_setTempMemorySpace(
+        FaissStandardGpuResources*,
+        int space);
+
 /// Set amount of pinned memory to allocate, for async GPU <-> CPU
 /// transfers
 int faiss_StandardGpuResources_setPinnedMemory(

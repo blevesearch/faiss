@@ -22,11 +22,11 @@ namespace gpu {
 class StackDeviceMemory {
    public:
     /// Allocate a new region of memory that we manage
-    StackDeviceMemory(GpuResources* res, int device, size_t allocPerDevice);
-
-    /// Manage a region of memory for a particular device, with or
-    /// without ownership
-    StackDeviceMemory(int device, void* p, size_t size, bool isOwner);
+    StackDeviceMemory(
+            GpuResources* res,
+            int device,
+            size_t allocPerDevice,
+            MemorySpace space = MemorySpace::Device);
 
     ~StackDeviceMemory();
 
@@ -53,8 +53,8 @@ class StackDeviceMemory {
     };
 
     struct Stack {
-        /// Constructor that allocates memory via cudaMalloc
-        Stack(GpuResources* res, int device, size_t size);
+        /// Constructor that allocates memory via the specified memory space
+        Stack(GpuResources* res, int device, size_t size, MemorySpace space);
 
         ~Stack();
 
@@ -77,6 +77,9 @@ class StackDeviceMemory {
 
         /// Device this allocation is on
         int device_;
+
+        /// Memory space used for this allocation
+        MemorySpace tempMemorySpace_;
 
         /// Where our temporary memory buffer is allocated; we allocate starting
         /// 16 bytes into this
