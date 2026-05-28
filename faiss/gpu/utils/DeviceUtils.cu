@@ -29,13 +29,12 @@ void setCurrentDevice(int device) {
 
 int getNumDevices() {
     int numDev = -1;
-    cudaError_t err = cudaGetDeviceCount(&numDev);
-    if (cudaErrorNoDevice == err || cudaErrorInsufficientDriver == err) {
+    auto err = cudaGetDeviceCount(&numDev);
+    if (err != cudaSuccess || numDev < 0) {
         numDev = 0;
-    } else {
-        CUDA_VERIFY(err);
+        cudaGetLastError();
     }
-    FAISS_ASSERT(numDev != -1);
+    FAISS_ASSERT(numDev >= 0);
 
     return numDev;
 }

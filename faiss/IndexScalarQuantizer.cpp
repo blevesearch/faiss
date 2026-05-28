@@ -107,7 +107,7 @@ void IndexScalarQuantizer::dist_compute(
 
     dc->set_query(query);
 
-    const uint8_t* base = (codes_ptr != nullptr) ? codes_ptr : codes.data();
+    const uint8_t* base = codes.data();
     for (size_t i = 0; i < n_ids; i++) {
         idx_t id = ids[i];
         const uint8_t* code = base + id * code_size;
@@ -116,14 +116,7 @@ void IndexScalarQuantizer::dist_compute(
 }
 
 void IndexScalarQuantizer::reconstruct(idx_t key, float* recons) const {
-    const uint8_t* code;
-
-    if (codes_ptr != nullptr) {
-        code = codes_ptr + key * code_size;
-    } else {
-        code = codes.data() + key * code_size;
-    }
-
+    const uint8_t* code = codes.data() + key * code_size;
     sq.decode(code, recons, 1);
 }
 

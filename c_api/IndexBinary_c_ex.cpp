@@ -10,6 +10,8 @@
 
 #include "IndexBinary_c_ex.h"
 #include <faiss/IndexBinary.h>
+#include <faiss/IndexBinaryFlat.h>
+#include <faiss/IndexBinaryIVF.h>
 #include "macros_impl.h"
 
 extern "C" {
@@ -33,9 +35,45 @@ int faiss_IndexBinary_search_with_params(
     CATCH_AND_HANDLE
 }
 
-size_t faiss_IndexBinary_size(FaissIndexBinary* index) {
-    auto xIndex = reinterpret_cast<faiss::IndexBinary*>(index);
-    size_t rv = sizeof(xIndex);
-    return rv;
+static size_t faiss_index_binary_static_size(const faiss::IndexBinary* idx) {
+    if (idx == nullptr) {
+        return 0;
+    }
+    // BFlat
+    if (dynamic_cast<const faiss::IndexBinaryFlat*>(idx)) {
+        return sizeof(faiss::IndexBinaryFlat);
+    }
+    // BIVF
+    if (dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
+        return sizeof(faiss::IndexBinaryIVF);
+    }
+    // Base
+    return sizeof(faiss::IndexBinary);
 }
+
+int faiss_IndexBinary_size(const FaissIndexBinary* index, size_t* p_size) {
+    try {
+        const faiss::IndexBinary* idx = reinterpret_cast<const faiss::IndexBinary*>(index);
+        size_t size = faiss_index_binary_static_size(idx);
+        if (auto ivf = dynamic_cast<const faiss::IndexBinaryIVF*>(idx)) {
+            auto ivfQuantizer = ivf->quantizer;
+            if (ivfQuantizer != nullptr) {
+                size += faiss_index_binary_static_size(ivfQuantizer);
+            }
+            if (!ivf->direct_map.no()) {
+                size += (size_t)ivf->ntotal * sizeof(faiss::idx_t);
+            }
+        }
+        *p_size = size;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexBinary_sa_code_size(const FaissIndexBinary* index, size_t* size) {
+    try {
+        *size = reinterpret_cast<const faiss::IndexBinary*>(index)->sa_code_size();
+    }
+    CATCH_AND_HANDLE
+}
+
 }

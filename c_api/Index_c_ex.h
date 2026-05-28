@@ -28,7 +28,13 @@ int faiss_Index_reconstruct_batch(
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
-size_t faiss_Index_size(FaissIndex* index);
+/** Return an approximate size estimate in bytes for the index.
+ * 
+ *
+ * @param index     opaque pointer to index object
+ * @param p_size    output approximate size in bytes
+ */
+int faiss_Index_size(const FaissIndex* index, size_t* p_size);
 
 /** Compute distances between a query vector and a set of vectors 
  *

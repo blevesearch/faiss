@@ -77,6 +77,8 @@ int faiss_IndexBinaryIVF_get_centroids_and_cardinality(
         size_t* cardinalities,
         idx_t* centroid_ids);
 
+int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* source);
+
 #ifdef __cplusplus
 }
 #endif

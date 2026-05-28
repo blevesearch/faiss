@@ -26,9 +26,6 @@ struct IndexScalarQuantizer : IndexFlatCodes {
     /// Used to encode the vectors
     ScalarQuantizer sq;
 
-    /// Pointer for mmaped codes if enabled
-    uint8_t* codes_ptr = nullptr;
-
     /** Constructor.
      *
      * @param d      dimensionality of the input vectors

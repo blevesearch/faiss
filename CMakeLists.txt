@@ -62,7 +62,9 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # Valid values are "generic", "avx2", "avx512", "avx512_spr", "sve".
-option(FAISS_OPT_LEVEL "" "generic")
+if(NOT DEFINED FAISS_OPT_LEVEL)
+  set(FAISS_OPT_LEVEL "generic" CACHE STRING "Optimization level (generic, avx2, avx512, etc.)")
+endif()
 option(FAISS_ENABLE_GPU "Enable support for GPU indexes." ON)
 option(FAISS_GPU_STATIC "Link GPU libraries statically." OFF)
 option(FAISS_ENABLE_CUVS "Enable cuVS for GPU indexes." OFF)

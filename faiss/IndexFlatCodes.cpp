@@ -20,7 +20,7 @@ namespace faiss {
 IndexFlatCodes::IndexFlatCodes(size_t code_size, idx_t d, MetricType metric)
         : Index(d, metric), code_size(code_size) {}
 
-IndexFlatCodes::IndexFlatCodes() : code_size(0), codes_ptr(nullptr) {}
+IndexFlatCodes::IndexFlatCodes() : code_size(0) {}
 
 IndexFlatCodes::~IndexFlatCodes() {}
 
@@ -100,8 +100,10 @@ void IndexFlatCodes::merge_from(Index& otherIndex, idx_t add_id) {
     check_compatible_for_merge(otherIndex);
     IndexFlatCodes* other = static_cast<IndexFlatCodes*>(&otherIndex);
     codes.resize((ntotal + other->ntotal) * code_size);
+
+    uint8_t* src = other->codes.data();
     memcpy(codes.data() + (ntotal * code_size),
-           other->codes.data(),
+           src,
            other->ntotal * code_size);
     ntotal += other->ntotal;
     other->reset();

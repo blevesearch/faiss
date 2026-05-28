@@ -100,4 +100,22 @@ int faiss_IndexBinaryIVF_get_centroids_and_cardinality(
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* source) {
+    try {
+        auto* tgt = reinterpret_cast<faiss::IndexBinary*>(target);
+        auto* src = reinterpret_cast<faiss::IndexBinary*>(source);
+        assert(tgt && src);
+
+        if (auto* tgt_bivf = dynamic_cast<faiss::IndexBinaryIVF*>(tgt)) {
+            auto* src_bivf = dynamic_cast<faiss::IndexBinaryIVF*>(src);
+            assert(src_bivf);
+
+            tgt_bivf->quantizer = src_bivf->quantizer;
+            tgt_bivf->is_trained = true;
+            return 0;
+        }
+    }
+    CATCH_AND_HANDLE
+}
 }

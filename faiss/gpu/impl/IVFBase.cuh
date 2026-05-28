@@ -43,6 +43,12 @@ class IVFBase {
     /// Reserve GPU memory in our inverted lists for this number of vectors
     virtual void reserveMemory(idx_t numVecs);
 
+    /// Reserve GPU memory in our inverted lists for the given number of vectors per list
+    virtual void reserveAssignedMemory(size_t nlist, const idx_t* x);
+
+    /// Compute the amount of memory required for a given set of assignments
+    virtual void computeRequiredMemory(size_t nlist, const idx_t* x, size_t* out);
+
     /// Clear out all inverted lists, but retain the coarse quantizer
     /// and the product quantizer info
     virtual void reset();
