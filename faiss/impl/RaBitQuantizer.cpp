@@ -579,4 +579,54 @@ FlatCodesDistanceComputer* RaBitQuantizer::get_distance_computer(
     }
 }
 
+size_t RaBitQuantizer::precomputed_query_size(uint8_t qb_in) const {
+    size_t bp_bytes = ((d + 7) / 8) * qb_in;
+    return sizeof(PrecomputedQueryScalars) +
+            d * sizeof(float) + bp_bytes;
+}
+
+void RaBitQuantizer::compute_query_precomputed(
+        const float* x,
+        uint8_t qb_in,
+        const float* centroid_in,
+        bool centered_in,
+        uint8_t* out,
+        size_t* out_size) const {
+    FAISS_THROW_IF_NOT(qb_in > 0 && qb_in <= 8);
+    FAISS_THROW_IF_NOT(x != nullptr);
+    FAISS_THROW_IF_NOT(out != nullptr);
+    FAISS_THROW_IF_NOT(out_size != nullptr);
+
+    // Reuse set_query via a temporary DC to avoid duplicating
+    // compute_query_factors + rearrangement logic.
+    std::unique_ptr<FlatCodesDistanceComputer> dc(
+            get_distance_computer(qb_in, centroid_in, centered_in));
+    dc->set_query(x);
+
+    // Safe: we created with qb > 0, so it's always RaBitQDistanceComputerQ.
+    auto* dc_q = static_cast<RaBitQDistanceComputerQ*>(dc.get());
+
+    // Serialize: [PrecomputedQueryScalars][rotated_q][rearranged_rotated_qq]
+    size_t bp_bytes = ((d + 7) / 8) * qb_in;
+    size_t offset = 0;
+
+    // Write only the 5 scalar floats we need (POD-safe).
+    PrecomputedQueryScalars scalars;
+    scalars.c1 = dc_q->query_fac.c1;
+    scalars.c2 = dc_q->query_fac.c2;
+    scalars.c34 = dc_q->query_fac.c34;
+    scalars.qr_to_c_L2sqr = dc_q->query_fac.qr_to_c_L2sqr;
+    scalars.qr_norm_L2sqr = dc_q->query_fac.qr_norm_L2sqr;
+    std::memcpy(out + offset, &scalars, sizeof(scalars));
+    offset += sizeof(scalars);
+
+    std::memcpy(out + offset, dc_q->rotated_q.data(), d * sizeof(float));
+    offset += d * sizeof(float);
+
+    std::memcpy(out + offset, dc_q->rearranged_rotated_qq.data(), bp_bytes);
+    offset += bp_bytes;
+
+    *out_size = offset;
+}
+
 } // namespace faiss
