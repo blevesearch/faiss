@@ -19,16 +19,21 @@ extern "C" {
 
 const char* faiss_get_version();
 
-/** Convert a real-valued vector to a binary vector.
+/** Convert real-valued vectors to binary vectors.
  *
  * Each bit in the output is set to 1 if the corresponding input value is
  * greater than 0, and 0 otherwise.
  *
- * @param d      dimension of the input vector (must be a multiple of 8)
- * @param x_in   input float vector (float table of size d)
- * @param x_out  output binary vector (uint8_t table of size d / 8)
+ * @param n      number of vectors
+ * @param d      dimension of each input vector (must be a multiple of 8)
+ * @param x_in   input float vectors (float table of size n * d)
+ * @param x_out  output binary vectors (uint8_t table of size n * (d / 8))
  */
-void faiss_real_to_binary(size_t d, const float* x_in, uint8_t* x_out);
+void faiss_real_to_binary(
+        size_t n,
+        size_t d,
+        const float* x_in,
+        uint8_t* x_out);
 
 #ifdef __cplusplus
 }

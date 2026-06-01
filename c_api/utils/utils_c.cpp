@@ -15,6 +15,13 @@ const char* faiss_get_version() {
     return VERSION_STRING;
 }
 
-void faiss_real_to_binary(size_t d, const float* x_in, uint8_t* x_out) {
-    faiss::real_to_binary(d, x_in, x_out);
+void faiss_real_to_binary(
+        size_t n,
+        size_t d,
+        const float* x_in,
+        uint8_t* x_out) {
+    const size_t out_stride = d / 8;
+    for (size_t i = 0; i < n; ++i) {
+        faiss::real_to_binary(d, x_in + i * d, x_out + i * out_stride);
+    }
 }
