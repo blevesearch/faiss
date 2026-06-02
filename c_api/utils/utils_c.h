@@ -21,8 +21,9 @@ const char* faiss_get_version();
 
 /** Convert real-valued vectors to binary vectors.
  *
- * Each bit in the output is set to 1 if the corresponding input value is
- * greater than 0, and 0 otherwise.
+ * Bits are packed LSB-first within each output byte: bit j corresponds to
+ * x_in[8 * i + j] for output byte i. A bit is set to 1 if the corresponding
+ * input value is greater than 0, and 0 otherwise.
  *
  * @param n      number of vectors
  * @param d      dimension of each input vector (must be a multiple of 8)
