@@ -176,6 +176,18 @@ int getWarpSizeCurrentDevice() {
     return getWarpSize(getCurrentDevice());
 }
 
+int probeDevice(int device) {
+    cudaError_t err = cudaSetDevice(device);
+    if (err != cudaSuccess) {
+        return -1;
+    }
+    cudaError_t err = cudaFree(nullptr);
+    if (err != cudaSuccess) {
+        return -1;
+    }
+    return 0;
+}
+
 size_t getFreeMemory(int device) {
     DeviceScope scope(device);
 
@@ -194,18 +206,6 @@ size_t getFreeMemoryCurrentDevice() {
     CUDA_VERIFY(cudaMemGetInfo(&free, &total));
 
     return free;
-}
-
-size_t probeDevice(int device) {
-    cudaError_t err = cudaSetDevice(device);
-    if (err != cudaSuccess) {
-        return -1;
-    }
-    cudaError_t err = cudaFree(nullptr);
-    if (err != cudaSuccess) {
-        return -1;
-    }
-    return 0;
 }
 
 DeviceScope::DeviceScope(int device) {
