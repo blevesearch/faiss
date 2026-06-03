@@ -180,20 +180,26 @@ int probeDevice(int device) {
     int prevDevice = -1;
     cudaError_t err = cudaGetDevice(&prevDevice);
     if (err != cudaSuccess) {
+        cudaGetLastError();
         return -1;
-    }
-    if (prevDevice == device) {
-        return cudaFree(nullptr) == cudaSuccess ? 0 : -1;
     }
     err = cudaSetDevice(device);
     if (err != cudaSuccess) {
+        cudaGetLastError();
         return -1;
     }
-    if (cudaFree(nullptr) != cudaSuccess) {
+    err = cudaFree(nullptr);
+    if (err != cudaSuccess) {
         cudaSetDevice(prevDevice);
+        cudaGetLastError();
         return -1;
     }
-    return cudaSetDevice(prevDevice) == cudaSuccess ? 0 : -1;
+    err = cudaSetDevice(prevDevice);
+    if (err != cudaSuccess) {
+        cudaGetLastError();
+        return -1;
+    }
+    return 0;
 }
 
 size_t getFreeMemory(int device) {
