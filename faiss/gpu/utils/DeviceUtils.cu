@@ -196,6 +196,18 @@ size_t getFreeMemoryCurrentDevice() {
     return free;
 }
 
+size_t probeDevice(int device) {
+    cudaError_t err = cudaSetDevice(device);
+    if (err != cudaSuccess) {
+        return -1;
+    }
+    cudaError_t err = cudaFree(nullptr);
+    if (err != cudaSuccess) {
+        return -1;
+    }
+    return 0;
+}
+
 DeviceScope::DeviceScope(int device) {
     if (device >= 0) {
         int curDevice = getCurrentDevice();
