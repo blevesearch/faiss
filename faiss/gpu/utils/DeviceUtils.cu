@@ -177,15 +177,23 @@ int getWarpSizeCurrentDevice() {
 }
 
 int probeDevice(int device) {
-    cudaError_t err = cudaSetDevice(device);
+    int prevDevice = -1;
+    cudaError_t err = cudaGetDevice(&prevDevice);
     if (err != cudaSuccess) {
         return -1;
     }
-    err = cudaFree(nullptr);
+    if (prevDevice == device) {
+        return cudaFree(nullptr) == cudaSuccess ? 0 : -1;
+    }
+    err = cudaSetDevice(device);
     if (err != cudaSuccess) {
         return -1;
     }
-    return 0;
+    if (cudaFree(nullptr) != cudaSuccess) {
+        cudaSetDevice(prevDevice);
+        return -1;
+    }
+    return cudaSetDevice(prevDevice) == cudaSuccess ? 0 : -1;
 }
 
 size_t getFreeMemory(int device) {

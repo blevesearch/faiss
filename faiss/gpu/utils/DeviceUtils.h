@@ -82,8 +82,8 @@ int getWarpSize(int device);
 /// Equivalent to getWarpSize(getCurrentDevice())
 int getWarpSizeCurrentDevice();
 
-/// Probes the given device for basic health, 
-/// returning 0 if the device is healthy, and -1 if not.
+/// Probes the given device for basic health, returning 0 if the device is
+/// healthy, and -1 if not.
 int probeDevice(int device);
 
 /// Returns the amount of currently available memory on the given device
