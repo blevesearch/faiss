@@ -181,7 +181,7 @@ int probeDevice(int device) {
     if (err != cudaSuccess) {
         return -1;
     }
-    cudaError_t err = cudaFree(nullptr);
+    err = cudaFree(nullptr);
     if (err != cudaSuccess) {
         return -1;
     }
