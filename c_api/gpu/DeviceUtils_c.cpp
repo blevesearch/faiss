@@ -54,7 +54,6 @@ int faiss_gpu_free_memory(int device, size_t* p_free_bytes) {
     CATCH_AND_HANDLE
 }
 
-
 /// Probes the specified GPU device for errors, and returns 0 if the device is healthy, 
 /// or a non-zero error code if the device is unhealthy
 int faiss_probe_gpu(int device) {
