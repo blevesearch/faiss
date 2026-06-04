@@ -13,6 +13,7 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 namespace faiss {
 namespace gpu {
@@ -145,7 +146,7 @@ class StackDeviceMemory {
         /// Arena details
 
         /// The arenas in our dynamic stack
-        std::list<std::unique_ptr<Stack>> arenas_;
+        std::vector<std::unique_ptr<Stack>> arenas_;
     };
 
     /// Our device
