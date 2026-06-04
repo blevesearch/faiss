@@ -219,6 +219,11 @@ void StandardGpuResourcesImpl::noTempMemory() {
 }
 
 void StandardGpuResourcesImpl::setTempMemory(size_t size) {
+    // API not compatible with dynamic temp memory, so disallow use of this API
+    // if dynamic temp memory is enabled
+    FAISS_ASSERT_MSG(
+            !dynamicTempMemory_,
+            "Cannot use setTempMemory with dynamic temp memory enabled");
     if (tempMemSize_ != size) {
         // adjust based on general limits
         tempMemSize_ = getDefaultTempMemForGPU(-1, size);
@@ -247,6 +252,12 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(tempMemory_.empty());
     tempMemorySpace_ = space;
+}
+
+void StandardGpuResourcesImpl::setDynamicTempMemory(bool enable) {
+    // Should not call this after devices have been initialized
+    FAISS_ASSERT(tempMemory_.empty());
+    dynamicTempMemory_ = enable;
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -454,14 +465,20 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
     FAISS_ASSERT(tempMemory_.count(device) == 0);
-    auto mem = std::make_unique<StackDeviceMemory>(
-            this,
-            device,
-            // adjust for this specific device
-            getDefaultTempMemForGPU(device, tempMemSize_),
-            tempMemorySpace_);
-
-    tempMemory_.emplace(device, std::move(mem));
+    // use dynamic temp memory if enabled, otherwise use fixed stack
+    if (dynamicTempMemory_) {
+        auto mem = std::make_unique<StackDeviceMemory>(
+                this, device, tempMemorySpace_);
+        tempMemory_.emplace(device, std::move(mem));
+    } else {
+        auto mem = std::make_unique<StackDeviceMemory>(
+                this,
+                device,
+                // adjust for this specific device
+                getDefaultTempMemForGPU(device, tempMemSize_),
+                tempMemorySpace_);
+        tempMemory_.emplace(device, std::move(mem));
+    }
 }
 
 cublasHandle_t StandardGpuResourcesImpl::getBlasHandle(int device) {
@@ -541,12 +558,13 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
             newReq.type = AllocType::TemporaryMemoryOverflow;
 
             if (allocLogging_) {
-                std::cout
-                        << "StandardGpuResources: alloc fail "
-                        << adjReq.toString()
-                        << " (no temp space); retrying as MemorySpace::"
-                        << (tempMemorySpace_ == MemorySpace::Unified ? "Unified" : "Device")
-                        << "\n";
+                std::cout << "StandardGpuResources: alloc fail "
+                          << adjReq.toString()
+                          << " (no temp space); retrying as MemorySpace::"
+                          << (tempMemorySpace_ == MemorySpace::Unified
+                                      ? "Unified"
+                                      : "Device")
+                          << "\n";
             }
 
             return allocMemory(newReq);
@@ -737,6 +755,10 @@ void StandardGpuResources::setTempMemory(size_t size) {
 
 void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
+}
+
+void StandardGpuResources::setDynamicTempMemory(bool enable) {
+    res_->setDynamicTempMemory(enable);
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {

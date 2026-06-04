@@ -50,6 +50,16 @@ int faiss_StandardGpuResources_setTempMemorySpace(
     CATCH_AND_HANDLE
 }
 
+int faiss_StandardGpuResources_setDynamicTempMemory(
+        FaissStandardGpuResources* res,
+        bool enable) {
+    try {
+        reinterpret_cast<StandardGpuResources*>(res)->setDynamicTempMemory(
+                enable);
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_StandardGpuResources_setPinnedMemory(
         FaissStandardGpuResources* res,
         size_t size) {

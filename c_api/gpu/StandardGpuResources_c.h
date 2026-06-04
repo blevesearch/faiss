@@ -45,6 +45,12 @@ int faiss_StandardGpuResources_setTempMemorySpace(
         FaissStandardGpuResources*,
         int space);
 
+/// Set if we should use a temp memory pool that will grow with repeated
+/// allocations or a single fixed buffer, which is the default.
+int faiss_StandardGpuResources_setDynamicTempMemory(
+        FaissStandardGpuResources* res,
+        bool enable);
+
 /// Set amount of pinned memory to allocate, for async GPU <-> CPU
 /// transfers
 int faiss_StandardGpuResources_setPinnedMemory(
