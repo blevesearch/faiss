@@ -205,7 +205,7 @@ char* StackDeviceMemory::DynamicStack::getAlloc(
     }
     // we need a new arena
     auto newArena =
-            std::make_unique<Stack>(res_, device_, size, tempMemorySpace_);
+            std::make_unique<Stack>(res_, device_, size + 16, tempMemorySpace_);
     arenas_.push_back(std::move(newArena));
     return arenas_.back()->getAlloc(size, stream);
 }
@@ -242,13 +242,17 @@ StackDeviceMemory::StackDeviceMemory(
         int device,
         size_t allocPerDevice,
         MemorySpace space)
-        : device_(device), stack_(res, device, allocPerDevice, space) {}
+        : device_(device),
+          stack_(std::make_unique<Stack>(
+                  res, device, allocPerDevice, space)) {}
 
 StackDeviceMemory::StackDeviceMemory(
         GpuResources* res,
         int device,
         MemorySpace space)
-        : device_(device), dynamicStack_(res, device, space) {}
+        : device_(device),
+          dynamicStack_(std::make_unique<DynamicStack>(
+                  res, device, space)) {}
 
 StackDeviceMemory::~StackDeviceMemory() {}
 
@@ -258,18 +262,18 @@ int StackDeviceMemory::getDevice() const {
 
 size_t StackDeviceMemory::getSizeAvailable() const {
     return dynamicStack_ ? dynamicStack_->getSizeAvailable()
-                         : stack_.getSizeAvailable();
+                         : stack_->getSizeAvailable();
 }
 
 std::string StackDeviceMemory::toString() const {
-    return dynamicStack_ ? dynamicStack_->toString() : stack_.toString();
+    return dynamicStack_ ? dynamicStack_->toString() : stack_->toString();
 }
 
 void* StackDeviceMemory::allocMemory(cudaStream_t stream, size_t size) {
     // All allocations should have been adjusted to a multiple of 16 bytes
     FAISS_ASSERT(size % 16 == 0);
     return dynamicStack_ ? dynamicStack_->getAlloc(size, stream)
-                         : stack_.getAlloc(size, stream);
+                         : stack_->getAlloc(size, stream);
 }
 
 void StackDeviceMemory::deallocMemory(
@@ -281,7 +285,7 @@ void StackDeviceMemory::deallocMemory(
     FAISS_ASSERT(device == device_);
 
     dynamicStack_ ? dynamicStack_->returnAlloc((char*)p, size, stream)
-                  : stack_.returnAlloc((char*)p, size, stream);
+                  : stack_->returnAlloc((char*)p, size, stream);
 }
 
 } // namespace gpu

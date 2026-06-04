@@ -151,8 +151,8 @@ class StackDeviceMemory {
     /// Our device
     int device_;
 
-    /// Memory stack
-    Stack stack_;
+    /// Memory stack (if configured)
+    std::unique_ptr<Stack> stack_;
 
     /// Dynamic Stack (if configured)
     std::unique_ptr<DynamicStack> dynamicStack_;

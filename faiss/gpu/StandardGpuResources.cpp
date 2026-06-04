@@ -104,7 +104,8 @@ StandardGpuResourcesImpl::StandardGpuResourcesImpl()
                   std::numeric_limits<size_t>::max())),
           pinnedMemSize_(kDefaultPinnedMemoryAllocation),
           allocLogging_(false),
-          tempMemorySpace_(MemorySpace::Device) {
+          tempMemorySpace_(MemorySpace::Device),
+          dynamicTempMemory_(false) {
 }
 
 StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
