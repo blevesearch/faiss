@@ -230,8 +230,9 @@ std::string StackDeviceMemory::DynamicStack::toString() const {
     s << "Dynamic SDM device " << device_ << ": " << arenas_.size()
       << " arenas\n";
 
-    for (size_t i = 0; i < arenas_.size(); ++i) {
-        s << "Arena " << i << ":\n" << arenas_[i]->toString();
+    size_t i = 0;
+    for (auto& arena : arenas_) {
+        s << "Arena " << i++ << ":\n" << arena->toString();
     }
 
     return s.str();
