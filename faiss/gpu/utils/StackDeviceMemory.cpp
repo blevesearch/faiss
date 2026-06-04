@@ -244,16 +244,14 @@ StackDeviceMemory::StackDeviceMemory(
         size_t allocPerDevice,
         MemorySpace space)
         : device_(device),
-          stack_(std::make_unique<Stack>(
-                  res, device, allocPerDevice, space)) {}
+          stack_(std::make_unique<Stack>(res, device, allocPerDevice, space)) {}
 
 StackDeviceMemory::StackDeviceMemory(
         GpuResources* res,
         int device,
         MemorySpace space)
         : device_(device),
-          dynamicStack_(std::make_unique<DynamicStack>(
-                  res, device, space)) {}
+          dynamicStack_(std::make_unique<DynamicStack>(res, device, space)) {}
 
 StackDeviceMemory::~StackDeviceMemory() {}
 
