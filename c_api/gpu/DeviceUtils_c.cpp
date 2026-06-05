@@ -53,3 +53,14 @@ int faiss_gpu_free_memory(int device, size_t* p_free_bytes) {
     }
     CATCH_AND_HANDLE
 }
+
+/// Probes the specified GPU device for basic health.
+/// On success, writes 0 to *p_probe_result if healthy, or -1 if unhealthy.
+/// Returns 0 on success, or a negative value on exception.
+int faiss_probe_gpu(int device, int* p_probe_result) {
+    try {
+        int result = faiss::gpu::probeDevice(device);
+        *p_probe_result = result;
+    }
+    CATCH_AND_HANDLE
+}
