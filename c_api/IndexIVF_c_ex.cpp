@@ -74,7 +74,7 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
             auto* src_ivfsq = dynamic_cast<faiss::IndexIVFScalarQuantizer*>(src);
             assert(src_ivfsq);
 
-            tgt_ivfsq->quantizer = clone_index(src_ivfsq->quantizer);
+            tgt_ivfsq->quantizer = src_ivfsq->quantizer;
             tgt_ivfsq->is_trained = true;
             tgt_ivfsq->sq = src_ivfsq->sq;
             return 0;
@@ -95,7 +95,7 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
             auto* src_rabitq = dynamic_cast<faiss::IndexIVFRaBitQ*>(src);
             assert(src_rabitq);
 
-            tgt_rabitq->quantizer = clone_index(src_rabitq->quantizer);
+            tgt_rabitq->quantizer = src_rabitq->quantizer;
             tgt_rabitq->is_trained = true;
             tgt_rabitq->rabitq = src_rabitq->rabitq;
             return 0;
