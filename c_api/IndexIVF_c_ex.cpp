@@ -16,6 +16,7 @@
 #include "macros_impl.h"
 
 using faiss::IndexIVF;
+using faiss::IndexIVFRaBitQ;
 using faiss::SearchParameters;
 using faiss::SearchParametersIVF;
 
@@ -202,6 +203,44 @@ int faiss_SearchParametersRaBitQ_new_with(
         rqsp->max_codes = max_codes;
 
         *p_sp = reinterpret_cast<FaissSearchParametersIVF*>(rqsp);
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVFRaBitQ_compute_distance_with_precomputed(
+        FaissIndexIVF* index,
+        idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        uint8_t* query_bp,
+        size_t* query_bp_size) {
+    try {
+        auto* rabitq_index = dynamic_cast<IndexIVFRaBitQ*>(
+                reinterpret_cast<IndexIVF*>(index));
+        FAISS_THROW_IF_NOT_MSG(
+                rabitq_index,
+                "index is not an IndexIVFRaBitQ instance");
+        rabitq_index->compute_distance_to_codes_with_precomputed(
+                list_no, x, n, codes, dists,
+                query_bp, query_bp_size);
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_IndexIVFRaBitQ_query_bitplanes_size(
+        FaissIndexIVF* index,
+        size_t* size) {
+    try {
+        auto* rabitq_index = dynamic_cast<IndexIVFRaBitQ*>(
+                reinterpret_cast<IndexIVF*>(index));
+        FAISS_THROW_IF_NOT_MSG(
+                rabitq_index,
+                "index is not an IndexIVFRaBitQ instance");
+        *size = rabitq_index->query_bitplanes_size();
         return 0;
     }
     CATCH_AND_HANDLE

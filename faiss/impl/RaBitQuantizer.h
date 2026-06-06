@@ -91,6 +91,41 @@ struct RaBitQuantizer : Quantizer {
             uint8_t qb = 0,
             const float* centroid = nullptr,
             bool centered = false) const;
+
+    /// Compute precomputed query state for reuse across distance calls.
+    /// Performs the expensive set_query computation (centroid subtraction,
+    /// query factor computation, bitplane rearrangement) and serializes the
+    /// result into a flat buffer.
+    ///
+    /// @param x         query vector (d dimensions)
+    /// @param qb        query quantization bits (must be > 0)
+    /// @param centroid  centroid vector for this IVF list
+    /// @param centered  whether to use centered quantization
+    /// @param out       output buffer (caller-allocated, use
+    ///                  precomputed_query_size() for size)
+    /// @param out_size  on return, actual bytes written
+    void compute_query_precomputed(
+            const float* x,
+            uint8_t qb,
+            const float* centroid,
+            bool centered,
+            uint8_t* out,
+            size_t* out_size) const;
+
+    /// Returns the byte size needed for the precomputed query buffer.
+    size_t precomputed_query_size(uint8_t qb) const;
+};
+
+/// POD struct holding the 5 query-factor scalars serialized into the
+/// precomputed buffer. Unlike QueryFactorsData (which contains a
+/// std::vector), this is safe to memcpy / reinterpret_cast from a
+/// flat byte buffer.
+struct PrecomputedQueryScalars {
+    float c1;
+    float c2;
+    float c34;
+    float qr_to_c_L2sqr;
+    float qr_norm_L2sqr;
 };
 
 // RaBitQDistanceComputer: Base class for RaBitQ distance computers

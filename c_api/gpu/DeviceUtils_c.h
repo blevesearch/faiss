@@ -34,6 +34,11 @@ int faiss_gpu_sync_all_devices();
 /// Returns the free memory (in bytes) on the specified device
 int faiss_gpu_free_memory(int device, size_t* p_free_bytes);
 
+/// Probes the specified GPU device for basic health.
+/// On success, writes 0 to *p_probe_result if healthy, or -1 if unhealthy.
+/// Returns 0 on success, or a negative value on exception.
+int faiss_probe_gpu(int device, int* p_probe_result);
+
 #ifdef __cplusplus
 }
 #endif

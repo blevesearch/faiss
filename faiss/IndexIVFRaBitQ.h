@@ -81,6 +81,58 @@ struct IndexIVFRaBitQ : IndexIVF {
             float* dists,
             float* dist_table) const override;
 
+    /// Self-describing header stamped at the start of the precomputed query
+    /// buffer. Validated on every reuse so a buffer built for a different
+    /// list / qb / nb_bits / d fails loud instead of silently producing
+    /// wrong distances. POD, fixed 24 bytes.
+    struct PrecomputedQueryHeader {
+        static constexpr uint32_t kMagic = 0x52424351; // 'RBCQ'
+        static constexpr uint16_t kVersion = 1; // bump on layout change
+
+        uint32_t magic;
+        uint16_t version;
+        uint16_t nb_bits;
+        uint8_t qb;
+        uint8_t pad[3];
+        uint32_t d;
+        int64_t list_no;
+    };
+    static_assert(
+            sizeof(PrecomputedQueryHeader) == 24,
+            "PrecomputedQueryHeader must be exactly 24 bytes");
+
+    /// Compute distances to codes with optional precomputed query state.
+    ///
+    /// The buffer carries a self-describing header so the function can
+    /// distinguish a fresh reusable buffer from a stale / wrong-list /
+    /// wrong-config one without trusting the caller's bookkeeping. The
+    /// caller MUST allocate at least query_bitplanes_size() bytes.
+    ///
+    /// @param list_no       IVF list the codes belong to.
+    /// @param x             query vector (d floats).
+    /// @param n             number of codes.
+    /// @param codes         input codes, n * code_size bytes.
+    /// @param dists         output distances, n floats.
+    /// @param query_bp      caller-allocated buffer of query_bitplanes_size()
+    ///                      bytes.
+    /// @param query_bp_size in/out: 0 to (re)compute, otherwise must equal
+    ///                      query_bitplanes_size() AND the in-buffer header
+    ///                      must match (list_no, qb, nb_bits, d). Either
+    ///                      mismatch triggers a fresh compute. On return:
+    ///                      set to bytes written.
+    void compute_distance_to_codes_with_precomputed(
+            idx_t list_no,
+            const float* x,
+            idx_t n,
+            const uint8_t* codes,
+            float* dists,
+            uint8_t* query_bp,
+            size_t* query_bp_size) const;
+
+    /// Returns the byte size needed for precomputed query bitplanes buffer.
+    /// Includes the self-describing header.
+    size_t query_bitplanes_size() const;
+
     // unfortunately
     DistanceComputer* get_distance_computer() const override;
 };

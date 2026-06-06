@@ -118,6 +118,46 @@ int faiss_IndexIVF_compute_distance_to_codes_for_list(
         float* dist_table);
 
 /*
+    Compute distance to codes with optional precomputed query
+    bitplanes.
+
+    query_bp: caller-allocated buffer of
+    faiss_IndexIVFRaBitQ_query_bitplanes_size() bytes.
+    query_bp_size: in/out. On entry: 0 or mismatched header =
+    (re)compute and fill query_bp; matching size + valid header =
+    reuse existing precomputed data. On return: set to actual
+    bytes written.
+
+    @param index          - the IVF index (must be IndexIVFRaBitQ)
+    @param list_no        - list number for inverted list
+    @param x              - input query vector
+    @param n              - number of codes
+    @param codes          - input codes
+    @param dists          - output computed distances
+    @param query_bp       - precomputed query bitplanes buffer
+    @param query_bp_size  - in/out: 0 to compute, >0 to reuse
+*/
+int faiss_IndexIVFRaBitQ_compute_distance_with_precomputed(
+        FaissIndexIVF* index,
+        idx_t list_no,
+        const float* x,
+        idx_t n,
+        const uint8_t* codes,
+        float* dists,
+        uint8_t* query_bp,
+        size_t* query_bp_size);
+
+/*
+    Get the byte size needed for precomputed query bitplanes buffer.
+
+    @param index  - the IVF index (must be IndexIVFRaBitQ)
+    @param size   - output: required buffer size in bytes
+*/
+int faiss_IndexIVFRaBitQ_query_bitplanes_size(
+        FaissIndexIVF* index,
+        size_t* size);
+
+/*
     Get centroid information and cardinality for all centroids in an IVF index.
 
     @param index: the IVF index
