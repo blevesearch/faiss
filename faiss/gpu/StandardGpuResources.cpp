@@ -625,7 +625,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     } else if (adjReq.space == MemorySpace::Hybrid) {
 #if defined USE_NVIDIA_CUVS
         // TODO when we actually integrate cuVS
-        FAISS_THROW_MSG("Hybrid Memory Space not yet supported with cuVS");
+        FAISS_ASSERT_MSG(false, "Hybrid Memory Space not yet supported with cuVS");
 #else
         // Try device memory first, and if that fails, fall back to unified memory
         auto err = cudaMalloc(&p, adjReq.size);
@@ -690,10 +690,22 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
         tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
     } else if (
             req.space == MemorySpace::Device ||
-            req.space == MemorySpace::Unified ||
-            req.space == MemorySpace::Hybrid) {
+            req.space == MemorySpace::Unified) {
 #if defined USE_NVIDIA_CUVS
         req.mr->deallocate_async(p, req.size, req.stream);
+#else
+        auto err = cudaFree(p);
+        FAISS_ASSERT_FMT(
+                err == cudaSuccess,
+                "Failed to cudaFree pointer %p (error %d %s)",
+                p,
+                (int)err,
+                cudaGetErrorString(err));
+#endif
+    } else if (req.space == MemorySpace::Hybrid) {
+#if defined USE_NVIDIA_CUVS
+        // TODO when we actually integrate cuVS
+        FAISS_ASSERT_MSG(false, "Hybrid Memory Space not yet supported with cuVS");
 #else
         auto err = cudaFree(p);
         FAISS_ASSERT_FMT(
