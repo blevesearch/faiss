@@ -545,7 +545,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
                         << "StandardGpuResources: alloc fail "
                         << adjReq.toString()
                         << " (no temp space); retrying as MemorySpace::"
-                        << (tempMemorySpace_ == MemorySpace::Unified ? "Unified" : "Device")
+                        << memorySpaceToString(tempMemorySpace_)
                         << "\n";
             }
 
@@ -622,6 +622,39 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
             FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
         }
 #endif
+    } else if (adjReq.space == MemorySpace::Hybrid) {
+#if defined USE_NVIDIA_CUVS
+        // TODO when we actually integrate cuVS
+        FAISS_THROW_MSG("Hybrid Memory Space not yet supported with cuVS");
+#else
+        // Try device memory first, and if that fails, fall back to unified memory
+        auto err = cudaMalloc(&p, adjReq.size);
+        if (err != cudaSuccess) {
+            cudaGetLastError();
+            if (allocLogging_) {
+                std::cout << "StandardGpuResources: alloc fail "
+                          << adjReq.toString()
+                          << " (cudaMalloc error " << cudaGetErrorString(err)
+                          << " [" << (int)err
+                          << "]); retrying with cudaMallocManaged\n";
+            }
+            err = cudaMallocManaged(&p, adjReq.size);
+            if (err != cudaSuccess) {
+                cudaGetLastError();
+                std::stringstream ss;
+                ss << "StandardGpuResources: alloc fail " << adjReq.toString()
+                   << " (cudaMallocManaged error " << cudaGetErrorString(err)
+                   << " [" << (int)err << "])\n";
+                auto str = ss.str();
+
+                if (allocLogging_) {
+                    std::cout << str;
+                }
+
+                FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
+            }
+        }
+#endif      
     } else {
         FAISS_ASSERT_FMT(false, "unknown MemorySpace %d", (int)adjReq.space);
     }
@@ -657,7 +690,8 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
         tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
     } else if (
             req.space == MemorySpace::Device ||
-            req.space == MemorySpace::Unified) {
+            req.space == MemorySpace::Unified ||
+            req.space == MemorySpace::Hybrid) {
 #if defined USE_NVIDIA_CUVS
         req.mr->deallocate_async(p, req.size, req.stream);
 #else

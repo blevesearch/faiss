@@ -57,6 +57,8 @@ std::string memorySpaceToString(MemorySpace s) {
             return "Device";
         case MemorySpace::Unified:
             return "Unified";
+        case MemorySpace::Hybrid:
+            return "Hybrid";
         default:
             return "Unknown";
     }

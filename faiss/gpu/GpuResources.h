@@ -97,6 +97,10 @@ enum MemorySpace {
     /// Managed using cudaMallocManaged/cudaFree (typical Unified CPU/GPU
     /// memory)
     Unified = 2,
+
+    /// Managed using cudaMalloc if possible, and falling back to
+    /// cudaMallocManaged if necessary (e.g., if the GPU is out of memory).
+    Hybrid = 3,
 };
 
 /// Convert a MemorySpace to string
