@@ -53,10 +53,7 @@ struct GpuClonerOptions {
     /// true, it will fallback to a CPU implementation.
     bool allowCpuCoarseQuantizer = false;
 
-    /// What memory space to use for primary storage.
-    /// On Pascal and above (CC 6+) architectures, MemorySpace::Unified
-    /// allows GPUs to use more memory than is available on the GPU via
-    /// automatic paging.
+    /// What memory space to use for primary storage. Default is MemorySpace::Device (cudaMalloc).
     MemorySpace memorySpace = MemorySpace::Device;
 };
 

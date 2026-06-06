@@ -99,7 +99,7 @@ enum MemorySpace {
     Unified = 2,
 
     /// Managed using cudaMalloc if possible, and falling back to
-    /// cudaMallocManaged if necessary (e.g., if the GPU is out of memory).
+    /// cudaMallocManaged if necessary
     Hybrid = 3,
 };
 

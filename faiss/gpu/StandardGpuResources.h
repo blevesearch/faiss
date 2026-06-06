@@ -64,8 +64,6 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Set memory space for all temporary memory allocations (both the
     /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
-    /// Set to MemorySpace::Unified for cudaMallocManaged.
-    /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
@@ -230,8 +228,6 @@ class StandardGpuResources : public GpuResourcesProvider {
 
     /// Set memory space for all temporary memory allocations (both the
     /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
-    /// Set to MemorySpace::Unified for cudaMallocManaged.
-    /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
