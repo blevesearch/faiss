@@ -71,7 +71,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Set if we should use a dynamic stack that can grow with repeated
     /// allocations or a single fixed stack. Default is false (single fixed
     /// stack).
-    void setDynamicTempMemory(bool enable);
+    void dynamicTempMemory();
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
@@ -245,7 +245,7 @@ class StandardGpuResources : public GpuResourcesProvider {
 
     /// Set if we should use a dynamic stack that can grow with repeated
     /// allocations or a single fixed stack
-    void setDynamicTempMemory(bool enable);
+    void dynamicTempMemory();
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers

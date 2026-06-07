@@ -255,10 +255,10 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     tempMemorySpace_ = space;
 }
 
-void StandardGpuResourcesImpl::setDynamicTempMemory(bool enable) {
+void StandardGpuResourcesImpl::dynamicTempMemory() {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(tempMemory_.empty());
-    dynamicTempMemory_ = enable;
+    dynamicTempMemory_ = true;
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -551,28 +551,33 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
     if (adjReq.space == MemorySpace::Temporary) {
         auto& tempMem = tempMemory_[adjReq.device];
+        if (dynamicTempMemory_) {
+            // For dynamic temp memory, we just forward to the temp memory
+            // allocator, which will handle growing the memory as needed
+            p = tempMem->allocMemory(adjReq.stream, adjReq.size);
+        } else {
+            if (adjReq.size > tempMem->getSizeAvailable()) {
+                // We need to allocate this ourselves
+                AllocRequest newReq = adjReq;
+                newReq.space = tempMemorySpace_;
+                newReq.type = AllocType::TemporaryMemoryOverflow;
 
-        if (adjReq.size > tempMem->getSizeAvailable()) {
-            // We need to allocate this ourselves
-            AllocRequest newReq = adjReq;
-            newReq.space = tempMemorySpace_;
-            newReq.type = AllocType::TemporaryMemoryOverflow;
+                if (allocLogging_) {
+                    std::cout << "StandardGpuResources: alloc fail "
+                            << adjReq.toString()
+                            << " (no temp space); retrying as MemorySpace::"
+                            << (tempMemorySpace_ == MemorySpace::Unified
+                                        ? "Unified"
+                                        : "Device")
+                            << "\n";
+                }
 
-            if (allocLogging_) {
-                std::cout << "StandardGpuResources: alloc fail "
-                          << adjReq.toString()
-                          << " (no temp space); retrying as MemorySpace::"
-                          << (tempMemorySpace_ == MemorySpace::Unified
-                                      ? "Unified"
-                                      : "Device")
-                          << "\n";
+                return allocMemory(newReq);
             }
 
-            return allocMemory(newReq);
+            // Otherwise, we can handle this locally
+            p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
         }
-
-        // Otherwise, we can handle this locally
-        p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
     } else if (adjReq.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         try {
@@ -758,8 +763,8 @@ void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
 }
 
-void StandardGpuResources::setDynamicTempMemory(bool enable) {
-    res_->setDynamicTempMemory(enable);
+void StandardGpuResources::dynamicTempMemory() {
+    res_->dynamicTempMemory();
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {
