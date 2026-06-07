@@ -185,29 +185,24 @@ StackDeviceMemory::DynamicStack::DynamicStack(
 StackDeviceMemory::DynamicStack::~DynamicStack() {}
 
 size_t StackDeviceMemory::DynamicStack::getSizeAvailable() const {
-    size_t total = 0;
-
-    for (auto& arena : arenas_) {
-        total += arena->getSizeAvailable();
-    }
-
-    return total;
+    return std::numeric_limits<size_t>::max();
 }
 
 char* StackDeviceMemory::DynamicStack::getAlloc(
         size_t size,
         cudaStream_t stream) {
-    // try to allocate from one of our existing arenas
-    for (auto& arena : arenas_) {
-        if (arena->getSizeAvailable() >= size) {
-            return arena->getAlloc(size, stream);
-        }
+    void* ptr = nullptr;
+    auto err = cudaMallocAsync(&ptr, size, stream);
+    if (err != cudaSuccess) {
+        cudaGetLastError();
+        FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", cudaGetErrorString(err));
     }
-    // we need a new arena
-    auto newArena =
-            std::make_unique<Stack>(res_, device_, size + 16, tempMemorySpace_);
-    arenas_.push_back(std::move(newArena));
-    return arenas_.back()->getAlloc(size, stream);
+
+    size_t prev = bytesOutstanding_.fetch_add(size, std::memory_order_relaxed);
+    highWaterBytesOutstanding_ =
+            std::max(highWaterBytesOutstanding_, prev + size);
+
+    return static_cast<char*>(ptr);
 }
 
 void StackDeviceMemory::DynamicStack::returnAlloc(
