@@ -22,10 +22,7 @@ namespace gpu {
 class PoolDeviceMemory {
    public:
     /// Allocate a new region of memory that we manage
-    PoolDeviceMemory(
-            GpuResources* res,
-            int device,
-            MemorySpace space = MemorySpace::Device);
+    PoolDeviceMemory(int device);
 
     ~PoolDeviceMemory();
 

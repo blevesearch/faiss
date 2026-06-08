@@ -480,8 +480,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
                 "Dynamic Temporary memory pool not yet integrated with cuVS");
 #else
         FAISS_ASSERT(tempPoolMemory_.count(device) == 0);
-        auto mem = std::make_unique<PoolDeviceMemory>(
-                this, device, tempMemorySpace_);
+        auto mem = std::make_unique<PoolDeviceMemory>(device);
         tempPoolMemory_.emplace(device, std::move(mem));
 #endif
     } else {

@@ -12,24 +12,11 @@
 namespace faiss {
 namespace gpu {
 
-PoolDeviceMemory::PoolDeviceMemory(
-        GpuResources* res,
-        int device,
-        MemorySpace space)
-        : device_(device) {
-    FAISS_ASSERT(space == MemorySpace::Device);
-
-    cudaMemPoolProps props = {};
-    props.allocType = cudaMemAllocationTypePinned;
-    props.location.type = cudaMemLocationTypeDevice;
-    props.location.id = device_;
-
-    CUDA_VERIFY(cudaMemPoolCreate(&pool_, &props));
+PoolDeviceMemory::PoolDeviceMemory(int device) : device_(device) {
+    CUDA_VERIFY(cudaDeviceGetDefaultMemPool(&pool_, device_));
 }
 
-PoolDeviceMemory::~PoolDeviceMemory() {
-    cudaMemPoolDestroy(pool_);
-}
+PoolDeviceMemory::~PoolDeviceMemory() {}
 
 int PoolDeviceMemory::getDevice() const {
     return device_;
@@ -37,7 +24,7 @@ int PoolDeviceMemory::getDevice() const {
 
 void* PoolDeviceMemory::allocMemory(cudaStream_t stream, size_t size) {
     void* ptr = nullptr;
-    auto err = cudaMallocFromPoolAsync(&ptr, size, pool_, stream);
+    auto err = cudaMallocAsync(&ptr, size, stream);
     if (err != cudaSuccess) {
         cudaGetLastError();
         FAISS_THROW_IF_NOT_FMT(
@@ -51,8 +38,8 @@ void PoolDeviceMemory::deallocMemory(
         cudaStream_t stream,
         size_t size,
         void* p) {
-    FAISS_ASSERT(device == device_);
     if (p) {
+        FAISS_ASSERT(device == device_);
         CUDA_VERIFY(cudaFreeAsync(p, stream));
     }
 }
