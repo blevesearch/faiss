@@ -599,7 +599,6 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
             p = tempMemory_[adjReq.device]->allocMemory(
                     adjReq.stream, adjReq.size);
         }
-#endif
     } else if (adjReq.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         try {
