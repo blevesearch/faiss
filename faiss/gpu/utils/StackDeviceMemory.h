@@ -13,7 +13,6 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
-#include <vector>
 
 namespace faiss {
 namespace gpu {
@@ -22,18 +21,11 @@ namespace gpu {
 /// out of a region of memory, for a single device
 class StackDeviceMemory {
    public:
-    /// Allocate a new region of memory that we manage, with a fixed stack of
-    /// size allocPerDevice
+    /// Allocate a new region of memory that we manage
     StackDeviceMemory(
             GpuResources* res,
             int device,
             size_t allocPerDevice,
-            MemorySpace space = MemorySpace::Device);
-
-    /// Allocate a new region of memory that we manage, with a dynamic stack
-    StackDeviceMemory(
-            GpuResources* res,
-            int device,
             MemorySpace space = MemorySpace::Device);
 
     ~StackDeviceMemory();
@@ -69,9 +61,6 @@ class StackDeviceMemory {
         /// Returns how much size is available for an allocation without
         /// calling cudaMalloc
         size_t getSizeAvailable() const;
-
-        /// Returns whether the given pointer belongs to this stack
-        bool contains(char* p) const;
 
         /// Obtains an allocation; all allocations are guaranteed to be 16
         /// byte aligned
@@ -115,48 +104,11 @@ class StackDeviceMemory {
         size_t highWaterMemoryUsed_;
     };
 
-    struct DynamicStack {
-        /// Constructor that allocates memory via the specified memory space
-        DynamicStack(GpuResources* res, int device, MemorySpace space);
-
-        ~DynamicStack();
-
-        /// Returns sum of sizes available for allocation across all arenas
-        size_t getSizeAvailable() const;
-
-        /// Obtains an allocation; all allocations are guaranteed to be 16
-        /// byte aligned
-        char* getAlloc(size_t size, cudaStream_t stream);
-
-        /// Returns an allocation
-        void returnAlloc(char* p, size_t size, cudaStream_t stream);
-
-        /// Returns the stack state
-        std::string toString() const;
-
-        /// Our GpuResources object
-        GpuResources* res_;
-
-        /// Device this allocation is on
-        int device_;
-
-        /// Memory space used for this allocation
-        MemorySpace tempMemorySpace_;
-
-        /// Arena details
-
-        /// The arenas in our dynamic stack
-        std::vector<std::unique_ptr<Stack>> arenas_;
-    };
-
     /// Our device
     int device_;
 
-    /// Memory stack (if configured)
-    std::unique_ptr<Stack> stack_;
-
-    /// Dynamic Stack (if configured)
-    std::unique_ptr<DynamicStack> dynamicStack_;
+    /// Memory stack
+    Stack stack_;
 };
 
 } // namespace gpu
