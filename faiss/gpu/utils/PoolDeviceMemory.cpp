@@ -37,7 +37,7 @@ int PoolDeviceMemory::getDevice() const {
 
 void* PoolDeviceMemory::allocMemory(cudaStream_t stream, size_t size) {
     void* ptr = nullptr;
-    auto err = cudaMemPoolAllocAsync(&ptr, pool_, size, stream);
+    auto err = cudaMallocFromPoolAsync(&ptr, size, pool_, stream);
 	if (err != cudaSuccess) {
 		cudaGetLastError();
 		FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
