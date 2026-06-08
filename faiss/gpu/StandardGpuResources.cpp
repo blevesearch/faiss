@@ -460,8 +460,8 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    FAISS_ASSERT(tempMemory_.count(device) == 0);
      if (!dynamicTempMemory_) {
+        FAISS_ASSERT(tempMemory_.count(device) == 0);
         auto mem = std::make_unique<StackDeviceMemory>(
                 this,
                 device,
