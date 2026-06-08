@@ -220,11 +220,6 @@ void StandardGpuResourcesImpl::noTempMemory() {
 }
 
 void StandardGpuResourcesImpl::setTempMemory(size_t size) {
-    // API not compatible with dynamic temp memory, so disallow use of this API
-    // if dynamic temp memory is enabled
-    FAISS_ASSERT_MSG(
-            !dynamicTempMemory_,
-            "Cannot use setTempMemory with dynamic temp memory enabled");
     if (tempMemSize_ != size) {
         // adjust based on general limits
         tempMemSize_ = getDefaultTempMemForGPU(-1, size);
@@ -466,12 +461,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
     FAISS_ASSERT(tempMemory_.count(device) == 0);
-    // use dynamic temp memory if enabled, otherwise use fixed stack
-    if (dynamicTempMemory_) {
-        auto mem = std::make_unique<StackDeviceMemory>(
-                this, device, tempMemorySpace_);
-        tempMemory_.emplace(device, std::move(mem));
-    } else {
+     if (!dynamicTempMemory_) {
         auto mem = std::make_unique<StackDeviceMemory>(
                 this,
                 device,
