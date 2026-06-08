@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <faiss/gpu/impl/PoolDeviceMemory.h>
+#include <faiss/gpu/utils/PoolDeviceMemory.h>
 #include <faiss/gpu/utils/DeviceUtils.h>
 #include <faiss/impl/FaissAssert.h>
 
@@ -37,10 +37,10 @@ int PoolDeviceMemory::getDevice() const {
 
 void* PoolDeviceMemory::allocMemory(cudaStream_t stream, size_t size) {
     void* ptr = nullptr;
-    auto err = cudaMemPoolAllocAsync(&ptr, pool_, size, stream);
+    auto err = cudaMallocFromPoolAsync(&ptr, size, pool_, stream);
 	if (err != cudaSuccess) {
 		cudaGetLastError();
-		FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
+		FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", cudaGetErrorString(err));
 	}
     return ptr;
 }
