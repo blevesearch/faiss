@@ -223,8 +223,10 @@ size_t getAvailableMemory(int device) {
     CUDA_VERIFY(cudaDeviceGetDefaultMemPool(&pool, device));
 
     size_t reserved = 0, used = 0;
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemCurrent, &used));
+    CUDA_VERIFY(cudaMemPoolGetAttribute(
+            pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
+    CUDA_VERIFY(cudaMemPoolGetAttribute(
+            pool, cudaMemPoolAttrUsedMemCurrent, &used));
 
     return (reserved - used) + free;
 }
@@ -246,8 +248,10 @@ size_t getAvailableMemoryCurrentDevice() {
     CUDA_VERIFY(cudaDeviceGetDefaultMemPool(&pool, getCurrentDevice()));
 
     size_t reserved = 0, used = 0;
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemCurrent, &used));
+    CUDA_VERIFY(cudaMemPoolGetAttribute(
+            pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
+    CUDA_VERIFY(cudaMemPoolGetAttribute(
+            pool, cudaMemPoolAttrUsedMemCurrent, &used));
 
     return (reserved - used) + free;
 }
