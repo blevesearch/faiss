@@ -68,11 +68,6 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
-    /// Set if we should use a dynamic stack that can grow with repeated
-    /// allocations or a single fixed stack. Default is false (single fixed
-    /// stack).
-    void dynamicTempMemory();
-
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
     void setPinnedMemory(size_t size);
@@ -203,10 +198,6 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Memory space for temp allocations - pool and overflow (default: Device)
     MemorySpace tempMemorySpace_;
-
-    /// Whether to use a dynamic stack that can grow with repeated allocations
-    /// or a single fixed stack (default: false)
-    bool dynamicTempMemory_;
 };
 
 /// Default implementation of GpuResources that allocates a cuBLAS
@@ -242,10 +233,6 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// Set to MemorySpace::Unified for cudaMallocManaged.
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
-
-    /// Set if we should use a dynamic stack that can grow with repeated
-    /// allocations or a single fixed stack
-    void dynamicTempMemory();
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
