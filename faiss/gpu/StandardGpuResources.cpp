@@ -109,17 +109,17 @@ StandardGpuResourcesImpl::StandardGpuResourcesImpl()
 }
 
 StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
-#if defined USE_NVIDIA_CUVS
-    FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
-#else
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
     if (dynamicTempMemory_) {
+#if defined USE_NVIDIA_CUVS
+    FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+#else
         tempPoolMemory_.clear();
+#endif
     } else {
         tempMemory_.clear();
     }
-#endif
 
     // Make sure all allocations have been freed
     bool allocError = false;
@@ -473,16 +473,17 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-#if defined USE_NVIDIA_CUVS
-    FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
-#else
     if (dynamicTempMemory_) {
+#if defined USE_NVIDIA_CUVS
+    FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+#else
         FAISS_ASSERT(tempPoolMemory_.count(device) == 0);
         auto mem = std::make_unique<PoolDeviceMemory>(
                 this,
                 device,
                 tempMemorySpace_);
         tempPoolMemory_.emplace(device, std::move(mem));
+#endif
     } else {
         FAISS_ASSERT(tempMemory_.count(device) == 0);
         auto mem = std::make_unique<StackDeviceMemory>(
@@ -493,7 +494,6 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
                 tempMemorySpace_);
         tempMemory_.emplace(device, std::move(mem));
     }
-#endif
 }
 
 cublasHandle_t StandardGpuResourcesImpl::getBlasHandle(int device) {
@@ -564,14 +564,15 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-#if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
-#else
         // Temporary memory allocations come from our temporary memory provider, which
         // can either be a fixed-size pool (StackDeviceMemory) or a dynamic pool (PoolDeviceMemory)
         if (dynamicTempMemory_) {
+#if defined USE_NVIDIA_CUVS
+                FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+#else
                 p = tempPoolMemory_[adjReq.device]->allocMemory(
                 adjReq.stream, adjReq.size);
+#endif
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
             if (adjReq.size > tempMem->getSizeAvailable()) {
@@ -698,15 +699,15 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-#if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
-#else
         if (dynamicTempMemory_) {
+#if defined USE_NVIDIA_CUVS
+        FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+#else
             tempPoolMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+#endif
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
         }
-#endif
     } else if (
             req.space == MemorySpace::Device ||
             req.space == MemorySpace::Unified) {
@@ -730,22 +731,22 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
+    if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
     FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
 #else
-    if (dynamicTempMemory_) {
         auto it = tempPoolMemory_.find(device);
         FAISS_ASSERT(it != tempPoolMemory_.end());
         auto totFree = getFreeMemory(device);
         auto poolFree = it->second->getSizeAvailable();
         return poolFree + totFree;
+#endif
     } else {
         auto it = tempMemory_.find(device);
         FAISS_ASSERT(it != tempMemory_.end());
 
         return it->second->getSizeAvailable();
     }
-#endif
 }
 
 std::map<int, std::map<std::string, std::pair<int, size_t>>>
