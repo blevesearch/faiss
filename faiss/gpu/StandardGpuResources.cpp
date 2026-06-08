@@ -104,7 +104,8 @@ StandardGpuResourcesImpl::StandardGpuResourcesImpl()
                   std::numeric_limits<size_t>::max())),
           pinnedMemSize_(kDefaultPinnedMemoryAllocation),
           allocLogging_(false),
-          tempMemorySpace_(MemorySpace::Device) {
+          tempMemorySpace_(MemorySpace::Device),
+          dynamicTempMemory_(false) {
 }
 
 StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
@@ -247,6 +248,12 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(tempMemory_.empty());
     tempMemorySpace_ = space;
+}
+
+void StandardGpuResourcesImpl::dynamicTempMemory() {
+    // Should not call this after devices have been initialized
+    FAISS_ASSERT(tempMemory_.empty());
+    dynamicTempMemory_ = true;
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -453,15 +460,16 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    FAISS_ASSERT(tempMemory_.count(device) == 0);
-    auto mem = std::make_unique<StackDeviceMemory>(
-            this,
-            device,
-            // adjust for this specific device
-            getDefaultTempMemForGPU(device, tempMemSize_),
-            tempMemorySpace_);
-
-    tempMemory_.emplace(device, std::move(mem));
+    if (!dynamicTempMemory_) {
+        FAISS_ASSERT(tempMemory_.count(device) == 0);
+        auto mem = std::make_unique<StackDeviceMemory>(
+                this,
+                device,
+                // adjust for this specific device
+                getDefaultTempMemForGPU(device, tempMemSize_),
+                tempMemorySpace_);
+        tempMemory_.emplace(device, std::move(mem));
+    }
 }
 
 cublasHandle_t StandardGpuResourcesImpl::getBlasHandle(int device) {
@@ -532,28 +540,52 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        auto& tempMem = tempMemory_[adjReq.device];
+        if (!dynamicTempMemory_) {
+            auto& tempMem = tempMemory_[adjReq.device];
+            if (adjReq.size > tempMem->getSizeAvailable()) {
+                // We need to allocate this ourselves
+                AllocRequest newReq = adjReq;
+                newReq.space = tempMemorySpace_;
+                newReq.type = AllocType::TemporaryMemoryOverflow;
 
-        if (adjReq.size > tempMem->getSizeAvailable()) {
-            // We need to allocate this ourselves
-            AllocRequest newReq = adjReq;
-            newReq.space = tempMemorySpace_;
-            newReq.type = AllocType::TemporaryMemoryOverflow;
+                if (allocLogging_) {
+                    std::cout << "StandardGpuResources: alloc fail "
+                              << adjReq.toString()
+                              << " (no temp space); retrying as MemorySpace::"
+                              << (tempMemorySpace_ == MemorySpace::Unified
+                                          ? "Unified"
+                                          : "Device")
+                              << "\n";
+                }
 
-            if (allocLogging_) {
-                std::cout
-                        << "StandardGpuResources: alloc fail "
-                        << adjReq.toString()
-                        << " (no temp space); retrying as MemorySpace::"
-                        << (tempMemorySpace_ == MemorySpace::Unified ? "Unified" : "Device")
-                        << "\n";
+                return allocMemory(newReq);
             }
 
-            return allocMemory(newReq);
-        }
+            // Otherwise, we can handle this locally
+            p = tempMemory_[adjReq.device]->allocMemory(
+                    adjReq.stream, adjReq.size);
+        } else {
+            auto err = cudaMallocAsync(&p, adjReq.size, adjReq.stream);
+            // Throw if we fail to allocate
+            if (err != cudaSuccess) {
+                // FIXME: as of CUDA 11, a memory allocation error appears to be
+                // presented via cudaGetLastError as well, and needs to be
+                // cleared. Just call the function to clear it
+                cudaGetLastError();
 
-        // Otherwise, we can handle this locally
-        p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
+                std::stringstream ss;
+                ss << "StandardGpuResources: alloc fail " << adjReq.toString()
+                   << " (cudaMallocAsync error " << cudaGetErrorString(err)
+                   << " [" << (int)err << "])\n";
+                auto str = ss.str();
+
+                if (allocLogging_) {
+                    std::cout << str;
+                }
+
+                FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
+            }
+        }
     } else if (adjReq.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         try {
@@ -654,7 +686,17 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+        if (!dynamicTempMemory_) {
+            tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+        } else {
+            auto err = cudaFreeAsync(p, req.stream);
+            FAISS_ASSERT_FMT(
+                    err == cudaSuccess,
+                    "Failed to cudaFreeAsync pointer %p (error %d %s)",
+                    p,
+                    (int)err,
+                    cudaGetErrorString(err));
+        }
     } else if (
             req.space == MemorySpace::Device ||
             req.space == MemorySpace::Unified) {
@@ -678,7 +720,11 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
-
+    if (dynamicTempMemory_) {
+        // return max value of size_t to indicate that we have no fixed limit
+        // on temp memory usage when dynamicTempMemory_ is enabled
+        return std::numeric_limits<size_t>::max();
+    }
     auto it = tempMemory_.find(device);
     FAISS_ASSERT(it != tempMemory_.end());
 
@@ -737,6 +783,10 @@ void StandardGpuResources::setTempMemory(size_t size) {
 
 void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
+}
+
+void StandardGpuResources::dynamicTempMemory() {
+    res_->dynamicTempMemory();
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {
