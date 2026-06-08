@@ -113,7 +113,8 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // that up before we finish fully de-initializing ourselves
     if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
-    FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+        FAISS_THROW_MSG(
+                "Dynamic Temporary memory pool not yet integrated with cuVS");
 #else
         tempPoolMemory_.clear();
 #endif
@@ -475,13 +476,12 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
 
     if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
-    FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+        FAISS_THROW_MSG(
+                "Dynamic Temporary memory pool not yet integrated with cuVS");
 #else
         FAISS_ASSERT(tempPoolMemory_.count(device) == 0);
         auto mem = std::make_unique<PoolDeviceMemory>(
-                this,
-                device,
-                tempMemorySpace_);
+                this, device, tempMemorySpace_);
         tempPoolMemory_.emplace(device, std::move(mem));
 #endif
     } else {
@@ -564,14 +564,16 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        // Temporary memory allocations come from our temporary memory provider, which
-        // can either be a fixed-size pool (StackDeviceMemory) or a dynamic pool (PoolDeviceMemory)
+        // Temporary memory allocations come from our temporary memory provider,
+        // which can either be a fixed-size pool (StackDeviceMemory) or a
+        // dynamic pool (PoolDeviceMemory)
         if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
-                FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+            FAISS_THROW_MSG(
+                    "Dynamic Temporary memory pool not yet integrated with cuVS");
 #else
-                p = tempPoolMemory_[adjReq.device]->allocMemory(
-                adjReq.stream, adjReq.size);
+            p = tempPoolMemory_[adjReq.device]->allocMemory(
+                    adjReq.stream, adjReq.size);
 #endif
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
@@ -701,9 +703,11 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     if (req.space == MemorySpace::Temporary) {
         if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG("Dynamic Temporary memory pool not yet integrated with cuVS");
+            FAISS_THROW_MSG(
+                    "Dynamic Temporary memory pool not yet integrated with cuVS");
 #else
-            tempPoolMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+            tempPoolMemory_[device]->deallocMemory(
+                    device, req.stream, req.size, p);
 #endif
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
@@ -733,7 +737,7 @@ size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
     if (dynamicTempMemory_) {
 #if defined USE_NVIDIA_CUVS
-    FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
+        FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
 #else
         auto it = tempPoolMemory_.find(device);
         FAISS_ASSERT(it != tempPoolMemory_.end());

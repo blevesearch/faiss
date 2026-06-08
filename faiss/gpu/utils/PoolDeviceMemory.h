@@ -38,12 +38,11 @@ class PoolDeviceMemory {
     size_t getSizeAvailable() const;
 
    protected:
-
     /// Our device
     int device_;
 
-	/// Our pool
-	cudaMemPool_t pool_;
+    /// Our pool
+    cudaMemPool_t pool_;
 };
 
 } // namespace gpu

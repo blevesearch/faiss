@@ -30,8 +30,8 @@
 
 #include <faiss/gpu/GpuResources.h>
 #include <faiss/gpu/utils/DeviceUtils.h>
-#include <faiss/gpu/utils/StackDeviceMemory.h>
 #include <faiss/gpu/utils/PoolDeviceMemory.h>
+#include <faiss/gpu/utils/StackDeviceMemory.h>
 #include <functional>
 #include <map>
 #include <unordered_map>
