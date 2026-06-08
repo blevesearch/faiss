@@ -89,8 +89,15 @@ int probeDevice(int device);
 /// Returns the amount of currently available memory on the given device
 size_t getFreeMemory(int device);
 
+/// Returns the amount of currently available memory on the given device,
+/// including any memory that may be reserved by a pool but not actively in use
+size_t getAvailableMemory(int device);
+
 /// Equivalent to getFreeMemory(getCurrentDevice())
 size_t getFreeMemoryCurrentDevice();
+
+/// Equivalent to getAvailableMemory(getCurrentDevice())
+size_t getAvailableMemoryCurrentDevice();
 
 /// RAII object to set the current device, and restore the previous
 /// device upon destruction

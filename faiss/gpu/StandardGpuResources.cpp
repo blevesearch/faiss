@@ -721,9 +721,7 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
     if (dynamicTempMemory_) {
-        // return max value of size_t to indicate that we have no fixed limit
-        // on temp memory usage when dynamicTempMemory_ is enabled
-        return std::numeric_limits<size_t>::max();
+        return getAvailableMemory(device);
     }
     auto it = tempMemory_.find(device);
     FAISS_ASSERT(it != tempMemory_.end());
