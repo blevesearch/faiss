@@ -8,11 +8,6 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include <faiss/gpu/GpuResources.h>
-#include <list>
-#include <memory>
-#include <tuple>
-#include <unordered_map>
 
 namespace faiss {
 namespace gpu {
