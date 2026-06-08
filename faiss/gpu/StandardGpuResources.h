@@ -139,6 +139,9 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Have GPU resources been initialized for this device yet?
     bool isInitialized(int device) const;
 
+    /// Have GPU resources been initialized for any device yet?
+    bool isInitialized() const;
+
     /// Adjust the default temporary memory allocation based on the total GPU
     /// memory size
     static size_t getDefaultTempMemForGPU(int device, size_t requested);
@@ -150,6 +153,9 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Temporary memory provider, per each device
     std::unordered_map<int, std::unique_ptr<StackDeviceMemory>> tempMemory_;
+
+    /// Dynamic temporary memory pool, per each device
+    std::unordered_map<int, std::unique_ptr<PoolDeviceMemory>> tempPoolMemory_;
 
     /// Our default stream that work is ordered on, one per each device
     std::unordered_map<int, cudaStream_t> defaultStreams_;

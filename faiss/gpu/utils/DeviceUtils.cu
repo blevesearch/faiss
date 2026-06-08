@@ -213,22 +213,6 @@ size_t getFreeMemory(int device) {
     return free;
 }
 
-size_t getAvailableMemory(int device) {
-    DeviceScope scope(device);
-
-    size_t free = 0, total = 0;
-    CUDA_VERIFY(cudaMemGetInfo(&free, &total));
-
-    cudaMemPool_t pool;
-    CUDA_VERIFY(cudaDeviceGetDefaultMemPool(&pool, device));
-
-    size_t reserved = 0, used = 0;
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemCurrent, &used));
-
-    return (reserved - used) + free;
-}
-
 size_t getFreeMemoryCurrentDevice() {
     size_t free = 0;
     size_t total = 0;
@@ -236,20 +220,6 @@ size_t getFreeMemoryCurrentDevice() {
     CUDA_VERIFY(cudaMemGetInfo(&free, &total));
 
     return free;
-}
-
-size_t getAvailableMemoryCurrentDevice() {
-    size_t free = 0, total = 0;
-    CUDA_VERIFY(cudaMemGetInfo(&free, &total));
-
-    cudaMemPool_t pool;
-    CUDA_VERIFY(cudaDeviceGetDefaultMemPool(&pool, getCurrentDevice()));
-
-    size_t reserved = 0, used = 0;
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrReservedMemCurrent, &reserved));
-    CUDA_VERIFY(cudaMemPoolGetAttribute(pool, cudaMemPoolAttrUsedMemCurrent, &used));
-
-    return (reserved - used) + free;
 }
 
 DeviceScope::DeviceScope(int device) {
