@@ -540,28 +540,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        if (dynamicTempMemory_) {
-            auto err = cudaMallocAsync(&p, adjReq.size, adjReq.stream);
-            // Throw if we fail to allocate
-            if (err != cudaSuccess) {
-                // FIXME: as of CUDA 11, a memory allocation error appears to be
-                // presented via cudaGetLastError as well, and needs to be
-                // cleared. Just call the function to clear it
-                cudaGetLastError();
-
-                std::stringstream ss;
-                ss << "StandardGpuResources: alloc fail " << adjReq.toString()
-                << " (cudaMallocAsync error " << cudaGetErrorString(err) << " ["
-                << (int)err << "])\n";
-                auto str = ss.str();
-
-                if (allocLogging_) {
-                    std::cout << str;
-                }
-
-                FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
-            }
-        } else {
+        if (!dynamicTempMemory_) {
             auto& tempMem = tempMemory_[adjReq.device];
             if (adjReq.size > tempMem->getSizeAvailable()) {
                 // We need to allocate this ourselves
@@ -584,6 +563,27 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
             // Otherwise, we can handle this locally
             p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
+        } else {
+            auto err = cudaMallocAsync(&p, adjReq.size, adjReq.stream);
+            // Throw if we fail to allocate
+            if (err != cudaSuccess) {
+                // FIXME: as of CUDA 11, a memory allocation error appears to be
+                // presented via cudaGetLastError as well, and needs to be
+                // cleared. Just call the function to clear it
+                cudaGetLastError();
+
+                std::stringstream ss;
+                ss << "StandardGpuResources: alloc fail " << adjReq.toString()
+                << " (cudaMallocAsync error " << cudaGetErrorString(err) << " ["
+                << (int)err << "])\n";
+                auto str = ss.str();
+
+                if (allocLogging_) {
+                    std::cout << str;
+                }
+
+                FAISS_THROW_IF_NOT_FMT(err == cudaSuccess, "%s", str.c_str());
+            }
         }
     } else if (adjReq.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
@@ -685,7 +685,9 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        if (dynamicTempMemory_) {
+        if (!dynamicTempMemory_) {
+            tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+        } else {
             auto err = cudaFreeAsync(p, req.stream);
             FAISS_ASSERT_FMT(
                     err == cudaSuccess,
@@ -693,8 +695,6 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
                     p,
                     (int)err,
                     cudaGetErrorString(err));
-        } else {
-            tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
         }
     } else if (
             req.space == MemorySpace::Device ||
