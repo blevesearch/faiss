@@ -460,7 +460,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-     if (!dynamicTempMemory_) {
+    if (!dynamicTempMemory_) {
         FAISS_ASSERT(tempMemory_.count(device) == 0);
         auto mem = std::make_unique<StackDeviceMemory>(
                 this,
@@ -550,19 +550,20 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
                 if (allocLogging_) {
                     std::cout << "StandardGpuResources: alloc fail "
-                            << adjReq.toString()
-                            << " (no temp space); retrying as MemorySpace::"
-                            << (tempMemorySpace_ == MemorySpace::Unified
-                                        ? "Unified"
-                                        : "Device")
-                            << "\n";
+                              << adjReq.toString()
+                              << " (no temp space); retrying as MemorySpace::"
+                              << (tempMemorySpace_ == MemorySpace::Unified
+                                          ? "Unified"
+                                          : "Device")
+                              << "\n";
                 }
 
                 return allocMemory(newReq);
             }
 
             // Otherwise, we can handle this locally
-            p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
+            p = tempMemory_[adjReq.device]->allocMemory(
+                    adjReq.stream, adjReq.size);
         } else {
             auto err = cudaMallocAsync(&p, adjReq.size, adjReq.stream);
             // Throw if we fail to allocate
@@ -574,8 +575,8 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
                 std::stringstream ss;
                 ss << "StandardGpuResources: alloc fail " << adjReq.toString()
-                << " (cudaMallocAsync error " << cudaGetErrorString(err) << " ["
-                << (int)err << "])\n";
+                   << " (cudaMallocAsync error " << cudaGetErrorString(err)
+                   << " [" << (int)err << "])\n";
                 auto str = ss.str();
 
                 if (allocLogging_) {
@@ -720,7 +721,7 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
     if (dynamicTempMemory_) {
-        // return max value of size_t to indicate that we have no fixed limit 
+        // return max value of size_t to indicate that we have no fixed limit
         // on temp memory usage when dynamicTempMemory_ is enabled
         return std::numeric_limits<size_t>::max();
     }
