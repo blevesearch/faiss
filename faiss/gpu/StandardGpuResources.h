@@ -156,7 +156,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     std::unordered_map<int, std::unique_ptr<StackDeviceMemory>> tempMemory_;
 
     /// Dynamic temporary memory pool, per each device
-    std::unordered_map<int, std::unique_ptr<GpuMemoryPool>> tempMemoryPool_;
+    std::unordered_map<int, GpuMemoryPool*> tempMemoryPool_;
 
     /// Our default stream that work is ordered on, one per each device
     std::unordered_map<int, cudaStream_t> defaultStreams_;
