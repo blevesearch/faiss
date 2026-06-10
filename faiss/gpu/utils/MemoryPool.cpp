@@ -35,9 +35,7 @@ GpuMemoryPool::GpuMemoryPool(int device, size_t poolCap)
 }
 
 GpuMemoryPool::~GpuMemoryPool() {
-    if (pool_) {
-        CUDA_VERIFY(cudaMemPoolDestroy(pool_));
-    }
+    CUDA_VERIFY(cudaMemPoolDestroy(pool_));
 }
 
 int GpuMemoryPool::getDevice() const {
