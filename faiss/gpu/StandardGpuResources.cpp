@@ -706,16 +706,12 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
-    if (dynamicTempMemory_) {
-#if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG("Temporary memory pool not yet integrated with cuVS");
-#else
-        auto it = tempPoolMemory_.find(device);
-        FAISS_ASSERT(it != tempPoolMemory_.end());
+    if (!tempMemoryPool_.empty()) {
+        auto it = tempMemoryPool_.find(device);
+        FAISS_ASSERT(it != tempMemoryPool_.end());
         auto totFree = getFreeMemory(device);
         auto poolFree = it->second->getSizeAvailable();
         return poolFree + totFree;
-#endif
     } else {
         auto it = tempMemory_.find(device);
         FAISS_ASSERT(it != tempMemory_.end());
