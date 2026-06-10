@@ -104,23 +104,13 @@ StandardGpuResourcesImpl::StandardGpuResourcesImpl()
                   std::numeric_limits<size_t>::max())),
           pinnedMemSize_(kDefaultPinnedMemoryAllocation),
           allocLogging_(false),
-          tempMemorySpace_(MemorySpace::Device),
-          dynamicTempMemory_(false) {
-}
+          tempMemorySpace_(MemorySpace::Device) {}
 
 StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
-    if (dynamicTempMemory_) {
-#if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG(
-                "Dynamic Temporary memory pool not yet integrated with cuVS");
-#else
-        tempPoolMemory_.clear();
-#endif
-    } else {
-        tempMemory_.clear();
-    }
+    tempMemory_.clear();
+    tempMemoryPool_->clear();
 
     // Make sure all allocations have been freed
     bool allocError = false;
@@ -259,10 +249,10 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     tempMemorySpace_ = space;
 }
 
-void StandardGpuResourcesImpl::dynamicTempMemory() {
+void StandardGpuResourcesImpl::setTempMemoryPool(GpuMemoryPool* pool) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(!isInitialized());
-    dynamicTempMemory_ = true;
+    tempMemoryPool_.emplace(pool->getDevice(), pool);
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -474,15 +464,8 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    if (dynamicTempMemory_) {
-#if defined USE_NVIDIA_CUVS
-        FAISS_THROW_MSG(
-                "Dynamic Temporary memory pool not yet integrated with cuVS");
-#else
-        FAISS_ASSERT(tempPoolMemory_.count(device) == 0);
-        auto mem = std::make_unique<PoolDeviceMemory>(device);
-        tempPoolMemory_.emplace(device, std::move(mem));
-#endif
+    if (!tempMemoryPool_.empty()) {
+        FAISS_ASSERT(tempMemoryPool_.count(device) != 0);
     } else {
         FAISS_ASSERT(tempMemory_.count(device) == 0);
         auto mem = std::make_unique<StackDeviceMemory>(
@@ -566,14 +549,9 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
         // Temporary memory allocations come from our temporary memory provider,
         // which can either be a fixed-size pool (StackDeviceMemory) or a
         // dynamic pool (PoolDeviceMemory)
-        if (dynamicTempMemory_) {
-#if defined USE_NVIDIA_CUVS
-            FAISS_THROW_MSG(
-                    "Dynamic Temporary memory pool not yet integrated with cuVS");
-#else
-            p = tempPoolMemory_[adjReq.device]->allocMemory(
+        if (!tempMemoryPool_.empty()) {
+            p = tempMemoryPool_[adjReq.device]->allocMemory(
                     adjReq.stream, adjReq.size);
-#endif
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
             if (adjReq.size > tempMem->getSizeAvailable()) {
@@ -699,14 +677,9 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        if (dynamicTempMemory_) {
-#if defined USE_NVIDIA_CUVS
-            FAISS_THROW_MSG(
-                    "Dynamic Temporary memory pool not yet integrated with cuVS");
-#else
-            tempPoolMemory_[device]->deallocMemory(
+        if (!tempMemoryPool_.empty()) {
+            tempMemoryPool_[device]->deallocMemory(
                     device, req.stream, req.size, p);
-#endif
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
         }
@@ -805,8 +778,8 @@ void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
 }
 
-void StandardGpuResources::dynamicTempMemory() {
-    res_->dynamicTempMemory();
+void StandardGpuResources::setTempMemoryPool(GpuMemoryPool* pool) {
+    res_->setTempMemoryPool(pool);
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {

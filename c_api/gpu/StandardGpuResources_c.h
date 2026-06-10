@@ -13,6 +13,7 @@
 #include <cuda_runtime_api.h>
 #include "../faiss_c.h"
 #include "GpuResources_c.h"
+#include "GpuMemoryPool_c.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,7 +48,9 @@ int faiss_StandardGpuResources_setTempMemorySpace(
 
 /// Set if we should use a temp memory pool that will grow with repeated
 /// allocations or a single fixed buffer, which is the default.
-int faiss_StandardGpuResources_dynamicTempMemory(FaissStandardGpuResources*);
+int faiss_StandardGpuResources_setTempMemoryPool(
+        FaissStandardGpuResources*,
+        FaissGpuMemoryPool*);
 
 /// Set amount of pinned memory to allocate, for async GPU <-> CPU
 /// transfers

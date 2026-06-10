@@ -14,12 +14,12 @@ namespace gpu {
 
 /// Device memory manager that provides temporary memory allocations
 /// out of a region of memory, for a single device
-class PoolDeviceMemory {
+class GpuMemoryPool {
    public:
     /// Allocate a new region of memory that we manage
-    PoolDeviceMemory(int device);
+    GpuMemoryPool(int device, size_t poolCap);
 
-    ~PoolDeviceMemory();
+    ~GpuMemoryPool();
 
     int getDevice() const;
 
@@ -32,6 +32,9 @@ class PoolDeviceMemory {
    protected:
     /// Our device
     int device_;
+
+    /// Soft limit for the pool size
+    size_t poolCap_;
 
     /// Our pool
     cudaMemPool_t pool_;

@@ -73,7 +73,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// temporary allocations, by default we create a temporary memory pool with
     /// a fixed size determined by `setTempMemory` and fallback to hard
     /// allocation if the pool is exhausted.
-    void dynamicTempMemory();
+    void setTempMemoryPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
@@ -156,7 +156,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     std::unordered_map<int, std::unique_ptr<StackDeviceMemory>> tempMemory_;
 
     /// Dynamic temporary memory pool, per each device
-    std::unordered_map<int, std::unique_ptr<PoolDeviceMemory>> tempPoolMemory_;
+    std::unordered_map<int, std::unique_ptr<GpuMemoryPool>> tempMemoryPool_;
 
     /// Our default stream that work is ordered on, one per each device
     std::unordered_map<int, cudaStream_t> defaultStreams_;
@@ -211,10 +211,6 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Memory space for temp allocations - pool and overflow (default: Device)
     MemorySpace tempMemorySpace_;
-
-    /// Whether to use a dynamic stack that can grow with repeated allocations
-    /// or a single fixed stack (default: false)
-    bool dynamicTempMemory_;
 };
 
 /// Default implementation of GpuResources that allocates a cuBLAS
@@ -255,7 +251,7 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// temporary allocations, by default we create a temporary memory pool with
     /// a fixed size determined by `setTempMemory` and fallback to hard
     /// allocation if the pool is exhausted.
-    void dynamicTempMemory();
+    void setTempMemoryPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
