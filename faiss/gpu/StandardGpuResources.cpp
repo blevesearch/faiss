@@ -552,6 +552,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
                         ->allocMemory(adjReq.stream, adjReq.size);
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
+
             if (adjReq.size > tempMem->getSizeAvailable()) {
                 // We need to allocate this ourselves
                 AllocRequest newReq = adjReq;
