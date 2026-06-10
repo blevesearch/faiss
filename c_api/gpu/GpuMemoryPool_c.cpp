@@ -8,6 +8,7 @@
 // -*- c -*-
 
 #include "GpuMemoryPool_c.h"
+#include <faiss/gpu/utils/MemoryPool.h>
 
 using faiss::gpu::GpuMemoryPool;
 
