@@ -11,6 +11,7 @@
 #define FAISS_GPU_MEMORY_POOL_C_H
 
 #include <cuda_runtime_api.h>
+#include "../faiss_c.h"
 
 #ifdef __cplusplus
 extern "C" {
