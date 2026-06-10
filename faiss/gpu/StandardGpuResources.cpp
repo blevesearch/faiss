@@ -551,7 +551,8 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
         // which can either be a fixed-size pool (StackDeviceMemory) or a
         // dynamic pool (GpuMemoryPool)
         if (tempMemoryPool_.count(adjReq.device) != 0) {
-            p = tempMemoryPool_.at(adjReq.device)->allocMemory(adjReq.stream, adjReq.size);
+            p = tempMemoryPool_.at(adjReq.device)
+                        ->allocMemory(adjReq.stream, adjReq.size);
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
             if (adjReq.size > tempMem->getSizeAvailable()) {
