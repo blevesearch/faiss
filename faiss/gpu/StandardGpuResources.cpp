@@ -547,9 +547,6 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        // Temporary memory allocations come from our temporary memory provider,
-        // which can either be a fixed-size pool (StackDeviceMemory) or a
-        // dynamic pool (GpuMemoryPool)
         if (tempMemoryPool_.count(adjReq.device) != 0) {
             p = tempMemoryPool_.at(adjReq.device)
                         ->allocMemory(adjReq.stream, adjReq.size);
