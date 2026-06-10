@@ -13,7 +13,6 @@
 #include <cuda_runtime_api.h>
 #include <faiss/gpu/utils/MemoryPool.h>
 #include "GpuIndex_c.h"
-#include "macros_impl.h"
 
 #ifdef __cplusplus
 extern "C" {
