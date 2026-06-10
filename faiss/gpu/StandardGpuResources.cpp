@@ -110,7 +110,7 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
     tempMemory_.clear();
-    tempMemoryPool_->clear();
+    tempMemoryPool_.clear();
 
     // Make sure all allocations have been freed
     bool allocError = false;
