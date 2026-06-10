@@ -38,7 +38,7 @@ int faiss_GpuMemoryPool_new(
         size_t poolCap,
         FaissGpuMemoryPool** out);
 
-FAISS_DECLARE_DESTRUCTOR(GpuMemoryPool)
+void faiss_GpuMemoryPool_free(FaissGpuMemoryPool* obj);
 
 #ifdef __cplusplus
 }

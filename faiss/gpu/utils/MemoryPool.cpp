@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <faiss/gpu/utils/DeviceUtils.h>
 #include <faiss/gpu/utils/MemoryPool.h>
 #include <faiss/impl/FaissAssert.h>
 

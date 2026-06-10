@@ -46,8 +46,7 @@ int faiss_StandardGpuResources_setTempMemorySpace(
         FaissStandardGpuResources*,
         int space);
 
-/// Set if we should use a temp memory pool that will grow with repeated
-/// allocations or a single fixed buffer, which is the default.
+/// Set a memory pool to use for temporary allocations on the GPU.
 int faiss_StandardGpuResources_setTempMemoryPool(
         FaissStandardGpuResources*,
         FaissGpuMemoryPool*);

@@ -12,8 +12,8 @@
 namespace faiss {
 namespace gpu {
 
-/// Device memory manager that provides temporary memory allocations
-/// out of a region of memory, for a single device
+/// A memory pool scoped to a single GPU device with a soft capacity limit.
+/// Supports stream-ordered allocation and deallocation of device memory.
 class GpuMemoryPool {
    public:
     /// Allocate a new region of memory that we manage

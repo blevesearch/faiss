@@ -22,4 +22,6 @@ int faiss_GpuMemoryPool_new(
     CATCH_AND_HANDLE
 }
 
-DEFINE_DESTRUCTOR(GpuMemoryPool)
+void faiss_GpuMemoryPool_free(FaissGpuMemoryPool* obj) {
+    delete reinterpret_cast<GpuMemoryPool*>(obj);
+}
