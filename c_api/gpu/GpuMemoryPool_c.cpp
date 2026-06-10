@@ -9,6 +9,7 @@
 
 #include "GpuMemoryPool_c.h"
 #include <faiss/gpu/utils/MemoryPool.h>
+#include "macros_impl.h"
 
 using faiss::gpu::GpuMemoryPool;
 
