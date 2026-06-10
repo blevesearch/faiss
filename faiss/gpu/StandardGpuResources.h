@@ -30,7 +30,7 @@
 
 #include <faiss/gpu/GpuResources.h>
 #include <faiss/gpu/utils/DeviceUtils.h>
-#include <faiss/gpu/utils/PoolDeviceMemory.h>
+#include <faiss/gpu/utils/MemoryPool.h>
 #include <faiss/gpu/utils/StackDeviceMemory.h>
 #include <functional>
 #include <map>
