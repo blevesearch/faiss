@@ -12,15 +12,14 @@
 using faiss::gpu::GpuMemoryPool;
 
 int faiss_GpuMemoryPool_new(
-		int device,
-		size_t poolCap,
-		FaissGpuMemoryPool** out) {
-	try {
-		auto pool = new GpuMemoryPool(device, poolCap);
-		*out = reinterpret_cast<FaissGpuMemoryPool*>(pool);
-		return 0;
-	}
-	CATCH_AND_HANDLE
+        int device,
+        size_t poolCap,
+        FaissGpuMemoryPool** out) {
+    try {
+        auto pool = new GpuMemoryPool(device, poolCap);
+        *out = reinterpret_cast<FaissGpuMemoryPool*>(pool);
+    }
+    CATCH_AND_HANDLE
 }
 
 DEFINE_DESTRUCTOR(GpuMemoryPool)

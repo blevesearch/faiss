@@ -22,20 +22,21 @@ extern "C" {
 FAISS_DECLARE_CLASS(GpuMemoryPool)
 
 /**
- * Returns a memory pool for the given device and pool capacity. 
- * The pool will be used for temporary memory allocations on the GPU, and will automatically release memory back to the system when the pool capacity is reached. 
- * The pool may exceed the specified capacity if necessary, but will not release memory until 
- * the capacity is reached.
- * 
+ * Returns a memory pool for the given device and pool capacity.
+ * The pool will be used for temporary memory allocations on the GPU, and will
+ * automatically release memory back to the system when the pool capacity is
+ * reached. The pool may exceed the specified capacity if necessary, but will
+ * not release memory until the capacity is reached.
+ *
  * @param device The GPU device ID.
  * @param poolCap The maximum capacity of the memory pool in bytes.
  * @param out A pointer to the memory pool object.
  * @return 0 on success, non-zero on failure.
-*/
+ */
 int faiss_GpuMemoryPool_new(
-		int device,
-		size_t poolCap,
-		FaissGpuMemoryPool** out);
+        int device,
+        size_t poolCap,
+        FaissGpuMemoryPool** out);
 
 FAISS_DECLARE_DESTRUCTOR(GpuMemoryPool)
 

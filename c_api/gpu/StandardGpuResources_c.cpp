@@ -11,9 +11,9 @@
 #include <faiss/gpu/StandardGpuResources.h>
 #include "macros_impl.h"
 
+using faiss::gpu::GpuMemoryPool;
 using faiss::gpu::MemorySpace;
 using faiss::gpu::StandardGpuResources;
-using faiss::gpu::GpuMemoryPool;
 
 DEFINE_DESTRUCTOR(StandardGpuResources)
 

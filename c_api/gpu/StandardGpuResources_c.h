@@ -12,8 +12,8 @@
 
 #include <cuda_runtime_api.h>
 #include "../faiss_c.h"
-#include "GpuResources_c.h"
 #include "GpuMemoryPool_c.h"
+#include "GpuResources_c.h"
 
 #ifdef __cplusplus
 extern "C" {
