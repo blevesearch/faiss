@@ -253,6 +253,8 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
 void StandardGpuResourcesImpl::setTempMemoryPool(GpuMemoryPool* pool) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(!isInitialized());
+    FAISS_ASSERT(pool != nullptr);
+    FAISS_ASSERT(tempMemoryPool_.count(pool->getDevice()) == 0);
     tempMemoryPool_.emplace(pool->getDevice(), pool);
 }
 
@@ -465,9 +467,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    if (!tempMemoryPool_.empty()) {
-        FAISS_ASSERT(tempMemoryPool_.count(device) != 0);
-    } else {
+    if (tempMemoryPool_.count(device) != 0) {
         FAISS_ASSERT(tempMemory_.count(device) == 0);
         auto mem = std::make_unique<StackDeviceMemory>(
                 this,
@@ -550,9 +550,8 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
         // Temporary memory allocations come from our temporary memory provider,
         // which can either be a fixed-size pool (StackDeviceMemory) or a
         // dynamic pool (GpuMemoryPool)
-        if (!tempMemoryPool_.empty()) {
-            p = tempMemoryPool_[adjReq.device]->allocMemory(
-                    adjReq.stream, adjReq.size);
+        if (tempMemoryPool_.count(adjReq.device) != 0) {
+            p = tempMemoryPool_.at(adjReq.device)->allocMemory(adjReq.stream, adjReq.size);
         } else {
             auto& tempMem = tempMemory_[adjReq.device];
             if (adjReq.size > tempMem->getSizeAvailable()) {
@@ -678,8 +677,8 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        if (!tempMemoryPool_.empty()) {
-            tempMemoryPool_[device]->deallocMemory(
+        if (tempMemoryPool_.count(device) != 0) {
+            tempMemoryPool_.at(device)->deallocMemory(
                     device, req.stream, req.size, p);
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
@@ -707,12 +706,8 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
-    if (!tempMemoryPool_.empty()) {
-        auto it = tempMemoryPool_.find(device);
-        FAISS_ASSERT(it != tempMemoryPool_.end());
-        auto totFree = getFreeMemory(device);
-        auto poolFree = it->second->getSizeAvailable();
-        return poolFree + totFree;
+    if (tempMemoryPool_.count(device) != 0) {
+        return tempMemoryPool_.at(device)->getSizeAvailable();
     } else {
         auto it = tempMemory_.find(device);
         FAISS_ASSERT(it != tempMemory_.end());
