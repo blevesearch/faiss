@@ -13,6 +13,7 @@
 
 using faiss::gpu::MemorySpace;
 using faiss::gpu::StandardGpuResources;
+using faiss::gpu::GpuMemoryPool;
 
 DEFINE_DESTRUCTOR(StandardGpuResources)
 
