@@ -16,16 +16,15 @@ namespace gpu {
 /// Supports stream-ordered allocation and deallocation of device memory.
 class GpuMemoryPool {
    public:
-    /// Allocate a new region of memory that we manage
     GpuMemoryPool(int device, size_t poolCap);
 
     ~GpuMemoryPool();
 
     int getDevice() const;
 
-    /// All allocations requested should be a multiple of 16 bytes
     void* allocMemory(cudaStream_t stream, size_t size);
-    void deallocMemory(int device, cudaStream_t, size_t size, void* p);
+
+    void deallocMemory(int device, cudaStream_t stream, size_t size, void* p);
 
     size_t getSizeAvailable() const;
 
