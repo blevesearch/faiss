@@ -69,10 +69,8 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
-    /// Set if we should use a memory pool that dynamically grows with repeated
-    /// temporary allocations, by default we create a temporary memory pool with
-    /// a fixed size determined by `setTempMemory` and fallback to hard
-    /// allocation if the pool is exhausted.
+    /// Set a memory pool to use for temporary memory allocations. 
+    /// If not set, we will fallback to using the default temporary memory provider.
     void setTempMemoryPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
@@ -247,10 +245,8 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
-    /// Set if we should use a memory pool that dynamically grows with repeated
-    /// temporary allocations, by default we create a temporary memory pool with
-    /// a fixed size determined by `setTempMemory` and fallback to hard
-    /// allocation if the pool is exhausted.
+    /// Set a memory pool to use for temporary memory allocations. 
+    /// If not set, we will fallback to using the default temporary memory provider.
     void setTempMemoryPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
