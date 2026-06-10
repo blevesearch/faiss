@@ -475,6 +475,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
                 // adjust for this specific device
                 getDefaultTempMemForGPU(device, tempMemSize_),
                 tempMemorySpace_);
+
         tempMemory_.emplace(device, std::move(mem));
     }
 }
