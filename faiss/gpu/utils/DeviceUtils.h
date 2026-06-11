@@ -196,16 +196,16 @@ void streamWaitBase(const L1& listWaiting, const L2& listWaitOn) {
 /// These versions allow usage of initializer_list as arguments, since
 /// otherwise {...} doesn't have a type
 template <typename L1>
-void streamWait(const L1& a, const std::initializer_list<cudaStream_t>& b) {
+void streamWait2(const L1& a, const std::initializer_list<cudaStream_t>& b) {
     streamWaitBase(a, b);
 }
 
 template <typename L2>
-void streamWait(const std::initializer_list<cudaStream_t>& a, const L2& b) {
+void streamWait2(const std::initializer_list<cudaStream_t>& a, const L2& b) {
     streamWaitBase(a, b);
 }
 
-inline void streamWait(
+inline void streamWait2(
         const std::initializer_list<cudaStream_t>& a,
         const std::initializer_list<cudaStream_t>& b) {
     streamWaitBase(a, b);
