@@ -251,6 +251,20 @@ class GpuResources {
     /// Returns the stream on which we perform async CPU <-> GPU copies
     virtual cudaStream_t getAsyncCopyStream(int device) = 0;
 
+     void streamWait(
+            const std::initializer_list<cudaStream_t>& waiting,
+            const std::initializer_list<cudaStream_t>& waitOn);
+
+    void streamWait(
+            const std::vector<cudaStream_t>& waiting,
+            const std::vector<cudaStream_t>& waitOn);
+
+    void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+                    const std::vector<cudaStream_t>& waitOn);
+                    
+    void streamWait(const std::vector<cudaStream_t>& waiting,
+                    const std::initializer_list<cudaStream_t>& waitOn);
+
     ///
     /// Functions provided by default
     ///

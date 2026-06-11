@@ -100,7 +100,7 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     void streamWait(const std::initializer_list<cudaStream_t>& waiting,
                     const std::vector<cudaStream_t>& waitOn);
-                    
+
     void streamWait(const std::vector<cudaStream_t>& waiting,
                     const std::initializer_list<cudaStream_t>& waitOn);
 
@@ -294,6 +294,21 @@ class StandardGpuResources : public GpuResourcesProvider {
             const;
     /// Returns the current default stream
     cudaStream_t getDefaultStream(int device);
+
+
+        void streamWait(
+            const std::initializer_list<cudaStream_t>& waiting,
+            const std::initializer_list<cudaStream_t>& waitOn);
+
+    void streamWait(
+            const std::vector<cudaStream_t>& waiting,
+            const std::vector<cudaStream_t>& waitOn);
+
+    void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+                    const std::vector<cudaStream_t>& waitOn);
+                    
+    void streamWait(const std::vector<cudaStream_t>& waiting,
+                    const std::initializer_list<cudaStream_t>& waitOn);
 
 #if defined USE_NVIDIA_CUVS
     /// Returns the raft handle for the given device which can be used to

@@ -905,5 +905,27 @@ void StandardGpuResources::setLogMemoryAllocations(bool enable) {
     res_->setLogMemoryAllocations(enable);
 }
 
+    void streamWait(
+            const std::initializer_list<cudaStream_t>& waiting,
+            const std::initializer_list<cudaStream_t>& waitOn) {
+        res_->streamWait(waiting, waitOn);
+    }
+
+    void streamWait(
+            const std::vector<cudaStream_t>& waiting,
+            const std::vector<cudaStream_t>& waitOn) {
+        res_->streamWait(waiting, waitOn);
+    }
+
+    void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+                    const std::vector<cudaStream_t>& waitOn) {
+        res_->streamWait(waiting, waitOn);
+    }
+
+    void streamWait(const std::vector<cudaStream_t>& waiting,
+                    const std::initializer_list<cudaStream_t>& waitOn) {
+        res_->streamWait(waiting, waitOn);
+    }
+
 } // namespace gpu
 } // namespace faiss
