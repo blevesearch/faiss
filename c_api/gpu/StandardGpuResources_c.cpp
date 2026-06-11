@@ -51,7 +51,7 @@ int faiss_StandardGpuResources_setTempMemorySpace(
     CATCH_AND_HANDLE
 }
 
-int faiss_StandardGpuResources_setTempMemoryPool(
+int faiss_StandardGpuResources_setTempMemoryOverflowPool(
         FaissStandardGpuResources* res,
         FaissGpuMemoryPool* pool) {
     try {

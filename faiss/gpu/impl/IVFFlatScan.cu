@@ -434,7 +434,8 @@ void runIVFFlatScan(
             &heapIndices1, &heapIndices2};
 
     auto streams = res->getAlternateStreamsCurrentDevice();
-    streamWait(streams, {stream});
+    //   streamWait(streams, {stream});
+    res->streamWait(streams, {stream});
 
     int curStream = 0;
 
@@ -487,7 +488,8 @@ void runIVFFlatScan(
         curStream = (curStream + 1) % 2;
     }
 
-    streamWait({stream}, streams);
+    //   streamWait({stream}, streams);
+    res->streamWait({stream}, streams);
 }
 
 } // namespace gpu

@@ -154,8 +154,9 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Temporary memory provider, per each device
     std::unordered_map<int, std::unique_ptr<StackDeviceMemory>> tempMemory_;
 
-    /// Dynamic temporary memory pool, per each device
-    std::unordered_map<int, GpuMemoryPool*> tempMemoryPool_;
+    /// Optional memory pool to use for temporary memory allocation overflow,
+    /// per device
+    std::unordered_map<int, GpuMemoryPool*> tempMemoryOverflowPool_;
 
     /// Our default stream that work is ordered on, one per each device
     std::unordered_map<int, cudaStream_t> defaultStreams_;
@@ -172,6 +173,9 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// cuBLAS handle for each device
     std::unordered_map<int, cublasHandle_t> blasHandles_;
+
+    /// Reusable CUDA event, one per stream managed by this resource
+    std::unordered_map<cudaStream_t, cudaEvent_t> streamEvents_;
 
 #if defined USE_NVIDIA_CUVS
     /// raft handle for each device

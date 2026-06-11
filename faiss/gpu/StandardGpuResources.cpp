@@ -111,7 +111,7 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
     tempMemory_.clear();
-    tempMemoryPool_.clear();
+    tempMemoryOverflowPool_.clear();
 
     // Make sure all allocations have been freed
     bool allocError = false;
@@ -135,6 +135,10 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
 #if defined USE_NVIDIA_CUVS
     raftHandles_.clear();
 #endif
+    // destroy all our events
+    for (auto& entry : streamEvents_) {
+        CUDA_VERIFY(cudaEventDestroy(entry.second));
+    }
 
     for (auto& entry : defaultStreams_) {
         DeviceScope scope(entry.first);
@@ -254,8 +258,8 @@ void StandardGpuResourcesImpl::setTempMemoryPool(GpuMemoryPool* pool) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(!isInitialized());
     FAISS_ASSERT(pool != nullptr);
-    FAISS_ASSERT(tempMemoryPool_.count(pool->getDevice()) == 0);
-    tempMemoryPool_.emplace(pool->getDevice(), pool);
+    FAISS_ASSERT(tempMemoryOverflowPool_.count(pool->getDevice()) == 0);
+    tempMemoryOverflowPool_.emplace(pool->getDevice(), pool);
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -284,6 +288,7 @@ void StandardGpuResourcesImpl::setDefaultStream(
         }
 
         if (prevStream != stream) {
+            // NOT CALLED
             streamWait({stream}, {prevStream});
         }
 #if defined USE_NVIDIA_CUVS
@@ -310,6 +315,7 @@ void StandardGpuResourcesImpl::revertDefaultStream(int device) {
             FAISS_ASSERT(defaultStreams_.count(device));
             cudaStream_t newStream = defaultStreams_[device];
 
+            // NOT CALLED
             streamWait({newStream}, {prevStream});
 
 #if defined USE_NVIDIA_CUVS
@@ -429,6 +435,11 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
 
     defaultStreams_[device] = defaultStream;
 
+    cudaEvent_t event;
+    CUDA_VERIFY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+
+    streamEvents_.emplace(defaultStream, event);
+
 #if defined USE_NVIDIA_CUVS
     raftHandles_.emplace(std::make_pair(device, defaultStream));
 #endif
@@ -438,6 +449,9 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
             cudaStreamCreateWithFlags(&asyncCopyStream, cudaStreamNonBlocking));
 
     asyncCopyStreams_[device] = asyncCopyStream;
+    cudaEvent_t asyncCopyEvent;
+    CUDA_VERIFY(cudaEventCreateWithFlags(&asyncCopyEvent, cudaEventDisableTiming));
+    streamEvents_.emplace(asyncCopyStream, asyncCopyEvent);
 
     std::vector<cudaStream_t> deviceStreams;
     for (int j = 0; j < kNumStreams; ++j) {
@@ -445,6 +459,9 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
         CUDA_VERIFY(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
 
         deviceStreams.push_back(stream);
+        cudaEvent_t event;
+        CUDA_VERIFY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+        streamEvents_.emplace(stream, event);
     }
 
     alternateStreams_[device] = std::move(deviceStreams);
@@ -467,17 +484,15 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    if (tempMemoryPool_.count(device) == 0) {
-        FAISS_ASSERT(tempMemory_.count(device) == 0);
-        auto mem = std::make_unique<StackDeviceMemory>(
-                this,
-                device,
-                // adjust for this specific device
-                getDefaultTempMemForGPU(device, tempMemSize_),
-                tempMemorySpace_);
+    FAISS_ASSERT(tempMemory_.count(device) == 0);
+    auto mem = std::make_unique<StackDeviceMemory>(
+            this,
+            device,
+            // adjust for this specific device
+            getDefaultTempMemForGPU(device, tempMemSize_),
+            tempMemorySpace_);
 
-        tempMemory_.emplace(device, std::move(mem));
-    }
+    tempMemory_.emplace(device, std::move(mem));
 }
 
 cublasHandle_t StandardGpuResourcesImpl::getBlasHandle(int device) {
@@ -548,13 +563,15 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        if (tempMemoryPool_.count(adjReq.device) != 0) {
-            p = tempMemoryPool_.at(adjReq.device)
-                        ->allocMemory(adjReq.stream, adjReq.size);
-        } else {
-            auto& tempMem = tempMemory_[adjReq.device];
-
-            if (adjReq.size > tempMem->getSizeAvailable()) {
+        auto& tempMem = tempMemory_[adjReq.device];
+        if (adjReq.size > tempMem->getSizeAvailable(adjReq.stream)) {
+            // Check if we have an overflow pool for this device, and if so,
+            // allocate through that instead
+            if (tempMemoryOverflowPool_.count(adjReq.device) != 0) {
+                adjReq.type = AllocType::TemporaryMemoryOverflow;
+                p = tempMemoryOverflowPool_.at(adjReq.device)
+                            ->allocMemory(adjReq.stream, adjReq.size);
+            } else {
                 // We need to allocate this ourselves
                 AllocRequest newReq = adjReq;
                 newReq.space = tempMemorySpace_;
@@ -572,7 +589,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
                 return allocMemory(newReq);
             }
-
+        } else {
             // Otherwise, we can handle this locally
             p = tempMemory_[adjReq.device]->allocMemory(
                     adjReq.stream, adjReq.size);
@@ -677,8 +694,8 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        if (tempMemoryPool_.count(device) != 0) {
-            tempMemoryPool_.at(device)->deallocMemory(
+        if (req.type == AllocType::TemporaryMemoryOverflow) {
+            tempMemoryOverflowPool_.at(device)->deallocMemory(
                     device, req.stream, req.size, p);
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
@@ -706,14 +723,14 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
-    if (tempMemoryPool_.count(device) != 0) {
-        return tempMemoryPool_.at(device)->getSizeAvailable();
-    } else {
-        auto it = tempMemory_.find(device);
-        FAISS_ASSERT(it != tempMemory_.end());
+    auto it = tempMemory_.find(device);
+    FAISS_ASSERT(it != tempMemory_.end());
 
-        return it->second->getSizeAvailable();
+    size_t available = it->second->getSizeAvailable();
+    if (tempMemoryOverflowPool_.count(device) != 0) {
+        available += tempMemoryOverflowPool_.at(device)->getSizeAvailable();
     }
+    return available;
 }
 
 std::map<int, std::map<std::string, std::pair<int, size_t>>>
@@ -736,6 +753,77 @@ StandardGpuResourcesImpl::getMemoryInfo() const {
 
     return out;
 }
+
+void StandardGpuResourcesImpl::streamWait(
+        const std::initializer_list<cudaStream_t>& waiting,
+        const std::initializer_list<cudaStream_t>& waitOn) {
+    for (const auto& streamOn : waitOn) {
+        FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
+        cudaEvent_t event = streamEvents_[streamOn];
+        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+    }
+
+    // For all the streams that are waiting, issue a wait
+    for (auto& stream : waiting) {
+        for (auto& streamOn : waitOn) {
+            cudaEvent_t event = streamEvents_[streamOn];
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+        }
+    }
+}
+
+void StandardGpuResourcesImpl::streamWait(
+        const std::vector<cudaStream_t>& waiting,
+        const std::vector<cudaStream_t>& waitOn) {
+    for (const auto& streamOn : waitOn) {
+        FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
+        cudaEvent_t event = streamEvents_[streamOn];
+        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+    }
+
+    // For all the streams that are waiting, issue a wait
+    for (auto& stream : waiting) {
+        for (auto& streamOn : waitOn) {
+            cudaEvent_t event = streamEvents_[streamOn];
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+        }
+    }
+}
+
+void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+                const std::vector<cudaStream_t>& waitOn) {
+    for (const auto& streamOn : waitOn) {
+        FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
+        cudaEvent_t event = streamEvents_[streamOn];
+        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+    }
+
+    // For all the streams that are waiting, issue a wait
+    for (auto& stream : waiting) {
+        for (auto& streamOn : waitOn) {
+            cudaEvent_t event = streamEvents_[streamOn];
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+        }
+    }
+}
+
+void streamWait(const std::vector<cudaStream_t>& waiting,
+                const std::initializer_list<cudaStream_t>& waitOn) {
+    for (const auto& streamOn : waitOn) {
+        FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
+        cudaEvent_t event = streamEvents_[streamOn];
+        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+    }
+
+    // For all the streams that are waiting, issue a wait
+    for (auto& stream : waiting) {
+        for (auto& streamOn : waitOn) {
+            cudaEvent_t event = streamEvents_[streamOn];
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+        }
+    }
+}
+
 
 //
 // StandardGpuResources

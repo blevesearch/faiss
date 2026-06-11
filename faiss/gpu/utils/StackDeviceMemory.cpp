@@ -103,7 +103,8 @@ char* StackDeviceMemory::Stack::getAlloc(size_t size, cudaStream_t stream) {
 
         if (stream != prevUser.stream_) {
             // Synchronization required
-            streamWait({stream}, {prevUser.stream_});
+            //    streamWait({stream}, {prevUser.stream_});
+            res_->streamWait({stream}, {prevUser.stream_});
         }
 
         if (endAlloc < prevUser.end_) {

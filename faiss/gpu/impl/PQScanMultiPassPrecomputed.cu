@@ -716,7 +716,8 @@ void runPQScanMultiPassPrecomputed(
         curStream = (curStream + 1) % 2;
     }
 
-    streamWait({stream}, streams);
+    //   streamWait({stream}, streams);
+    res->streamWait({stream}, streams);
 }
 
 } // namespace gpu
