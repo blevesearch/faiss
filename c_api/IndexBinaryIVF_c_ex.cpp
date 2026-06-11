@@ -9,6 +9,7 @@
 
 #include "IndexBinaryIVF_c_ex.h"
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/clone_index.h>
 #include "macros_impl.h"
 
 using faiss::IndexBinaryIVF;
@@ -111,7 +112,7 @@ int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* sour
             auto* src_bivf = dynamic_cast<faiss::IndexBinaryIVF*>(src);
             assert(src_bivf);
 
-            tgt_bivf->quantizer = src_bivf->quantizer;
+            tgt_bivf->quantizer = clone_binary_index(src_bivf->quantizer);
             tgt_bivf->is_trained = true;
             return 0;
         }
