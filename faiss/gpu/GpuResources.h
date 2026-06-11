@@ -253,19 +253,19 @@ class GpuResources {
 
     virtual void streamWait(
             const std::initializer_list<cudaStream_t>& waiting,
-            const std::initializer_list<cudaStream_t>& waitOn);
+            const std::initializer_list<cudaStream_t>& waitOn) = 0;
 
     virtual void streamWait(
             const std::vector<cudaStream_t>& waiting,
-            const std::vector<cudaStream_t>& waitOn);
+            const std::vector<cudaStream_t>& waitOn) = 0;
 
     virtual void streamWait(
             const std::initializer_list<cudaStream_t>& waiting,
-            const std::vector<cudaStream_t>& waitOn);
+            const std::vector<cudaStream_t>& waitOn) = 0;
 
     virtual void streamWait(
             const std::vector<cudaStream_t>& waiting,
-            const std::initializer_list<cudaStream_t>& waitOn);
+            const std::initializer_list<cudaStream_t>& waitOn) = 0;
 
     ///
     /// Functions provided by default
