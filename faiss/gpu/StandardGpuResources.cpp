@@ -759,15 +759,13 @@ void StandardGpuResourcesImpl::streamWait(
         const std::initializer_list<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
-        cudaEvent_t event = streamEvents_[streamOn];
-        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+        CUDA_VERIFY(cudaEventRecord(streamEvents_[streamOn], streamOn));
     }
 
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            cudaEvent_t event = streamEvents_[streamOn];
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
         }
     }
 }
@@ -777,15 +775,13 @@ void StandardGpuResourcesImpl::streamWait(
         const std::vector<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
-        cudaEvent_t event = streamEvents_[streamOn];
-        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+        CUDA_VERIFY(cudaEventRecord(streamEvents_[streamOn], streamOn));
     }
 
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            cudaEvent_t event = streamEvents_[streamOn];
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
         }
     }
 }
@@ -794,15 +790,13 @@ void StandardGpuResourcesImpl::streamWait(const std::initializer_list<cudaStream
                 const std::vector<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
-        cudaEvent_t event = streamEvents_[streamOn];
-        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+        CUDA_VERIFY(cudaEventRecord(streamEvents_[streamOn], streamOn));
     }
 
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            cudaEvent_t event = streamEvents_[streamOn];
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
         }
     }
 }
@@ -811,15 +805,13 @@ void StandardGpuResourcesImpl::streamWait(const std::vector<cudaStream_t>& waiti
                 const std::initializer_list<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
-        cudaEvent_t event = streamEvents_[streamOn];
-        CUDA_VERIFY(cudaEventRecord(*event, streamOn));
+        CUDA_VERIFY(cudaEventRecord(streamEvents_[streamOn], streamOn));
     }
 
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            cudaEvent_t event = streamEvents_[streamOn];
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, *event, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
         }
     }
 }
