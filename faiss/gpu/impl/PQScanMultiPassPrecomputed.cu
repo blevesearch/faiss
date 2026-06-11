@@ -658,7 +658,8 @@ void runPQScanMultiPassPrecomputed(
             &heapIndices1, &heapIndices2};
 
     auto streams = res->getAlternateStreamsCurrentDevice();
-    streamWait(streams, {stream});
+    //   streamWait(streams, {stream});
+    res->streamWait(streams, {stream});
 
     int curStream = 0;
 

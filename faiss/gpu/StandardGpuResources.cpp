@@ -289,7 +289,7 @@ void StandardGpuResourcesImpl::setDefaultStream(
 
         if (prevStream != stream) {
             // NOT CALLED
-            streamWait({stream}, {prevStream});
+            // streamWait({stream}, {prevStream});
         }
 #if defined USE_NVIDIA_CUVS
         // delete the raft handle for this device, which will be initialized
@@ -316,7 +316,7 @@ void StandardGpuResourcesImpl::revertDefaultStream(int device) {
             cudaStream_t newStream = defaultStreams_[device];
 
             // NOT CALLED
-            streamWait({newStream}, {prevStream});
+            // streamWait({newStream}, {prevStream});
 
 #if defined USE_NVIDIA_CUVS
             // update the stream on the raft handle for this device
