@@ -204,30 +204,6 @@ size_t GpuResources::getTempMemoryAvailableCurrentDevice() const {
     return getTempMemoryAvailable(getCurrentDevice());
 }
 
-void GpuResources::streamWait(
-        const std::initializer_list<cudaStream_t>& waiting,
-        const std::initializer_list<cudaStream_t>& waitOn) {
-    streamWait(waiting, waitOn);
-}
-
-void GpuResources::streamWait(
-        const std::vector<cudaStream_t>& waiting,
-        const std::vector<cudaStream_t>& waitOn) {
-    streamWait(waiting, waitOn);
-}
-
-void GpuResources::streamWait(
-        const std::initializer_list<cudaStream_t>& waiting,
-        const std::vector<cudaStream_t>& waitOn) {
-    streamWait(waiting, waitOn);
-}
-
-void GpuResources::streamWait(
-        const std::vector<cudaStream_t>& waiting,
-        const std::initializer_list<cudaStream_t>& waitOn) {
-    streamWait(waiting, waitOn);
-}
-
 //
 // GpuResourcesProvider
 //
