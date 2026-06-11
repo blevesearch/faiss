@@ -92,17 +92,17 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     void streamWait(
             const std::initializer_list<cudaStream_t>& waiting,
-            const std::initializer_list<cudaStream_t>& waitOn);
+            const std::initializer_list<cudaStream_t>& waitOn) override;
 
     void streamWait(
             const std::vector<cudaStream_t>& waiting,
-            const std::vector<cudaStream_t>& waitOn);
+            const std::vector<cudaStream_t>& waitOn) override;
 
     void streamWait(const std::initializer_list<cudaStream_t>& waiting,
-                    const std::vector<cudaStream_t>& waitOn);
+                    const std::vector<cudaStream_t>& waitOn) override;
 
     void streamWait(const std::vector<cudaStream_t>& waiting,
-                    const std::initializer_list<cudaStream_t>& waitOn);
+                    const std::initializer_list<cudaStream_t>& waitOn) override;
 
     /// Returns the stream for the given device on which all Faiss GPU work is
     /// ordered.
