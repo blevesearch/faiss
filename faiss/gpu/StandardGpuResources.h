@@ -89,6 +89,21 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// resources object, in case someone called `setDefaultStream`.
     void revertDefaultStream(int device);
 
+
+    void streamWait(
+            const std::initializer_list<cudaStream_t>& waiting,
+            const std::initializer_list<cudaStream_t>& waitOn);
+
+    void streamWait(
+            const std::vector<cudaStream_t>& waiting,
+            const std::vector<cudaStream_t>& waitOn);
+
+    void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+                    const std::vector<cudaStream_t>& waitOn);
+                    
+    void streamWait(const std::vector<cudaStream_t>& waiting,
+                    const std::initializer_list<cudaStream_t>& waitOn);
+
     /// Returns the stream for the given device on which all Faiss GPU work is
     /// ordered.
     /// We are guaranteed that all Faiss GPU work is ordered with respect to

@@ -790,7 +790,7 @@ void StandardGpuResourcesImpl::streamWait(
     }
 }
 
-void streamWait(const std::initializer_list<cudaStream_t>& waiting,
+void StandardGpuResourcesImpl::streamWait(const std::initializer_list<cudaStream_t>& waiting,
                 const std::vector<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
@@ -807,7 +807,7 @@ void streamWait(const std::initializer_list<cudaStream_t>& waiting,
     }
 }
 
-void streamWait(const std::vector<cudaStream_t>& waiting,
+void StandardGpuResourcesImpl::streamWait(const std::vector<cudaStream_t>& waiting,
                 const std::initializer_list<cudaStream_t>& waitOn) {
     for (const auto& streamOn : waitOn) {
         FAISS_ASSERT(streamEvents_.count(streamOn) != 0);
