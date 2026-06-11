@@ -765,7 +765,7 @@ void StandardGpuResourcesImpl::streamWait(
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn], 0));
         }
     }
 }
@@ -781,7 +781,7 @@ void StandardGpuResourcesImpl::streamWait(
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn], 0));
         }
     }
 }
@@ -796,7 +796,7 @@ void StandardGpuResourcesImpl::streamWait(const std::initializer_list<cudaStream
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn], 0));
         }
     }
 }
@@ -811,7 +811,7 @@ void StandardGpuResourcesImpl::streamWait(const std::vector<cudaStream_t>& waiti
     // For all the streams that are waiting, issue a wait
     for (auto& stream : waiting) {
         for (auto& streamOn : waitOn) {
-            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn];, 0));
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, streamEvents_[streamOn], 0));
         }
     }
 }
