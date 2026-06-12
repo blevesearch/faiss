@@ -573,6 +573,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
                 return allocMemory(newReq);
             }
+
         } else {
             // Otherwise, we can handle this locally
             p = tempMemory_[adjReq.device]->allocMemory(
@@ -707,6 +708,7 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
+
     auto it = tempMemory_.find(device);
     FAISS_ASSERT(it != tempMemory_.end());
 
