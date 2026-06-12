@@ -710,7 +710,7 @@ size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     auto it = tempMemory_.find(device);
     FAISS_ASSERT(it != tempMemory_.end());
 
-     return it->second->getSizeAvailable();
+    return it->second->getSizeAvailable();
 }
 
 std::map<int, std::map<std::string, std::pair<int, size_t>>>

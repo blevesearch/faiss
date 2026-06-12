@@ -70,7 +70,8 @@ class StandardGpuResourcesImpl : public GpuResources {
     void setTempMemorySpace(MemorySpace space);
 
     /// Set a memory pool to use for temporary memory overflow allocations.
-    /// If not set, we will fallback to on-demand cudaMalloc for overflow allocations.
+    /// If not set, we will fallback to on-demand cudaMalloc for overflow
+    /// allocations.
     void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
@@ -247,7 +248,8 @@ class StandardGpuResources : public GpuResourcesProvider {
     void setTempMemorySpace(MemorySpace space);
 
     /// Set a memory pool to use for temporary memory overflow allocations.
-    /// If not set, we will fallback to on-demand cudaMalloc for overflow allocations.
+    /// If not set, we will fallback to on-demand cudaMalloc for overflow
+    /// allocations.
     void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
