@@ -141,7 +141,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// memory size
     static size_t getDefaultTempMemForGPU(int device, size_t requested);
 
-    static void addEventForStream(cudaStream_t stream);
+    void addEventForStream(cudaStream_t stream);
 
    protected:
     /// Set of currently outstanding memory allocations per device
