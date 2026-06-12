@@ -351,7 +351,7 @@ void runGeneralDistance(
             &outIndexBuf1, &outIndexBuf2};
 
     auto streams = res->getAlternateStreamsCurrentDevice();
-    streamWait(streams, {stream});
+    res->streamWait(streams, {stream});
 
     int curStream = 0;
     bool interrupt = false;
@@ -448,7 +448,7 @@ void runGeneralDistance(
     }
 
     // Have the desired ordering stream wait on the multi-stream
-    streamWait({stream}, streams);
+    res->streamWait({stream}, streams);
 
     if (interrupt) {
         FAISS_THROW_MSG("interrupted");
