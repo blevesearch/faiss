@@ -547,6 +547,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
     if (adjReq.space == MemorySpace::Temporary) {
         auto& tempMem = tempMemory_[adjReq.device];
+
         if (adjReq.size > tempMem->getSizeAvailable()) {
             // Check if we have an overflow pool for this device, and if so,
             // allocate through that instead
