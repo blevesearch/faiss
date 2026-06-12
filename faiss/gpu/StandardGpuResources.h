@@ -129,6 +129,8 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     cudaStream_t getAsyncCopyStream(int device) override;
 
+    void streamWait(const std::vector<cudaStream_t>& waitStreams, const std::vector<cudaStream_t>& signalStreams);
+
    protected:
     /// Have GPU resources been initialized for this device yet?
     bool isInitialized(int device) const;
@@ -136,6 +138,8 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Adjust the default temporary memory allocation based on the total GPU
     /// memory size
     static size_t getDefaultTempMemForGPU(int device, size_t requested);
+
+    static void addEventForStream(cudaStream_t stream);
 
    protected:
     /// Set of currently outstanding memory allocations per device
@@ -160,6 +164,9 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// cuBLAS handle for each device
     std::unordered_map<int, cublasHandle_t> blasHandles_;
+
+    /// Reusable CUDA event, one per stream managed by this resource
+    std::unordered_map<cudaStream_t, cudaEvent_t> streamEvents_;
 
 #if defined USE_NVIDIA_CUVS
     /// raft handle for each device
