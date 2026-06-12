@@ -139,9 +139,6 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Have GPU resources been initialized for this device yet?
     bool isInitialized(int device) const;
 
-    /// Have GPU resources been initialized for any device yet?
-    bool isInitialized() const;
-
     /// Adjust the default temporary memory allocation based on the total GPU
     /// memory size
     static size_t getDefaultTempMemForGPU(int device, size_t requested);

@@ -246,13 +246,13 @@ void StandardGpuResourcesImpl::setTempMemory(size_t size) {
 
 void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     // Should not call this after devices have been initialized
-    FAISS_ASSERT(!isInitialized());
+    FAISS_ASSERT(tempMemory_.empty());
     tempMemorySpace_ = space;
 }
 
 void StandardGpuResourcesImpl::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
-    // Should not call this after devices have been initialized
-    FAISS_ASSERT(!isInitialized());
+    // Should not call this after device has been initialized
+    FAISS_ASSERT(!isInitialized(pool->getDevice()));
     FAISS_ASSERT(pool != nullptr);
     FAISS_ASSERT(tempMemoryOverflowPool_.count(pool->getDevice()) == 0);
     tempMemoryOverflowPool_.emplace(pool->getDevice(), pool);
@@ -260,7 +260,7 @@ void StandardGpuResourcesImpl::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
     // Should not call this after devices have been initialized
-    FAISS_ASSERT(!isInitialized());
+    FAISS_ASSERT(defaultStreams_.size() == 0);
     FAISS_ASSERT(!pinnedMemAlloc_);
 
     pinnedMemSize_ = size;
@@ -349,11 +349,6 @@ bool StandardGpuResourcesImpl::isInitialized(int device) const {
     // Use default streams as a marker for whether or not a certain
     // device has been initialized
     return defaultStreams_.count(device) != 0;
-}
-
-bool StandardGpuResourcesImpl::isInitialized() const {
-    // If we have no default streams, then we haven't initialized any devices
-    return !defaultStreams_.empty();
 }
 
 void StandardGpuResourcesImpl::initializeForDevice(int device) {
