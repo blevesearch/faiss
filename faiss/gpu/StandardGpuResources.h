@@ -72,7 +72,7 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Set a memory pool to use for temporary memory allocations.
     /// If not set, we will fallback to using the default temporary memory
     /// provider.
-    void setTempMemoryPool(GpuMemoryPool* pool);
+    void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
@@ -250,7 +250,7 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// Set a memory pool to use for temporary memory allocations.
     /// If not set, we will fallback to using the default temporary memory
     /// provider.
-    void setTempMemoryPool(GpuMemoryPool* pool);
+    void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers

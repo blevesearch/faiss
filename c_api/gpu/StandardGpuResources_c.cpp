@@ -55,7 +55,7 @@ int faiss_StandardGpuResources_setTempMemoryOverflowPool(
         FaissStandardGpuResources* res,
         FaissGpuMemoryPool* pool) {
     try {
-        reinterpret_cast<StandardGpuResources*>(res)->setTempMemoryPool(
+        reinterpret_cast<StandardGpuResources*>(res)->setTempMemoryOverflowPool(
                 reinterpret_cast<GpuMemoryPool*>(pool));
     }
     CATCH_AND_HANDLE

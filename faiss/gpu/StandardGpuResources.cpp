@@ -250,7 +250,7 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     tempMemorySpace_ = space;
 }
 
-void StandardGpuResourcesImpl::setTempMemoryPool(GpuMemoryPool* pool) {
+void StandardGpuResourcesImpl::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(!isInitialized());
     FAISS_ASSERT(pool != nullptr);
@@ -766,8 +766,8 @@ void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
 }
 
-void StandardGpuResources::setTempMemoryPool(GpuMemoryPool* pool) {
-    res_->setTempMemoryPool(pool);
+void StandardGpuResources::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
+    res_->setTempMemoryOverflowPool(pool);
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {
