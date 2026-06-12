@@ -46,13 +46,13 @@ int faiss_StandardGpuResources_setTempMemorySpace(
         FaissStandardGpuResources*,
         int space);
 
-/// Set a memory pool to use for temporary allocations on the GPU.
-/// NOTE: The provided pool is NOT owned by the StandardGpuResources object, and
-/// will not be destroyed when the StandardGpuResources object is destroyed.
-/// The caller is responsible for managing the lifetime of the provided pool,
-/// and must ensure that it remains valid for the duration of any GPU work that
-/// may use it.
-int faiss_StandardGpuResources_setTempMemoryPool(
+/// Set a memory pool to handle temporary allocation overflow.
+/// When the initial temporary memory allocation is exhausted, allocations
+/// use this pool if provided, otherwise fall back to on-demand allocation.
+/// NOTE: The caller retains ownership of the pool; StandardGpuResources does
+/// not manage its lifetime. The pool must remain valid for all GPU operations
+/// that may reference it.
+int faiss_StandardGpuResources_setTempMemoryOverflowPool(
         FaissStandardGpuResources*,
         FaissGpuMemoryPool*);
 

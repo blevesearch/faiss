@@ -111,7 +111,7 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
     tempMemory_.clear();
-    tempMemoryPool_.clear();
+    tempMemoryOverflowPool_.clear();
 
     // Make sure all allocations have been freed
     bool allocError = false;
@@ -254,8 +254,8 @@ void StandardGpuResourcesImpl::setTempMemoryPool(GpuMemoryPool* pool) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(!isInitialized());
     FAISS_ASSERT(pool != nullptr);
-    FAISS_ASSERT(tempMemoryPool_.count(pool->getDevice()) == 0);
-    tempMemoryPool_.emplace(pool->getDevice(), pool);
+    FAISS_ASSERT(tempMemoryOverflowPool_.count(pool->getDevice()) == 0);
+    tempMemoryOverflowPool_.emplace(pool->getDevice(), pool);
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -467,17 +467,15 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
     FAISS_ASSERT(allocs_.count(device) == 0);
     allocs_[device] = std::unordered_map<void*, AllocRequest>();
 
-    if (tempMemoryPool_.count(device) == 0) {
-        FAISS_ASSERT(tempMemory_.count(device) == 0);
-        auto mem = std::make_unique<StackDeviceMemory>(
-                this,
-                device,
-                // adjust for this specific device
-                getDefaultTempMemForGPU(device, tempMemSize_),
-                tempMemorySpace_);
+    FAISS_ASSERT(tempMemory_.count(device) == 0);
+    auto mem = std::make_unique<StackDeviceMemory>(
+            this,
+            device,
+            // adjust for this specific device
+            getDefaultTempMemForGPU(device, tempMemSize_),
+            tempMemorySpace_);
 
-        tempMemory_.emplace(device, std::move(mem));
-    }
+    tempMemory_.emplace(device, std::move(mem));
 }
 
 cublasHandle_t StandardGpuResourcesImpl::getBlasHandle(int device) {
@@ -548,13 +546,15 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
     void* p = nullptr;
 
     if (adjReq.space == MemorySpace::Temporary) {
-        if (tempMemoryPool_.count(adjReq.device) != 0) {
-            p = tempMemoryPool_.at(adjReq.device)
-                        ->allocMemory(adjReq.stream, adjReq.size);
-        } else {
-            auto& tempMem = tempMemory_[adjReq.device];
-
-            if (adjReq.size > tempMem->getSizeAvailable()) {
+        auto& tempMem = tempMemory_[adjReq.device];
+        if (adjReq.size > tempMem->getSizeAvailable()) {
+            // Check if we have an overflow pool for this device, and if so,
+            // allocate through that instead
+            if (tempMemoryOverflowPool_.count(adjReq.device) != 0) {
+                adjReq.type = AllocType::TemporaryMemoryOverflow;
+                p = tempMemoryOverflowPool_.at(adjReq.device)
+                            ->allocMemory(adjReq.stream, adjReq.size);
+            } else {
                 // We need to allocate this ourselves
                 AllocRequest newReq = adjReq;
                 newReq.space = tempMemorySpace_;
@@ -572,7 +572,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
                 return allocMemory(newReq);
             }
-
+        } else {
             // Otherwise, we can handle this locally
             p = tempMemory_[adjReq.device]->allocMemory(
                     adjReq.stream, adjReq.size);
@@ -677,8 +677,8 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        if (tempMemoryPool_.count(device) != 0) {
-            tempMemoryPool_.at(device)->deallocMemory(
+        if (req.type == AllocType::TemporaryMemoryOverflow) {
+            tempMemoryOverflowPool_.at(device)->deallocMemory(
                     device, req.stream, req.size, p);
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
@@ -706,14 +706,10 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
 size_t StandardGpuResourcesImpl::getTempMemoryAvailable(int device) const {
     FAISS_ASSERT(isInitialized(device));
-    if (tempMemoryPool_.count(device) != 0) {
-        return tempMemoryPool_.at(device)->getSizeAvailable();
-    } else {
-        auto it = tempMemory_.find(device);
-        FAISS_ASSERT(it != tempMemory_.end());
+    auto it = tempMemory_.find(device);
+    FAISS_ASSERT(it != tempMemory_.end());
 
-        return it->second->getSizeAvailable();
-    }
+     return it->second->getSizeAvailable();
 }
 
 std::map<int, std::map<std::string, std::pair<int, size_t>>>
