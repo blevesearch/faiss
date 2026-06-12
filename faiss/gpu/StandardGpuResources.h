@@ -129,7 +129,9 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     cudaStream_t getAsyncCopyStream(int device) override;
 
-    void streamWait(const std::vector<cudaStream_t>& waitStreams, const std::vector<cudaStream_t>& signalStreams);
+    void streamWait(
+            const std::vector<cudaStream_t>& waitStreams,
+            const std::vector<cudaStream_t>& signalStreams);
 
    protected:
     /// Have GPU resources been initialized for this device yet?

@@ -725,7 +725,6 @@ StandardGpuResourcesImpl::getMemoryInfo() const {
 void StandardGpuResourcesImpl::streamWait(
         const std::vector<cudaStream_t>& listWaiting,
         const std::vector<cudaStream_t>& listWaitOn) {
-
     std::vector<cudaEvent_t> events;
     for (auto& stream : listWaitOn) {
         FAISS_ASSERT(streamEvents_.count(stream) != 0);
