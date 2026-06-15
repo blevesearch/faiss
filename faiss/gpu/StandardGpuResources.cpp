@@ -135,6 +135,10 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     raftHandles_.clear();
 #endif
 
+    for (auto& entry : streamEvents_) {
+        CUDA_VERIFY(cudaEventDestroy(entry.second));
+    }
+
     for (auto& entry : defaultStreams_) {
         DeviceScope scope(entry.first);
 
@@ -205,6 +209,14 @@ size_t StandardGpuResourcesImpl::getDefaultTempMemForGPU(
 
     // use whatever lower limit the user requested
     return requested;
+}
+
+void StandardGpuResourcesImpl::addEventForStream(cudaStream_t stream) {
+    if (streamEvents_.count(stream) == 0) {
+        cudaEvent_t event = nullptr;
+        CUDA_VERIFY(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
+        streamEvents_.emplace(stream, event);
+    }
 }
 
 /// Does the given GPU support bfloat16?
@@ -287,6 +299,7 @@ void StandardGpuResourcesImpl::setDefaultStream(
 #endif
     }
 
+    addEventForStream(stream);
     userDefaultStreams_[device] = stream;
 }
 
@@ -414,6 +427,7 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
             cudaStreamCreateWithFlags(&defaultStream, cudaStreamNonBlocking));
 
     defaultStreams_[device] = defaultStream;
+    addEventForStream(defaultStream);
 
 #if defined USE_NVIDIA_CUVS
     raftHandles_.emplace(std::make_pair(device, defaultStream));
@@ -424,11 +438,13 @@ void StandardGpuResourcesImpl::initializeForDevice(int device) {
             cudaStreamCreateWithFlags(&asyncCopyStream, cudaStreamNonBlocking));
 
     asyncCopyStreams_[device] = asyncCopyStream;
+    addEventForStream(asyncCopyStream);
 
     std::vector<cudaStream_t> deviceStreams;
     for (int j = 0; j < kNumStreams; ++j) {
         cudaStream_t stream = nullptr;
         CUDA_VERIFY(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+        addEventForStream(stream);
 
         deviceStreams.push_back(stream);
     }
@@ -704,6 +720,26 @@ StandardGpuResourcesImpl::getMemoryInfo() const {
     }
 
     return out;
+}
+
+void StandardGpuResourcesImpl::streamWait(
+        const std::vector<cudaStream_t>& listWaiting,
+        const std::vector<cudaStream_t>& listWaitOn) {
+    std::vector<cudaEvent_t> events;
+    for (auto& stream : listWaitOn) {
+        FAISS_ASSERT(streamEvents_.count(stream) != 0);
+        cudaEvent_t event = streamEvents_[stream];
+
+        CUDA_VERIFY(cudaEventRecord(event, stream));
+        events.push_back(event);
+    }
+
+    // For all the streams that are waiting, issue a wait
+    for (auto& stream : listWaiting) {
+        for (auto& event : events) {
+            CUDA_VERIFY(cudaStreamWaitEvent(stream, event, 0));
+        }
+    }
 }
 
 //

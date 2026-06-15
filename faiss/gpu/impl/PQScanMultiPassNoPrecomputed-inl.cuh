@@ -673,7 +673,7 @@ void runPQScanMultiPassNoPrecomputed(
             &heapIndices1, &heapIndices2};
 
     auto streams = res->getAlternateStreamsCurrentDevice();
-    streamWait(streams, {stream});
+    res->streamWait(streams, {stream});
 
     int curStream = 0;
 
@@ -736,7 +736,7 @@ void runPQScanMultiPassNoPrecomputed(
         curStream = (curStream + 1) % 2;
     }
 
-    streamWait({stream}, streams);
+    res->streamWait({stream}, streams);
 }
 
 } // namespace gpu
