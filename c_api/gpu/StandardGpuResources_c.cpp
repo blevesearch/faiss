@@ -11,6 +11,7 @@
 #include <faiss/gpu/StandardGpuResources.h>
 #include "macros_impl.h"
 
+using faiss::gpu::GpuMemoryPool;
 using faiss::gpu::MemorySpace;
 using faiss::gpu::StandardGpuResources;
 
@@ -46,6 +47,16 @@ int faiss_StandardGpuResources_setTempMemorySpace(
     try {
         reinterpret_cast<StandardGpuResources*>(res)->setTempMemorySpace(
                 static_cast<MemorySpace>(space));
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_StandardGpuResources_setTempMemoryOverflowPool(
+        FaissStandardGpuResources* res,
+        FaissGpuMemoryPool* pool) {
+    try {
+        reinterpret_cast<StandardGpuResources*>(res)->setTempMemoryOverflowPool(
+                reinterpret_cast<GpuMemoryPool*>(pool));
     }
     CATCH_AND_HANDLE
 }

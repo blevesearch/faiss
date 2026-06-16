@@ -111,6 +111,7 @@ StandardGpuResourcesImpl::~StandardGpuResourcesImpl() {
     // The temporary memory allocator has allocated memory through us, so clean
     // that up before we finish fully de-initializing ourselves
     tempMemory_.clear();
+    tempMemoryOverflowPool_.clear();
 
     // Make sure all allocations have been freed
     bool allocError = false;
@@ -259,6 +260,14 @@ void StandardGpuResourcesImpl::setTempMemorySpace(MemorySpace space) {
     // Should not call this after devices have been initialized
     FAISS_ASSERT(tempMemory_.empty());
     tempMemorySpace_ = space;
+}
+
+void StandardGpuResourcesImpl::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
+    // Should not call this after device has been initialized
+    FAISS_ASSERT(!isInitialized(pool->getDevice()));
+    FAISS_ASSERT(pool != nullptr);
+    FAISS_ASSERT(tempMemoryOverflowPool_.count(pool->getDevice()) == 0);
+    tempMemoryOverflowPool_.emplace(pool->getDevice(), pool);
 }
 
 void StandardGpuResourcesImpl::setPinnedMemory(size_t size) {
@@ -551,25 +560,36 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
         auto& tempMem = tempMemory_[adjReq.device];
 
         if (adjReq.size > tempMem->getSizeAvailable()) {
-            // We need to allocate this ourselves
-            AllocRequest newReq = adjReq;
-            newReq.space = tempMemorySpace_;
-            newReq.type = AllocType::TemporaryMemoryOverflow;
+            // Check if we have an overflow pool for this device, and if so,
+            // allocate through that instead
+            if (tempMemoryOverflowPool_.count(adjReq.device) != 0) {
+                adjReq.type = AllocType::TemporaryMemoryOverflow;
+                p = tempMemoryOverflowPool_.at(adjReq.device)
+                            ->allocMemory(adjReq.stream, adjReq.size);
+            } else {
+                // We need to allocate this ourselves
+                AllocRequest newReq = adjReq;
+                newReq.space = tempMemorySpace_;
+                newReq.type = AllocType::TemporaryMemoryOverflow;
 
-            if (allocLogging_) {
-                std::cout
-                        << "StandardGpuResources: alloc fail "
-                        << adjReq.toString()
-                        << " (no temp space); retrying as MemorySpace::"
-                        << (tempMemorySpace_ == MemorySpace::Unified ? "Unified" : "Device")
-                        << "\n";
+                if (allocLogging_) {
+                    std::cout << "StandardGpuResources: alloc fail "
+                              << adjReq.toString()
+                              << " (no temp space); retrying as MemorySpace::"
+                              << (tempMemorySpace_ == MemorySpace::Unified
+                                          ? "Unified"
+                                          : "Device")
+                              << "\n";
+                }
+
+                return allocMemory(newReq);
             }
 
-            return allocMemory(newReq);
+        } else {
+            // Otherwise, we can handle this locally
+            p = tempMemory_[adjReq.device]->allocMemory(
+                    adjReq.stream, adjReq.size);
         }
-
-        // Otherwise, we can handle this locally
-        p = tempMemory_[adjReq.device]->allocMemory(adjReq.stream, adjReq.size);
     } else if (adjReq.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         try {
@@ -670,7 +690,12 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
     }
 
     if (req.space == MemorySpace::Temporary) {
-        tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+        if (req.type == AllocType::TemporaryMemoryOverflow) {
+            tempMemoryOverflowPool_.at(device)->deallocMemory(
+                    device, req.stream, req.size, p);
+        } else {
+            tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
+        }
     } else if (req.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         req.mr->deallocate_async(p, req.size, req.stream);
@@ -783,6 +808,10 @@ void StandardGpuResources::setTempMemory(size_t size) {
 
 void StandardGpuResources::setTempMemorySpace(MemorySpace space) {
     res_->setTempMemorySpace(space);
+}
+
+void StandardGpuResources::setTempMemoryOverflowPool(GpuMemoryPool* pool) {
+    res_->setTempMemoryOverflowPool(pool);
 }
 
 void StandardGpuResources::setPinnedMemory(size_t size) {

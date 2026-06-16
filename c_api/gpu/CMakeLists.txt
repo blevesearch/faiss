@@ -11,6 +11,7 @@ target_sources(faiss_c PRIVATE
   GpuIndex_c_ex.cpp
   GpuIndexIVF_c_ex.cpp
   GpuMemoryEstimate_c.cpp
+  GpuMemoryPool_c.cpp
   GpuResources_c.cpp
   StandardGpuResources_c.cpp
 )

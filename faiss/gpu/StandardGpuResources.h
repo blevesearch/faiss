@@ -30,6 +30,7 @@
 
 #include <faiss/gpu/GpuResources.h>
 #include <faiss/gpu/utils/DeviceUtils.h>
+#include <faiss/gpu/utils/MemoryPool.h>
 #include <faiss/gpu/utils/StackDeviceMemory.h>
 #include <functional>
 #include <map>
@@ -67,6 +68,11 @@ class StandardGpuResourcesImpl : public GpuResources {
     /// Set to MemorySpace::Unified for cudaMallocManaged.
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
+
+    /// Set a memory pool to use for temporary memory overflow allocations.
+    /// If not set, we will fallback to on-demand cudaMalloc for overflow
+    /// allocations.
+    void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers
@@ -152,6 +158,10 @@ class StandardGpuResourcesImpl : public GpuResources {
 
     /// Temporary memory provider, per each device
     std::unordered_map<int, std::unique_ptr<StackDeviceMemory>> tempMemory_;
+
+    /// Optional memory pool to use for temporary memory allocation overflow,
+    /// per device
+    std::unordered_map<int, GpuMemoryPool*> tempMemoryOverflowPool_;
 
     /// Our default stream that work is ordered on, one per each device
     std::unordered_map<int, cudaStream_t> defaultStreams_;
@@ -244,6 +254,11 @@ class StandardGpuResources : public GpuResourcesProvider {
     /// Set to MemorySpace::Unified for cudaMallocManaged.
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
+
+    /// Set a memory pool to use for temporary memory overflow allocations.
+    /// If not set, we will fallback to on-demand cudaMalloc for overflow
+    /// allocations.
+    void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
     /// transfers

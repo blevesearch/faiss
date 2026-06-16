@@ -57,6 +57,7 @@ set(FAISS_GPU_SRC
   utils/BlockSelectFloat.cu
   utils/DeviceUtils.cu
   utils/StackDeviceMemory.cpp
+  utils/MemoryPool.cpp
   utils/Timer.cpp
   utils/WarpSelectFloat.cu
   utils/blockselect/BlockSelectFloat1.cu
@@ -156,6 +157,7 @@ set(FAISS_GPU_HEADERS
   utils/Reductions.cuh
   utils/Select.cuh
   utils/StackDeviceMemory.h
+  utils/MemoryPool.h
   utils/StaticUtils.h
   utils/Tensor-inl.cuh
   utils/Tensor.cuh
