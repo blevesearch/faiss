@@ -12,6 +12,7 @@
 
 #include <cuda_runtime_api.h>
 #include "../faiss_c.h"
+#include "GpuMemoryPool_c.h"
 #include "GpuResources_c.h"
 
 #ifdef __cplusplus
@@ -44,6 +45,16 @@ int faiss_StandardGpuResources_setTempMemory(
 int faiss_StandardGpuResources_setTempMemorySpace(
         FaissStandardGpuResources*,
         int space);
+
+/// Set a memory pool to handle temporary allocation overflow.
+/// When the initial temporary memory allocation is exhausted, allocations
+/// use this pool if provided, otherwise fall back to on-demand allocation.
+/// NOTE: The caller retains ownership of the pool; StandardGpuResources does
+/// not manage its lifetime. The pool must remain valid for all GPU operations
+/// that may reference it.
+int faiss_StandardGpuResources_setTempMemoryOverflowPool(
+        FaissStandardGpuResources*,
+        FaissGpuMemoryPool*);
 
 /// Set amount of pinned memory to allocate, for async GPU <-> CPU
 /// transfers
