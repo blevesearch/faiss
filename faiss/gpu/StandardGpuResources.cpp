@@ -671,7 +671,7 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
 
     if (req.space == MemorySpace::Temporary) {
         tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
-    } else if (req.space == MemorySpace::Device ) {
+    } else if (req.space == MemorySpace::Device) {
 #if defined USE_NVIDIA_CUVS
         req.mr->deallocate_async(p, req.size, req.stream);
 #else
