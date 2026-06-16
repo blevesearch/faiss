@@ -593,7 +593,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
             std::stringstream ss;
             ss << "StandardGpuResources: alloc fail " << adjReq.toString()
-               << " (cudaMalloc error " << cudaGetErrorString(err) << " ["
+               << " (cudaMallocAsync error " << cudaGetErrorString(err) << " ["
                << (int)err << "])\n";
             auto str = ss.str();
 
@@ -678,7 +678,7 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
         auto err = cudaFreeAsync(p, req.stream);
         FAISS_ASSERT_FMT(
                 err == cudaSuccess,
-                "Failed to cudaFree pointer %p (error %d %s)",
+                "Failed to cudaFreeAsync pointer %p (error %d %s)",
                 p,
                 (int)err,
                 cudaGetErrorString(err));
