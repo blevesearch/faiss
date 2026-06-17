@@ -602,7 +602,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
             FAISS_THROW_MSG("CUDA memory allocation error");
         }
 #else
-        auto err = cudaMalloc(&p, adjReq.size);
+        auto err = cudaMallocAsync(&p, adjReq.size, adjReq.stream);
 
         // Throw if we fail to allocate
         if (err != cudaSuccess) {
@@ -613,7 +613,7 @@ void* StandardGpuResourcesImpl::allocMemory(const AllocRequest& req) {
 
             std::stringstream ss;
             ss << "StandardGpuResources: alloc fail " << adjReq.toString()
-               << " (cudaMalloc error " << cudaGetErrorString(err) << " ["
+               << " (cudaMallocAsync error " << cudaGetErrorString(err) << " ["
                << (int)err << "])\n";
             auto str = ss.str();
 
@@ -696,9 +696,19 @@ void StandardGpuResourcesImpl::deallocMemory(int device, void* p) {
         } else {
             tempMemory_[device]->deallocMemory(device, req.stream, req.size, p);
         }
-    } else if (
-            req.space == MemorySpace::Device ||
-            req.space == MemorySpace::Unified) {
+    } else if (req.space == MemorySpace::Device) {
+#if defined USE_NVIDIA_CUVS
+        req.mr->deallocate_async(p, req.size, req.stream);
+#else
+        auto err = cudaFreeAsync(p, req.stream);
+        FAISS_ASSERT_FMT(
+                err == cudaSuccess,
+                "Failed to cudaFreeAsync pointer %p (error %d %s)",
+                p,
+                (int)err,
+                cudaGetErrorString(err));
+#endif
+    } else if (req.space == MemorySpace::Unified) {
 #if defined USE_NVIDIA_CUVS
         req.mr->deallocate_async(p, req.size, req.stream);
 #else
