@@ -76,8 +76,9 @@ enum AllocType {
     /// When using StandardGpuResources, any MemorySpace::Temporary allocations
     /// that cannot be satisfied within the TemporaryMemoryBuffer region fall
     /// back
-    /// to calling cudaMalloc which are sized to just the request at hand. These
-    /// "overflow" temporary allocations are marked with this AllocType.
+    /// to a GpuMemoryPool if configured, or to on-demand Device or Unified
+    /// allocation sized to just the request at hand. These "overflow" temporary
+    /// allocations are marked with this AllocType.
     TemporaryMemoryOverflow = 11,
 };
 
@@ -88,10 +89,10 @@ std::string allocTypeToString(AllocType t);
 enum MemorySpace {
     /// Temporary device memory (guaranteed to no longer be used upon exit of a
     /// top-level index call, and where the streams using it have completed GPU
-    /// work). Typically backed by Device memory (cudaMalloc/cudaFree).
+    /// work). Typically backed by Device memory (cudaMallocAsync/cudaFreeAsync).
     Temporary = 0,
 
-    /// Managed using cudaMalloc/cudaFree (typical GPU device memory)
+    /// Managed using cudaMallocAsync/cudaFreeAsync (typical GPU device memory)
     Device = 1,
 
     /// Managed using cudaMallocManaged/cudaFree (typical Unified CPU/GPU
