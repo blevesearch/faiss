@@ -106,7 +106,9 @@ void IndexFlatCodes::merge_from(Index& otherIndex, idx_t add_id) {
            src,
            other->ntotal * code_size);
     ntotal += other->ntotal;
-    other->reset();
+    if (other->codes.is_owned) {
+        other->reset();
+    }
 }
 
 CodePacker* IndexFlatCodes::get_CodePacker() const {
