@@ -334,9 +334,14 @@ void IndexIVFScalarQuantizer::compute_distance_to_codes_for_list(
 
     dc->code_size = sq.code_size;
 
+    // NOTE: set_query() only stores the query pointer, it does not copy, so
+    // the residual buffer must outlive the distance_to_codes() call below.
+    // Declaring it inside the if-block would leave dc->q dangling.
+    std::vector<float> tmp;
+
     if (by_residual) {
         // shift of x_in wrt centroid
-        std::vector<float> tmp(d);
+        tmp.resize(d);
         quantizer->compute_residual(x, tmp.data(), list_no);
         dc->set_query(tmp.data());
     } else {
