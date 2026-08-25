@@ -53,7 +53,8 @@ class StandardGpuResourcesImpl : public GpuResources {
     bool supportsBFloat16(int device) override;
 
     /// Disable allocation of temporary memory; all temporary memory
-    /// requests will call cudaMalloc / cudaFree at the point of use
+    /// requests will allocate directly via the Device or Unified memory path
+    /// at the point of use
     void noTempMemory();
 
     /// Specify that we wish to use a certain fixed size of memory on
@@ -64,14 +65,14 @@ class StandardGpuResourcesImpl : public GpuResources {
     void setTempMemory(size_t size);
 
     /// Set memory space for all temporary memory allocations (both the
-    /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
+    /// pool and overflow). Default is MemorySpace::Device (cudaMallocAsync).
     /// Set to MemorySpace::Unified for cudaMallocManaged.
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
     /// Set a memory pool to use for temporary memory overflow allocations.
-    /// If not set, we will fallback to on-demand cudaMalloc for overflow
-    /// allocations.
+    /// If not set, we will fallback to on-demand Device or Unified allocation
+    /// for overflow allocations.
     void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
@@ -239,7 +240,8 @@ class StandardGpuResources : public GpuResourcesProvider {
     bool supportsBFloat16CurrentDevice();
 
     /// Disable allocation of temporary memory; all temporary memory
-    /// requests will call cudaMalloc / cudaFree at the point of use
+    /// requests will allocate directly via the Device or Unified memory path
+    /// at the point of use
     void noTempMemory();
 
     /// Specify that we wish to use a certain fixed size of memory on
@@ -250,14 +252,14 @@ class StandardGpuResources : public GpuResourcesProvider {
     void setTempMemory(size_t size);
 
     /// Set memory space for all temporary memory allocations (both the
-    /// pool and overflow). Default is MemorySpace::Device (cudaMalloc).
+    /// pool and overflow). Default is MemorySpace::Device (cudaMallocAsync).
     /// Set to MemorySpace::Unified for cudaMallocManaged.
     /// Must be called before any device is initialized.
     void setTempMemorySpace(MemorySpace space);
 
     /// Set a memory pool to use for temporary memory overflow allocations.
-    /// If not set, we will fallback to on-demand cudaMalloc for overflow
-    /// allocations.
+    /// If not set, we will fallback to on-demand Device or Unified allocation
+    /// for overflow allocations.
     void setTempMemoryOverflowPool(GpuMemoryPool* pool);
 
     /// Set amount of pinned memory to allocate, for async GPU <-> CPU
