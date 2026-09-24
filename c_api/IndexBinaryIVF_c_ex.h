@@ -79,6 +79,20 @@ int faiss_IndexBinaryIVF_get_centroids_and_cardinality(
 
 int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* source);
 
+/** Report whether two binary IVF indexes share an identical coarse quantizer,
+ *  i.e. the exact same centroid layout: same dimensionality, nlist and
+ *  bit-identical centroid codes, in the same order. See
+ *  faiss_IndexIVF_same_coarse_quantizer for why this matters.
+ *
+ * @param a    first binary IVF index
+ * @param b    second binary IVF index
+ * @param out  output: 1 if the coarse quantizers are identical, else 0
+*/
+int faiss_IndexBinaryIVF_same_coarse_quantizer(
+        const FaissIndexBinaryIVF* a,
+        const FaissIndexBinaryIVF* b,
+        int* out);
+
 #ifdef __cplusplus
 }
 #endif

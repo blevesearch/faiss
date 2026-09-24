@@ -208,6 +208,30 @@ int faiss_Set_quantizers(
         FaissIndex* target,
         FaissIndex* source);
 
+/*
+    Report whether two IVF indexes share an identical coarse quantizer, i.e.
+    the exact same centroid layout: same dimensionality, metric, nlist and
+    bit-identical centroid codes, in the same order.
+
+    This is the precondition for reusing one index's coarse-quantizer search
+    results (centroid ids + distances) to drive a search_preassigned call on
+    the other: list number 'i' must denote the same region of the vector space
+    in both indexes.
+
+    Indexes produced by the fast-merge path satisfy this, because their
+    quantizers are cloned from a common trained index via faiss_Set_quantizers.
+    Indexes built independently (e.g. small segments that were never fast
+    merged) generally do not.
+
+    @param a    - first IVF index
+    @param b    - second IVF index
+    @param out  - output: 1 if the coarse quantizers are identical, else 0
+*/
+int faiss_IndexIVF_same_coarse_quantizer(
+        const FaissIndexIVF* a,
+        const FaissIndexIVF* b,
+        int* out);
+
 #ifdef __cplusplus
 }
 #endif

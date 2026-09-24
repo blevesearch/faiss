@@ -12,7 +12,9 @@
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/IndexIVFRaBitQ.h>
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/IndexFlatCodes.h>
 #include <faiss/clone_index.h>
+#include <cstring>
 #include "macros_impl.h"
 
 using faiss::IndexIVF;
@@ -241,6 +243,86 @@ int faiss_IndexIVFRaBitQ_query_bitplanes_size(
                 rabitq_index,
                 "index is not an IndexIVFRaBitQ instance");
         *size = rabitq_index->query_bitplanes_size();
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
+namespace {
+
+// Extract the raw centroid bytes of an IVF index's coarse quantizer, along
+// with the code size. Returns false if the quantizer is not a flat-codes
+// index, in which case no byte-wise comparison is possible and we
+// conservatively report the layouts as different.
+bool coarse_quantizer_codes(
+        const IndexIVF* ivf,
+        const uint8_t** codes,
+        size_t* code_size) {
+    if (ivf == nullptr || ivf->quantizer == nullptr) {
+        return false;
+    }
+    const auto* flat =
+            dynamic_cast<const faiss::IndexFlatCodes*>(ivf->quantizer);
+    if (flat == nullptr) {
+        return false;
+    }
+    *codes = flat->codes.data();
+    *code_size = flat->code_size;
+    return true;
+}
+
+} // namespace
+
+int faiss_IndexIVF_same_coarse_quantizer(
+        const FaissIndexIVF* a,
+        const FaissIndexIVF* b,
+        int* out) {
+    try {
+        FAISS_THROW_IF_NOT_MSG(out, "output pointer must not be null");
+        *out = 0;
+
+        const auto* ivf_a = reinterpret_cast<const IndexIVF*>(a);
+        const auto* ivf_b = reinterpret_cast<const IndexIVF*>(b);
+        if (ivf_a == nullptr || ivf_b == nullptr) {
+            return 0;
+        }
+        // The same object trivially shares its own layout.
+        if (ivf_a == ivf_b || ivf_a->quantizer == ivf_b->quantizer) {
+            *out = 1;
+            return 0;
+        }
+        if (ivf_a->d != ivf_b->d || ivf_a->nlist != ivf_b->nlist ||
+            ivf_a->metric_type != ivf_b->metric_type) {
+            return 0;
+        }
+        if (ivf_a->quantizer == nullptr || ivf_b->quantizer == nullptr) {
+            return 0;
+        }
+        // A quantizer holding fewer centroids than nlist was never fully
+        // trained; list numbers would not line up.
+        if (ivf_a->quantizer->ntotal != ivf_b->quantizer->ntotal ||
+            ivf_a->quantizer->ntotal != (faiss::idx_t)ivf_a->nlist) {
+            return 0;
+        }
+
+        const uint8_t* codes_a = nullptr;
+        const uint8_t* codes_b = nullptr;
+        size_t code_size_a = 0;
+        size_t code_size_b = 0;
+        if (!coarse_quantizer_codes(ivf_a, &codes_a, &code_size_a) ||
+            !coarse_quantizer_codes(ivf_b, &codes_b, &code_size_b)) {
+            return 0;
+        }
+        if (code_size_a != code_size_b) {
+            return 0;
+        }
+        const size_t nbytes = code_size_a * (size_t)ivf_a->nlist;
+        if (nbytes == 0) {
+            return 0;
+        }
+        if (codes_a == codes_b || memcmp(codes_a, codes_b, nbytes) == 0) {
+            *out = 1;
+        }
         return 0;
     }
     CATCH_AND_HANDLE

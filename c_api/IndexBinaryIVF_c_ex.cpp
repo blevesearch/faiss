@@ -9,7 +9,9 @@
 
 #include "IndexBinaryIVF_c_ex.h"
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/IndexBinaryFlat.h>
 #include <faiss/clone_index.h>
+#include <cstring>
 #include "macros_impl.h"
 
 using faiss::IndexBinaryIVF;
@@ -119,4 +121,58 @@ int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* sour
     }
     CATCH_AND_HANDLE
 }
+
+int faiss_IndexBinaryIVF_same_coarse_quantizer(
+        const FaissIndexBinaryIVF* a,
+        const FaissIndexBinaryIVF* b,
+        int* out) {
+    try {
+        FAISS_THROW_IF_NOT_MSG(out, "output pointer must not be null");
+        *out = 0;
+
+        const auto* ivf_a = reinterpret_cast<const IndexBinaryIVF*>(a);
+        const auto* ivf_b = reinterpret_cast<const IndexBinaryIVF*>(b);
+        if (ivf_a == nullptr || ivf_b == nullptr) {
+            return 0;
+        }
+        if (ivf_a == ivf_b || ivf_a->quantizer == ivf_b->quantizer) {
+            *out = 1;
+            return 0;
+        }
+        if (ivf_a->d != ivf_b->d || ivf_a->nlist != ivf_b->nlist) {
+            return 0;
+        }
+        if (ivf_a->quantizer == nullptr || ivf_b->quantizer == nullptr) {
+            return 0;
+        }
+        if (ivf_a->quantizer->ntotal != ivf_b->quantizer->ntotal ||
+            ivf_a->quantizer->ntotal != (faiss::idx_t)ivf_a->nlist) {
+            return 0;
+        }
+
+        const auto* flat_a =
+                dynamic_cast<const faiss::IndexBinaryFlat*>(ivf_a->quantizer);
+        const auto* flat_b =
+                dynamic_cast<const faiss::IndexBinaryFlat*>(ivf_b->quantizer);
+        if (flat_a == nullptr || flat_b == nullptr) {
+            return 0;
+        }
+        // IndexBinaryFlat stores d bits per vector, i.e. d / 8 bytes.
+        const size_t nbytes = (size_t)(ivf_a->d / 8) * (size_t)ivf_a->nlist;
+        if (nbytes == 0) {
+            return 0;
+        }
+        const uint8_t* codes_a = flat_a->xb.data();
+        const uint8_t* codes_b = flat_b->xb.data();
+        if (codes_a == nullptr || codes_b == nullptr) {
+            return 0;
+        }
+        if (codes_a == codes_b || memcmp(codes_a, codes_b, nbytes) == 0) {
+            *out = 1;
+        }
+        return 0;
+    }
+    CATCH_AND_HANDLE
+}
+
 }
