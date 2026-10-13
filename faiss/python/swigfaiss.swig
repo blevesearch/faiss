@@ -361,6 +361,7 @@ void gpu_sync_all_devices();
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFScalarQuantizer.h>
 #include <faiss/gpu/GpuIndexBinaryFlat.h>
+#include <faiss/gpu/GpuIndexBinaryIVF.h>
 #include <faiss/gpu/GpuAutoTune.h>
 #include <faiss/gpu/GpuCloner.h>
 #include <faiss/gpu/GpuDistance.h>
@@ -687,6 +688,7 @@ struct faiss::simd16uint16 {};
 %include  <faiss/gpu/GpuIndexIVFFlat.h>
 %include  <faiss/gpu/GpuIndexIVFScalarQuantizer.h>
 %include  <faiss/gpu/GpuIndexBinaryFlat.h>
+%include  <faiss/gpu/GpuIndexBinaryIVF.h>
 %include  <faiss/gpu/GpuDistance.h>
 %include  <faiss/gpu/GpuIcmEncoder.h>
 
@@ -843,6 +845,7 @@ struct faiss::simd16uint16 {};
     DOWNCAST ( IndexBinaryMultiHash )
 #ifdef GPU_WRAPPER
     DOWNCAST_GPU ( GpuIndexBinaryFlat )
+    DOWNCAST_GPU ( GpuIndexBinaryIVF )
 #endif
     // default for non-recognized classes
     DOWNCAST ( IndexBinary )
