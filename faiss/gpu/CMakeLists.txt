@@ -25,6 +25,7 @@ set(FAISS_GPU_SRC
   GpuIcmEncoder.cu
   GpuIndex.cu
   GpuIndexBinaryFlat.cu
+  GpuIndexBinaryIVF.cu
   GpuIndexFlat.cu
   GpuIndexIVF.cu
   GpuIndexIVFFlat.cu
@@ -34,12 +35,14 @@ set(FAISS_GPU_SRC
   StandardGpuResources.cpp
   impl/BinaryDistance.cu
   impl/BinaryFlatIndex.cu
+  impl/BinaryIVF.cu
   impl/BroadcastSum.cu
   impl/Distance.cu
   impl/FlatIndex.cu
   impl/IndexUtils.cu
   impl/IVFAppend.cu
   impl/IVFBase.cu
+  impl/IVFBinaryScan.cu
   impl/IVFFlat.cu
   impl/IVFFlatScan.cu
   impl/IVFInterleaved.cu
@@ -93,6 +96,7 @@ set(FAISS_GPU_HEADERS
   GpuFaissAssert.h
   GpuIndex.h
   GpuIndexBinaryFlat.h
+  GpuIndexBinaryIVF.h
   GpuIndexFlat.h
   GpuIndexIVF.h
   GpuIndexIVFFlat.h
@@ -103,6 +107,7 @@ set(FAISS_GPU_HEADERS
   StandardGpuResources.h
   impl/BinaryDistance.cuh
   impl/BinaryFlatIndex.cuh
+  impl/BinaryIVF.cuh
   impl/BroadcastSum.cuh
   impl/Distance.cuh
   impl/DistanceUtils.cuh
@@ -112,6 +117,7 @@ set(FAISS_GPU_HEADERS
   impl/IndexUtils.h
   impl/IVFAppend.cuh
   impl/IVFBase.cuh
+  impl/IVFBinaryScan.cuh
   impl/IVFFlat.cuh
   impl/IVFFlatScan.cuh
   impl/IVFInterleaved.cuh
