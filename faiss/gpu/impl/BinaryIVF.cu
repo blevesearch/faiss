@@ -97,6 +97,17 @@ idx_t BinaryIVF::addCodes(
                 listNo,
                 numLists_);
 
+        // Validate the ids up front, so that an invalid one leaves the index
+        // unmodified (a device allocation failure while appending below can
+        // still leave the lists partially updated, as in the other IVF
+        // indexes)
+        FAISS_THROW_IF_NOT_FMT(
+                indicesOptions_ != INDICES_32_BIT ||
+                        (ids[i] >= 0 &&
+                         ids[i] <= (idx_t)std::numeric_limits<int>::max()),
+                "id %ld does not fit in INDICES_32_BIT",
+                ids[i]);
+
         rowsByList[listNo].push_back(i);
         ++numAdded;
     }
@@ -141,12 +152,6 @@ idx_t BinaryIVF::addCodes(
         } else if (indicesOptions_ == INDICES_32_BIT) {
             std::vector<int> listIds32(listIds.size());
             for (size_t j = 0; j < listIds.size(); ++j) {
-                FAISS_THROW_IF_NOT_FMT(
-                        listIds[j] >= 0 &&
-                                listIds[j] <=
-                                        (idx_t)std::numeric_limits<int>::max(),
-                        "id %ld does not fit in INDICES_32_BIT",
-                        listIds[j]);
                 listIds32[j] = (int)listIds[j];
             }
             indices->data.append(

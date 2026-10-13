@@ -20,6 +20,7 @@
 #include <faiss/gpu/utils/DeviceTensor.cuh>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 
 namespace faiss {
@@ -29,6 +30,10 @@ namespace {
 
 /// Default size in bytes above which host data is paged to the device
 constexpr size_t kMinPageSize = (size_t)256 * 1024 * 1024;
+
+/// Smallest number of queries per search page that we are willing to bound by
+/// the temporary memory available
+constexpr idx_t kMinQueriesPerPage = 8;
 
 /// Creates the (empty) coarse quantizer, which always uses the native GPU
 /// path, sharing our resources
@@ -87,7 +92,11 @@ GpuIndexBinaryIVF::GpuIndexBinaryIVF(
     resetInvertedLists_();
 }
 
-GpuIndexBinaryIVF::~GpuIndexBinaryIVF() {}
+GpuIndexBinaryIVF::~GpuIndexBinaryIVF() {
+    DeviceScope scope(ivfConfig_.device);
+    index_.reset();
+    quantizer_.reset();
+}
 
 int GpuIndexBinaryIVF::getDevice() const {
     return ivfConfig_.device;
@@ -123,6 +132,8 @@ void GpuIndexBinaryIVF::resetInvertedLists_() {
 void GpuIndexBinaryIVF::copyFrom(const faiss::IndexBinaryIVF* index) {
     DeviceScope scope(ivfConfig_.device);
 
+    // Validate everything before touching our own state, so that a failure
+    // leaves this index usable
     FAISS_THROW_IF_NOT_FMT(
             index->d % 8 == 0,
             "vector dimension (number of bits) "
@@ -132,6 +143,53 @@ void GpuIndexBinaryIVF::copyFrom(const faiss::IndexBinaryIVF* index) {
     FAISS_THROW_IF_NOT_MSG(index->nlist > 0, "nlist must be positive");
     validateNProbe(index->nprobe);
 
+    if (!index->is_trained) {
+        FAISS_THROW_IF_NOT_MSG(
+                index->ntotal == 0, "untrained index must be empty");
+    } else {
+        FAISS_THROW_IF_NOT(index->quantizer);
+        FAISS_THROW_IF_NOT_MSG(
+                index->quantizer->d == index->d,
+                "coarse quantizer dimension must match the index");
+        FAISS_THROW_IF_NOT_MSG(
+                index->quantizer->ntotal == (idx_t)index->nlist,
+                "coarse quantizer must hold nlist centroids");
+        FAISS_THROW_IF_NOT(index->invlists);
+
+        if (ivfConfig_.indicesOptions == INDICES_32_BIT) {
+            for (idx_t l = 0; l < (idx_t)index->nlist; ++l) {
+                InvertedLists::ScopedIds ids(index->invlists, l);
+                for (size_t j = 0; j < index->invlists->list_size(l); ++j) {
+                    FAISS_THROW_IF_NOT_FMT(
+                            ids[j] >= 0 &&
+                                    ids[j] <= (idx_t)std::numeric_limits<
+                                                      int>::max(),
+                            "id %ld does not fit in INDICES_32_BIT",
+                            ids[j]);
+                }
+            }
+        }
+    }
+
+    // Build the new device state, then swap it in
+    auto quantizer = makeQuantizer(resources_, index->d, ivfConfig_);
+    std::unique_ptr<BinaryIVF> lists(new BinaryIVF(
+            resources_.get(),
+            index->d,
+            index->nlist,
+            ivfConfig_.indicesOptions,
+            ivfConfig_.memorySpace));
+
+    if (index->is_trained) {
+        // Copy the centroids
+        std::vector<uint8_t> centroids((size_t)index->nlist * index->code_size);
+        index->quantizer->reconstruct_n(0, index->nlist, centroids.data());
+        quantizer->add(index->nlist, centroids.data());
+
+        // Copy all of the IVF data
+        lists->copyInvertedListsFrom(index->invlists);
+    }
+
     this->d = index->d;
     this->code_size = index->code_size;
     this->nlist = index->nlist;
@@ -140,30 +198,8 @@ void GpuIndexBinaryIVF::copyFrom(const faiss::IndexBinaryIVF* index) {
     this->ntotal = index->ntotal;
     this->is_trained = index->is_trained;
 
-    // destroy old state first before allocating new
-    quantizer_.reset();
-    index_.reset();
-
-    quantizer_ = makeQuantizer(resources_, this->d, ivfConfig_);
-    resetInvertedLists_();
-
-    // The other index might not be trained
-    if (!index->is_trained) {
-        return;
-    }
-
-    FAISS_THROW_IF_NOT(index->quantizer);
-    FAISS_THROW_IF_NOT_MSG(
-            index->quantizer->ntotal == (idx_t)index->nlist,
-            "coarse quantizer must hold nlist centroids");
-
-    // Copy the centroids
-    std::vector<uint8_t> centroids((size_t)nlist * this->code_size);
-    index->quantizer->reconstruct_n(0, nlist, centroids.data());
-    quantizer_->add(nlist, centroids.data());
-
-    // Copy all of the IVF data
-    index_->copyInvertedListsFrom(index->invlists);
+    quantizer_ = std::move(quantizer);
+    index_ = std::move(lists);
 }
 
 void GpuIndexBinaryIVF::copyTo(faiss::IndexBinaryIVF* index) const {
@@ -196,6 +232,9 @@ void GpuIndexBinaryIVF::copyTo(faiss::IndexBinaryIVF* index) const {
 
     auto ivf = new ArrayInvertedLists(nlist, this->code_size);
     index->replace_invlists(ivf, true);
+
+    // The GPU index keeps no direct map, so drop any stale one
+    index->make_direct_map(false);
 
     if (this->is_trained) {
         index_->copyInvertedListsTo(ivf);
@@ -266,6 +305,27 @@ void GpuIndexBinaryIVF::add_with_ids(
 
     if (n == 0) {
         return;
+    }
+
+    // The ids are small next to the codes, so stage them on the host once.
+    // This lets us validate all of them before any page is added.
+    std::vector<idx_t> hostIds;
+    if (xids && getDeviceForAddress(xids) != -1) {
+        auto stream = resources_->getDefaultStream(ivfConfig_.device);
+        hostIds.resize(n);
+        fromDevice(const_cast<idx_t*>(xids), hostIds.data(), n, stream);
+        CUDA_VERIFY(cudaStreamSynchronize(stream));
+        xids = hostIds.data();
+    }
+
+    if (xids && ivfConfig_.indicesOptions == INDICES_32_BIT) {
+        for (idx_t i = 0; i < n; ++i) {
+            FAISS_THROW_IF_NOT_FMT(
+                    xids[i] >= 0 &&
+                            xids[i] <= (idx_t)std::numeric_limits<int>::max(),
+                    "id %ld does not fit in INDICES_32_BIT",
+                    xids[i]);
+        }
     }
 
     // Page the input so that the host staging buffers stay bounded
@@ -361,15 +421,21 @@ void GpuIndexBinaryIVF::search(
     if (getDeviceForAddress(x) == -1) {
         pageSize = std::min(pageSize, (idx_t)(minPagedSize_ / codeSize));
     }
+    pageSize = std::max<idx_t>(1, pageSize);
 
+    // Also bound the page by the temporary memory it needs. As in the other
+    // IVF indexes, if that leaves only a handful of queries per page (e.g.
+    // there is no temporary memory reservation), ignore the bound rather
+    // than degrading to tiny pages.
     size_t perQuery = codeSize +
             (effectiveNprobe + 2 * (size_t)k) *
                     (sizeof(int32_t) + sizeof(idx_t));
-    pageSize = std::min(
-            pageSize,
+    idx_t memPageSize =
             (idx_t)(resources_->getTempMemoryAvailableCurrentDevice() / 4 /
-                    perQuery));
-    pageSize = std::max<idx_t>(1, pageSize);
+                    perQuery);
+    if (memPageSize >= std::min<idx_t>(pageSize, kMinQueriesPerPage)) {
+        pageSize = std::min(pageSize, memPageSize);
+    }
 
     for (idx_t cur = 0; cur < n; cur += pageSize) {
         idx_t num = std::min(pageSize, n - cur);

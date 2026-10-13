@@ -536,6 +536,43 @@ TEST(TestGpuIndexBinaryIVF, IndicesOptions) {
     faiss::idx_t big = (faiss::idx_t)1 << 40;
     EXPECT_THROW(
             gpu.add_with_ids(1, f.add.data(), &big), faiss::FaissException);
+
+    // a bad id in the middle of a batch must not leave a partial add behind
+    std::vector<faiss::idx_t> mixed(200);
+    for (int i = 0; i < 200; ++i) {
+        mixed[i] = i;
+    }
+    mixed[150] = big;
+    EXPECT_THROW(
+            gpu.add_with_ids(200, f.add.data(), mixed.data()),
+            faiss::FaissException);
+    EXPECT_EQ(gpu.ntotal, f.index.ntotal);
+    faiss::idx_t total = 0;
+    for (int l = 0; l < f.nlist; ++l) {
+        total += gpu.getListLength(l);
+    }
+    EXPECT_EQ(total, f.index.ntotal);
+}
+
+// With no temporary memory reservation, many queries must still be searched
+// correctly (and not one at a time)
+TEST(TestGpuIndexBinaryIVF, NoTempMemoryManyQueries) {
+    faiss::gpu::StandardGpuResources res;
+    res.noTempMemory();
+    CpuFixture f;
+    int k = 5;
+    int nq = 3000;
+    auto queries = randomCodes(nq, f.codeSize, 99);
+    f.index.nprobe = f.nlist;
+
+    faiss::gpu::GpuIndexBinaryIVF gpu(&res, &f.index);
+    gpu.nprobe = f.nlist;
+
+    std::vector<int32_t> a(nq * k), b(nq * k);
+    std::vector<faiss::idx_t> l(nq * k);
+    f.index.search(nq, queries.data(), k, a.data(), l.data());
+    gpu.search(nq, queries.data(), k, b.data(), l.data());
+    EXPECT_EQ(a, b);
 }
 
 // Adding and searching in tiny pages must not change the results
@@ -639,6 +676,123 @@ TEST(TestGpuIndexBinaryIVF, MultiGpuShard) {
         EXPECT_GE(labels[i], 0);
         EXPECT_LT(labels[i], f.numAdd);
     }
+}
+
+// A failed or degenerate input must not hang, abort or half-apply
+TEST(TestGpuIndexBinaryIVF, EdgeCases) {
+    faiss::gpu::StandardGpuResources res;
+    CpuFixture f;
+    int k = 4;
+
+    // a paging size below one code (or zero) behaves like one vector / query
+    // per page
+    faiss::gpu::GpuIndexBinaryIVF gpu(&res, &f.index);
+    gpu.nprobe = f.nlist;
+    std::vector<int32_t> ref(f.numQuery * k), got(f.numQuery * k);
+    std::vector<faiss::idx_t> l(f.numQuery * k);
+    gpu.search(f.numQuery, f.query.data(), k, ref.data(), l.data());
+    for (size_t paging : {(size_t)0, (size_t)1}) {
+        gpu.setMinPagingSize(paging);
+        gpu.search(f.numQuery, f.query.data(), k, got.data(), l.data());
+        EXPECT_EQ(ref, got);
+    }
+    gpu.setMinPagingSize(0);
+    gpu.add(10, f.add.data());
+    EXPECT_EQ(gpu.ntotal, f.index.ntotal + 10);
+
+    // reset, then the index is reusable
+    gpu.reset();
+    EXPECT_EQ(gpu.ntotal, 0);
+    gpu.add(f.numAdd, f.add.data());
+    gpu.search(f.numQuery, f.query.data(), k, got.data(), l.data());
+    EXPECT_EQ(ref, got);
+
+    // add after copyFrom continues the auto ids
+    faiss::gpu::GpuIndexBinaryIVF copied(&res, &f.index);
+    copied.add(1, f.add.data());
+    EXPECT_EQ(copied.ntotal, f.index.ntotal + 1);
+    faiss::idx_t maxId = -1;
+    for (int i = 0; i < f.nlist; ++i) {
+        for (auto id : copied.getListIndices(i)) {
+            maxId = std::max(maxId, id);
+        }
+    }
+    EXPECT_EQ(maxId, f.index.ntotal);
+
+    // nprobe above nlist is clamped
+    copied.nprobe = 4 * f.nlist;
+    copied.search(f.numQuery, f.query.data(), k, got.data(), l.data());
+}
+
+// Invalid ids are rejected without modifying the index, including when the
+// input spans several pages and when copying from a CPU index
+TEST(TestGpuIndexBinaryIVF, InvalidIdsLeaveIndexUnchanged) {
+    faiss::gpu::StandardGpuResources res;
+    CpuFixture f;
+    faiss::idx_t big = (faiss::idx_t)1 << 40;
+
+    faiss::gpu::GpuIndexBinaryIVFConfig config;
+    config.indicesOptions = faiss::gpu::INDICES_32_BIT;
+    faiss::gpu::GpuIndexBinaryIVF gpu(&res, &f.index, config);
+    gpu.setMinPagingSize(10 * f.codeSize);
+
+    std::vector<faiss::idx_t> ids(100);
+    for (int i = 0; i < 100; ++i) {
+        ids[i] = i;
+    }
+    ids[95] = big; // in the last of ten pages
+    EXPECT_THROW(
+            gpu.add_with_ids(100, f.add.data(), ids.data()),
+            faiss::FaissException);
+    EXPECT_EQ(gpu.ntotal, f.index.ntotal);
+    faiss::idx_t total = 0;
+    for (int l = 0; l < f.nlist; ++l) {
+        total += gpu.getListLength(l);
+    }
+    EXPECT_EQ(total, f.index.ntotal);
+
+    // negative ids are rejected as well
+    faiss::idx_t neg = -5;
+    EXPECT_THROW(
+            gpu.add_with_ids(1, f.add.data(), &neg), faiss::FaissException);
+
+    // copyFrom with an unrepresentable id throws and keeps the old state
+    faiss::IndexBinaryFlat q(f.dims);
+    faiss::IndexBinaryIVF cpu(&q, f.dims, f.nlist);
+    cpu.train(f.nlist * 40, f.train.data());
+    cpu.add_with_ids(1, f.add.data(), &big);
+    EXPECT_THROW(gpu.copyFrom(&cpu), faiss::FaissException);
+    EXPECT_EQ(gpu.ntotal, f.index.ntotal);
+    std::vector<int32_t> dist(f.numQuery * 3);
+    std::vector<faiss::idx_t> labels(f.numQuery * 3);
+    gpu.nprobe = f.nlist;
+    gpu.search(f.numQuery, f.query.data(), 3, dist.data(), labels.data());
+    for (auto lbl : labels) {
+        EXPECT_GE(lbl, 0);
+    }
+
+    // an untrained index that claims vectors is rejected
+    faiss::IndexBinaryFlat q2(f.dims);
+    faiss::IndexBinaryIVF bogus(&q2, f.dims, f.nlist);
+    bogus.ntotal = 3;
+    EXPECT_THROW(gpu.copyFrom(&bogus), faiss::FaissException);
+}
+
+// copyTo into a CPU index that had a direct map leaves a consistent index
+TEST(TestGpuIndexBinaryIVF, CopyToResetsDirectMap) {
+    faiss::gpu::StandardGpuResources res;
+    CpuFixture f;
+    faiss::gpu::GpuIndexBinaryIVF gpu(&res, &f.index);
+
+    faiss::IndexBinaryFlat q(f.dims);
+    faiss::IndexBinaryIVF target(&q, f.dims, f.nlist);
+    target.train(f.nlist * 40, f.train.data());
+    target.add(10, f.add.data());
+    target.make_direct_map(true);
+
+    gpu.copyTo(&target);
+    EXPECT_EQ(target.ntotal, f.index.ntotal);
+    EXPECT_TRUE(target.direct_map.no());
 }
 
 int main(int argc, char** argv) {
