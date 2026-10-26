@@ -17,6 +17,10 @@
  * always called f and thus is not passed in as a macro parameter.
  **************************************************************/
 
+namespace faiss {
+size_t get_deserialization_vector_byte_limit();
+} // namespace faiss
+
 #define READANDCHECK(ptr, n)                         \
     {                                                \
         size_t ret = (*f)(ptr, sizeof(*(ptr)), n);   \
@@ -31,20 +35,55 @@
 
 #define READ1(x) READANDCHECK(&(x), 1)
 
+// Reads a single byte into a bool, rejecting any byte that is not the
+// canonical encoding for the platform's bool representation. Reading a
+// non-canonical byte directly into a bool is undefined behavior and
+// trips UBSan's invalid-bool-load check. To stay ABI-portable, we
+// assign via the language-defined conversion (b != 0) and then compare
+// the resulting bool's storage byte back against the byte we read - the
+// roundtrip succeeds iff the input byte was already canonical on this
+// platform. FAISS only ever writes the canonical encoding via
+// WRITE1(bool), so well-formed indices roundtrip cleanly; corrupt or
+// attacker-controlled input that places a non-canonical byte at a bool
+// offset is rejected as a FaissException.
+#define READ1_BOOL(x)                                                      \
+    {                                                                      \
+        static_assert(                                                     \
+                sizeof(x) == 1, "READ1_BOOL: destination must be 1 byte"); \
+        uint8_t b;                                                         \
+        READANDCHECK(&b, 1);                                               \
+        (x) = (b != 0);                                                    \
+        FAISS_THROW_IF_NOT_FMT(                                            \
+                *reinterpret_cast<const uint8_t*>(&(x)) == b,              \
+                "invalid bool encoding 0x%02x for %s",                     \
+                b,                                                         \
+                #x);                                                       \
+    }
+
 #define READ1_DUMMY(x_type) \
     {                       \
         x_type x = {};      \
         READ1(x);           \
     }
 
-// will fail if we write 256G of data at once...
-#define READVECTOR(vec)                                              \
-    {                                                                \
-        size_t size;                                                 \
-        READANDCHECK(&size, 1);                                      \
-        FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40)); \
-        (vec).resize(size);                                          \
-        READANDCHECK((vec).data(), size);                            \
+// Rejects vectors whose total allocation would exceed the configurable
+// byte limit (default 1 TB).
+#define READVECTOR(vec)                                                  \
+    {                                                                    \
+        size_t size;                                                     \
+        READANDCHECK(&size, 1);                                          \
+        FAISS_THROW_IF_NOT(                                              \
+                size >= 0 &&                                             \
+                size < (faiss::get_deserialization_vector_byte_limit() / \
+                        sizeof(*(vec).data())));                         \
+        FAISS_THROW_IF_NOT_FMT(                                          \
+                size <= SIZE_MAX / sizeof((vec)[0]),                     \
+                "READVECTOR: size %zu would overflow for element "       \
+                "size %zu",                                              \
+                size,                                                    \
+                sizeof((vec)[0]));                                       \
+        (vec).resize(size);                                              \
+        READANDCHECK((vec).data(), size);                                \
     }
 
 #define WRITEANDCHECK(ptr, n)                         \
@@ -78,12 +117,15 @@
         WRITEANDCHECK((vec).data(), size * 4);     \
     }
 
-#define READXBVECTOR(vec)                                            \
-    {                                                                \
-        size_t size;                                                 \
-        READANDCHECK(&size, 1);                                      \
-        FAISS_THROW_IF_NOT(size >= 0 && size < (uint64_t{1} << 40)); \
-        size *= 4;                                                   \
-        (vec).resize(size);                                          \
-        READANDCHECK((vec).data(), size);                            \
+#define READXBVECTOR(vec)                                                \
+    {                                                                    \
+        size_t size;                                                     \
+        READANDCHECK(&size, 1);                                          \
+        FAISS_THROW_IF_NOT(                                              \
+                size >= 0 &&                                             \
+                size < (faiss::get_deserialization_vector_byte_limit() / \
+                        (4 * sizeof(*(vec).data()))));                   \
+        size *= 4;                                                       \
+        (vec).resize(size);                                              \
+        READANDCHECK((vec).data(), size);                                \
     }

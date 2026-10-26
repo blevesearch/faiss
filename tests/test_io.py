@@ -3,16 +3,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import numpy as np
-import unittest
-import faiss
-import tempfile
-import os
 import io
-import sys
+import os
 import pickle
 import platform
+import sys
+import tempfile
+import unittest
 from multiprocessing.pool import ThreadPool
+
+import faiss
+import numpy as np
 from common_faiss_tests import get_dataset_2
 
 
@@ -26,7 +27,7 @@ class TestIOVariants(unittest.TestCase):
 
     def test_io_error(self):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         index = faiss.IndexFlatL2(d)
         index.add(x)
         fd, fname = tempfile.mkstemp()
@@ -37,11 +38,11 @@ class TestIOVariants(unittest.TestCase):
             # should be fine
             faiss.read_index(fname)
 
-            with open(fname, 'rb') as f:
+            with open(fname, "rb") as f:
                 data = f.read()
             # now damage file
-            with open(fname, 'wb') as f:
-                f.write(data[:int(len(data) / 2)])
+            with open(fname, "wb") as f:
+                f.write(data[: int(len(data) / 2)])
 
             # should make a nice readable exception that mentions the filename
             try:
@@ -61,7 +62,7 @@ class TestCallbacks(unittest.TestCase):
 
     def do_write_callback(self, bsz):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         index = faiss.IndexFlatL2(d)
         index.add(x)
 
@@ -73,27 +74,24 @@ class TestCallbacks(unittest.TestCase):
             writer = faiss.BufferedIOWriter(writer, bsz)
 
         faiss.write_index(index, writer)
-        del writer   # make sure all writes committed
+        del writer  # make sure all writes committed
 
         if sys.version_info[0] < 3:
             buf = f.getvalue()
         else:
             buf = f.getbuffer()
 
-        index2 = faiss.deserialize_index(np.frombuffer(buf, dtype='uint8'))
+        index2 = faiss.deserialize_index(np.frombuffer(buf, dtype="uint8"))
 
         self.assertEqual(index.d, index2.d)
         np.testing.assert_array_equal(
             faiss.vector_to_array(index.codes),
-            faiss.vector_to_array(index2.codes)
+            faiss.vector_to_array(index2.codes),
         )
 
         # This is not a callable function: should raise an exception
         writer = faiss.PyCallbackIOWriter("blabla")
-        self.assertRaises(
-            Exception,
-            faiss.write_index, index, writer
-        )
+        self.assertRaises(Exception, faiss.write_index, index, writer)
 
     def test_buf_read(self):
         x = np.random.uniform(size=20)
@@ -103,7 +101,7 @@ class TestCallbacks(unittest.TestCase):
         try:
             x.tofile(fname)
 
-            with open(fname, 'rb') as f:
+            with open(fname, "rb") as f:
                 reader = faiss.PyCallbackIOReader(f.read, 1234)
 
                 bsz = 123
@@ -119,7 +117,7 @@ class TestCallbacks(unittest.TestCase):
 
     def do_read_callback(self, bsz):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         index = faiss.IndexFlatL2(d)
         index.add(x)
 
@@ -128,7 +126,7 @@ class TestCallbacks(unittest.TestCase):
         try:
             faiss.write_index(index, fname)
 
-            with open(fname, 'rb') as f:
+            with open(fname, "rb") as f:
                 reader = faiss.PyCallbackIOReader(f.read, 1234)
 
                 if bsz > 0:
@@ -139,15 +137,12 @@ class TestCallbacks(unittest.TestCase):
             self.assertEqual(index.d, index2.d)
             np.testing.assert_array_equal(
                 faiss.vector_to_array(index.codes),
-                faiss.vector_to_array(index2.codes)
+                faiss.vector_to_array(index2.codes),
             )
 
             # This is not a callable function: should raise an exception
             reader = faiss.PyCallbackIOReader("blabla")
-            self.assertRaises(
-                Exception,
-                faiss.read_index, reader
-            )
+            self.assertRaises(Exception, faiss.read_index, reader)
         finally:
             if os.path.exists(fname):
                 os.unlink(fname)
@@ -168,7 +163,7 @@ class TestCallbacks(unittest.TestCase):
 
     def test_read_buffer(self):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         index = faiss.IndexFlatL2(d)
         index.add(x)
 
@@ -177,15 +172,14 @@ class TestCallbacks(unittest.TestCase):
         try:
             faiss.write_index(index, fname)
 
-            reader = faiss.BufferedIOReader(
-                faiss.FileIOReader(fname), 1234)
+            reader = faiss.BufferedIOReader(faiss.FileIOReader(fname), 1234)
 
             index2 = faiss.read_index(reader)
 
             self.assertEqual(index.d, index2.d)
             np.testing.assert_array_equal(
                 faiss.vector_to_array(index.codes),
-                faiss.vector_to_array(index2.codes)
+                faiss.vector_to_array(index2.codes),
             )
 
         finally:
@@ -194,10 +188,10 @@ class TestCallbacks(unittest.TestCase):
                 os.unlink(fname)
 
     def test_transfer_pipe(self):
-        """ transfer an index through a Unix pipe """
+        """transfer an index through a Unix pipe"""
 
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         index = faiss.IndexFlatL2(d)
         index.add(x)
         Dref, Iref = index.search(x, 10)
@@ -230,7 +224,7 @@ class TestCallbacks(unittest.TestCase):
 
 
 class PyOndiskInvertedLists:
-    """ wraps an OnDisk object for use from C++ """
+    """wraps an OnDisk object for use from C++"""
 
     def __init__(self, oil):
         self.oil = oil
@@ -242,7 +236,7 @@ class PyOndiskInvertedLists:
         oil = self.oil
         assert 0 <= list_no < oil.lists.size()
         l = oil.lists.at(list_no)
-        with open(oil.filename, 'rb') as f:
+        with open(oil.filename, "rb") as f:
             f.seek(l.offset)
             return f.read(l.size * oil.code_size)
 
@@ -250,7 +244,7 @@ class PyOndiskInvertedLists:
         oil = self.oil
         assert 0 <= list_no < oil.lists.size()
         l = oil.lists.at(list_no)
-        with open(oil.filename, 'rb') as f:
+        with open(oil.filename, "rb") as f:
             f.seek(l.offset + l.capacity * oil.code_size)
             return f.read(l.size * 8)
 
@@ -276,6 +270,15 @@ class TestPickle(unittest.TestCase):
         np.testing.assert_array_equal(Iref, Inew)
         np.testing.assert_array_equal(Dref, Dnew)
 
+        # Verify deserialized index is serializable again
+        buf2 = io.BytesIO()
+        pickle.dump(index2, buf2)
+        buf2.seek(0)
+        index3 = pickle.load(buf2)
+        Dnew3, Inew3 = index3.search(xq, 4)
+        np.testing.assert_array_equal(Iref, Inew3)
+        np.testing.assert_array_equal(Dref, Dnew3)
+
     def test_flat(self):
         self.dump_load_factory("Flat")
 
@@ -291,9 +294,10 @@ class Test_IO_VectorTransform(unittest.TestCase):
     test write_VectorTransform using IOWriter Pointer
     and read_VectorTransform using file name
     """
+
     def test_write_vector_transform(self):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFSpectralHash(quantizer, d, n, 8, 1.0)
         index.train(x)
@@ -312,6 +316,19 @@ class Test_IO_VectorTransform(unittest.TestCase):
             assert vt.d_out == index.vt.d_out
             assert vt.is_trained
 
+            # Verify deserialized VectorTransform is serializable again
+            fd2, fname2 = tempfile.mkstemp()
+            os.close(fd2)
+            try:
+                faiss.write_VectorTransform(vt, fname2)
+                vt2 = faiss.read_VectorTransform(fname2)
+                assert vt2.d_in == index.vt.d_in
+                assert vt2.d_out == index.vt.d_out
+                assert vt2.is_trained
+            finally:
+                if os.path.exists(fname2):
+                    os.unlink(fname2)
+
         finally:
             if os.path.exists(fname):
                 os.unlink(fname)
@@ -320,9 +337,10 @@ class Test_IO_VectorTransform(unittest.TestCase):
     test write_VectorTransform using file name
     and read_VectorTransform using IOWriter Pointer
     """
+
     def test_read_vector_transform(self):
         d, n = 32, 1000
-        x = np.random.uniform(size=(n, d)).astype('float32')
+        x = np.random.uniform(size=(n, d)).astype("float32")
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFSpectralHash(quantizer, d, n, 8, 1.0)
         index.train(x)
@@ -349,6 +367,7 @@ class Test_IO_PQ(unittest.TestCase):
     """
     test read and write PQ.
     """
+
     def test_io_pq(self):
         xt, xb, xq = get_dataset_2(d, nt, nb, nq)
         index = faiss.IndexPQ(d, 4, 4)
@@ -369,15 +388,31 @@ class Test_IO_PQ(unittest.TestCase):
         self.assertEqual(index.pq.ksub, read_pq.ksub)
         np.testing.assert_array_equal(
             faiss.vector_to_array(index.pq.centroids),
-            faiss.vector_to_array(read_pq.centroids)
+            faiss.vector_to_array(read_pq.centroids),
         )
 
+        # Verify deserialized PQ is serializable again
+        fd2, fname2 = tempfile.mkstemp()
+        os.close(fd2)
+        try:
+            faiss.write_ProductQuantizer(read_pq, fname2)
+            read_pq2 = faiss.read_ProductQuantizer(fname2)
+        finally:
+            if os.path.exists(fname2):
+                os.unlink(fname2)
+        self.assertEqual(index.pq.M, read_pq2.M)
+        self.assertEqual(index.pq.nbits, read_pq2.nbits)
+        np.testing.assert_array_equal(
+            faiss.vector_to_array(index.pq.centroids),
+            faiss.vector_to_array(read_pq2.centroids),
+        )
 
 
 class Test_IO_IndexLSH(unittest.TestCase):
     """
     test read and write IndexLSH.
     """
+
     def test_io_lsh(self):
         xt, xb, xq = get_dataset_2(d, nt, nb, nq)
         index_lsh = faiss.IndexLSH(d, 32, True, True)
@@ -391,8 +426,7 @@ class Test_IO_IndexLSH(unittest.TestCase):
         try:
             faiss.write_index(index_lsh, fname)
 
-            reader = faiss.BufferedIOReader(
-                faiss.FileIOReader(fname), 1234)
+            reader = faiss.BufferedIOReader(faiss.FileIOReader(fname), 1234)
             read_index_lsh = faiss.read_index(reader)
             # Delete reader to prevent [WinError 32] The process cannot
             # access the file because it is being used by another process
@@ -401,12 +435,19 @@ class Test_IO_IndexLSH(unittest.TestCase):
             self.assertEqual(index_lsh.d, read_index_lsh.d)
             np.testing.assert_array_equal(
                 faiss.vector_to_array(index_lsh.codes),
-                faiss.vector_to_array(read_index_lsh.codes)
+                faiss.vector_to_array(read_index_lsh.codes),
             )
             D_read, I_read = read_index_lsh.search(xq, 10)
 
             np.testing.assert_array_equal(D, D_read)
             np.testing.assert_array_equal(I, I_read)
+
+            # Verify deserialized index is serializable again
+            data3 = faiss.serialize_index(read_index_lsh)
+            index3 = faiss.deserialize_index(data3)
+            D3, I3 = index3.search(xq, 10)
+            np.testing.assert_array_equal(D, D3)
+            np.testing.assert_array_equal(I, I3)
 
         finally:
             if os.path.exists(fname):
@@ -417,6 +458,7 @@ class Test_IO_IndexIVFSpectralHash(unittest.TestCase):
     """
     test read and write IndexIVFSpectralHash.
     """
+
     def test_io_ivf_spectral_hash(self):
         nlist = 1000
         xt, xb, xq = get_dataset_2(d, nt, nb, nq)
@@ -432,8 +474,7 @@ class Test_IO_IndexIVFSpectralHash(unittest.TestCase):
         try:
             faiss.write_index(index, fname)
 
-            reader = faiss.BufferedIOReader(
-                faiss.FileIOReader(fname), 1234)
+            reader = faiss.BufferedIOReader(faiss.FileIOReader(fname), 1234)
             read_index = faiss.read_index(reader)
             del reader
 
@@ -446,6 +487,13 @@ class Test_IO_IndexIVFSpectralHash(unittest.TestCase):
             np.testing.assert_array_equal(D, D_read)
             np.testing.assert_array_equal(I, I_read)
 
+            # Verify deserialized index is serializable again
+            data3 = faiss.serialize_index(read_index)
+            index3 = faiss.deserialize_index(data3)
+            D3, I3 = index3.search(xq, 10)
+            np.testing.assert_array_equal(D, D3)
+            np.testing.assert_array_equal(I, I3)
+
         finally:
             if os.path.exists(fname):
                 os.unlink(fname)
@@ -454,8 +502,8 @@ class Test_IO_IndexIVFSpectralHash(unittest.TestCase):
 class TestIVFPQRead(unittest.TestCase):
     def test_reader(self):
         d, n = 32, 1000
-        xq = np.random.uniform(size=(n, d)).astype('float32')
-        xb = np.random.uniform(size=(n, d)).astype('float32')
+        xq = np.random.uniform(size=(n, d)).astype("float32")
+        xb = np.random.uniform(size=(n, d)).astype("float32")
 
         index = faiss.index_factory(32, "IVF32,PQ16np", faiss.METRIC_L2)
         index.train(xb)
@@ -468,7 +516,8 @@ class TestIVFPQRead(unittest.TestCase):
 
             index_a = faiss.read_index(fname)
             index_b = faiss.read_index(
-                fname, faiss.IO_FLAG_SKIP_PRECOMPUTE_TABLE)
+                fname, faiss.IO_FLAG_SKIP_PRECOMPUTE_TABLE
+            )
 
             Da, Ia = index_a.search(xq, 10)
             Db, Ib = index_b.search(xq, 10)
@@ -479,6 +528,13 @@ class TestIVFPQRead(unittest.TestCase):
             codes_b = index_b.sa_encode(xq)
             np.testing.assert_array_equal(codes_a, codes_b)
 
+            # Verify deserialized indexes are serializable again
+            data3 = faiss.serialize_index(index_a)
+            index3 = faiss.deserialize_index(data3)
+            D3, I3 = index3.search(xq, 10)
+            np.testing.assert_array_equal(Da, D3)
+            np.testing.assert_array_equal(Ia, I3)
+
         finally:
             if os.path.exists(fname):
                 os.unlink(fname)
@@ -486,13 +542,13 @@ class TestIVFPQRead(unittest.TestCase):
 
 class TestIOFlatMMap(unittest.TestCase):
     @unittest.skipIf(
-        platform.system() not in ["Windows", "Linux"],
-        "supported OSes only"
+        platform.system() not in ["Windows", "Linux", "Darwin"],
+        "supported OSes only",
     )
-    def test_mmap(self): 
+    def test_mmap(self):
         xt, xb, xq = get_dataset_2(32, 0, 100, 50)
         index = faiss.index_factory(32, "SQfp16", faiss.METRIC_L2)
-        # does not need training 
+        # does not need training
         index.add(xb)
         Dref, Iref = index.search(xq, 10)
 
@@ -510,12 +566,44 @@ class TestIOFlatMMap(unittest.TestCase):
             del index2
 
             if os.path.exists(fname):
-                # skip the error. On Windows, index2 holds the handle file, 
+                # skip the error. On Windows, index2 holds the handle file,
                 #   so it cannot be ensured that the file can be deleted
                 #   unless index2 is collected by a GC
                 try:
                     os.unlink(fname)
-                except:
+                except Exception:
+                    pass
+
+    @unittest.skipIf(
+        platform.system() not in ["Windows", "Linux", "Darwin"],
+        "supported OSes only",
+    )
+    def test_mmap_ivf(self):
+        d, nlist = 32, 64
+        xt, xb, xq = get_dataset_2(d, 2000, 5000, 50)
+        index = faiss.index_factory(d, f"IVF{nlist},Flat")
+        index.train(xt)
+        index.add(xb)
+        index.nprobe = 8
+        Dref, Iref = index.search(xq, 10)
+
+        fd, fname = tempfile.mkstemp()
+        os.close(fd)
+
+        index2 = None
+        try:
+            faiss.write_index(index, fname)
+            index2 = faiss.read_index(fname, faiss.IO_FLAG_MMAP_IFC)
+            index2.nprobe = 8
+            Dnew, Inew = index2.search(xq, 10)
+            np.testing.assert_array_equal(Iref, Inew)
+            np.testing.assert_array_equal(Dref, Dnew)
+        finally:
+            del index2
+            if os.path.exists(fname):
+                try:
+                    os.unlink(fname)
+                except Exception:
                     pass
 
     def test_zerocopy(self):
@@ -527,8 +615,176 @@ class TestIOFlatMMap(unittest.TestCase):
 
         serialized_index = faiss.serialize_index(index)
         reader = faiss.ZeroCopyIOReader(
-            faiss.swig_ptr(serialized_index), serialized_index.size)
+            faiss.swig_ptr(serialized_index), serialized_index.size
+        )
         index2 = faiss.read_index(reader)
         Dnew, Inew = index2.search(xq, 10)
         np.testing.assert_array_equal(Iref, Inew)
         np.testing.assert_array_equal(Dref, Dnew)
+
+        # Verify deserialized index is serializable again
+        data3 = faiss.serialize_index(index2)
+        index3 = faiss.deserialize_index(data3)
+        Dnew3, Inew3 = index3.search(xq, 10)
+        np.testing.assert_array_equal(Iref, Inew3)
+        np.testing.assert_array_equal(Dref, Dnew3)
+
+
+class TestIORoundTrip(unittest.TestCase):
+    """Round-trip serialize/deserialize tests covering index types
+    and sub-objects not covered by other Python tests."""
+
+    def test_index_pq(self):
+        """IndexPQ (full index, not just the PQ component)."""
+        xt, xb, xq = get_dataset_2(d, nt, nb, nq)
+        index = faiss.index_factory(d, "PQ4np")
+        index.train(xt)
+        index.add(xb)
+        Dref, Iref = index.search(xq, 5)
+
+        index2 = faiss.deserialize_index(faiss.serialize_index(index))
+        D2, I2 = index2.search(xq, 5)
+        np.testing.assert_array_equal(Iref, I2)
+        np.testing.assert_array_equal(Dref, D2)
+
+    def test_index_sq8(self):
+        """IndexScalarQuantizer with SQ8."""
+        xt, xb, xq = get_dataset_2(d, nt, nb, nq)
+        index = faiss.index_factory(d, "SQ8")
+        index.train(xt)
+        index.add(xb)
+        Dref, Iref = index.search(xq, 5)
+
+        index2 = faiss.deserialize_index(faiss.serialize_index(index))
+        D2, I2 = index2.search(xq, 5)
+        np.testing.assert_array_equal(Iref, I2)
+        np.testing.assert_array_equal(Dref, D2)
+
+    def test_vector_transform_pca(self):
+        """PCAMatrix VectorTransform with output fidelity check."""
+        xt, _, xq = get_dataset_2(d, nt, nb, nq)
+        pca = faiss.PCAMatrix(d, 16)
+        pca.train(xt)
+
+        writer = faiss.VectorIOWriter()
+        faiss.write_VectorTransform(pca, writer)
+
+        reader = faiss.VectorIOReader()
+        faiss.copy_array_to_vector(
+            np.array(faiss.vector_to_array(writer.data)), reader.data
+        )
+        pca2 = faiss.read_VectorTransform(reader)
+
+        self.assertEqual(pca2.d_in, d)
+        self.assertEqual(pca2.d_out, 16)
+
+        ref = pca.apply(xq)
+        out = pca2.apply(xq)
+        np.testing.assert_array_equal(ref, out)
+
+    def test_vector_transform_hadamard_rotation(self):
+        """HadamardRotation VectorTransform write/read round-trip."""
+        xt, _, xq = get_dataset_2(d, nt, nb, nq)
+        fr = faiss.HadamardRotation(d, 42)
+
+        writer = faiss.VectorIOWriter()
+        faiss.write_VectorTransform(fr, writer)
+
+        reader = faiss.VectorIOReader()
+        faiss.copy_array_to_vector(
+            np.array(faiss.vector_to_array(writer.data)), reader.data
+        )
+        fr2 = faiss.read_VectorTransform(reader)
+
+        self.assertEqual(fr2.d_in, d)
+        self.assertEqual(fr2.d_out, d)
+
+        ref = fr.apply(xq)
+        out = fr2.apply(xq)
+        np.testing.assert_array_equal(ref, out)
+
+    def test_index_pretransform_hadamard_rotation(self):
+        """Full index with HadamardRotation pre-transform round-trip."""
+        xt, xb, xq = get_dataset_2(d, nt, nb, nq)
+        index = faiss.index_factory(d, "HR,Flat")
+        index.train(xt)
+        index.add(xb)
+        Dref, Iref = index.search(xq, 5)
+
+        index2 = faiss.deserialize_index(faiss.serialize_index(index))
+        D2, I2 = index2.search(xq, 5)
+        np.testing.assert_array_equal(Iref, I2)
+        np.testing.assert_array_equal(Dref, D2)
+
+    def test_null_index(self):
+        """Serializing None / null index round-trips to None."""
+        writer = faiss.VectorIOWriter()
+        faiss.write_index(None, writer)
+
+        reader = faiss.VectorIOReader()
+        faiss.copy_array_to_vector(
+            np.array(faiss.vector_to_array(writer.data)), reader.data
+        )
+        index2 = faiss.read_index(reader)
+
+        self.assertIsNone(index2)
+
+
+class Test_IO_HNSW(unittest.TestCase):
+    def __init__(self, methodName="runTest"):
+        unittest.TestCase.__init__(self, methodName)
+        self.xt, self.xb, self.xq = get_dataset_2(d, nt, nb, nq)
+
+    def _test_roundtrip(self, index):
+        for _trips in range(3):
+            read_index = faiss.deserialize_index(faiss.serialize_index(index))
+            self.assertEqual(index.hnsw.efSearch, read_index.hnsw.efSearch)
+            self.assertEqual(
+                index.hnsw.efConstruction, read_index.hnsw.efConstruction
+            )
+            D, I = index.search(self.xq, 10)
+            D_read, I_read = read_index.search(self.xq, 10)
+            np.testing.assert_array_equal(D, D_read)
+            np.testing.assert_array_equal(I, I_read)
+            index = read_index  # test re-serialization
+
+    def _test_io_hnsw(self, index):
+        index.train(self.xt)
+        index.add(self.xb)
+        self._test_roundtrip(index)
+
+    def test_hnsw_flat(self):
+        index = faiss.IndexHNSWFlat(d, 16)
+        self._test_io_hnsw(index)
+
+    def test_hnsw_pq(self):
+        index = faiss.IndexHNSWPQ(d, 16, 16, 4)
+        self._test_io_hnsw(index)
+
+    def test_hnsw_prq(self):
+        """Exercise HNSW with aritrary storage"""
+        storage = faiss.IndexProductResidualQuantizer(
+            d, 8, 2, 4, faiss.METRIC_L2, faiss.AdditiveQuantizer.ST_norm_qint8
+        )
+        index = faiss.IndexHNSW(storage, 32)
+        del storage
+        self._test_io_hnsw(index)
+
+    def test_hnsw_noadd(self):
+        """Exercise HNSW with a swapped-out storage"""
+        index = faiss.IndexHNSWFlat(d, 16)
+        index.train(self.xt)
+        index.add(self.xb)
+        # Build the graph with Flat storage, then verify that swapping in an
+        # equivalent RaBitQ storage preserves useful search results.
+        I_flat = index.storage.assign(self.xq, 10)
+        I_hnsw_flat = index.assign(self.xq, 10)
+        index.storage = faiss.IndexRaBitQ(d)
+        index.storage.train(self.xb)
+        index.storage.add(self.xb)
+        I_hnsw_rabitq = index.assign(self.xq, 10)
+        recall_hnsw_flat = faiss.eval_intersection(I_hnsw_flat, I_flat)
+        recall_hnsw_rabitq = faiss.eval_intersection(I_hnsw_rabitq, I_flat)
+        self.assertGreater(recall_hnsw_flat, 0.999)
+        self.assertGreater(recall_hnsw_rabitq, 0.999)
+        self._test_roundtrip(index)

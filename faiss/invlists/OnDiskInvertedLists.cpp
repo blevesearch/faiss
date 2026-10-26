@@ -11,6 +11,7 @@
 
 #include <pthread.h>
 
+#include <memory>
 #include <unordered_set>
 
 #include <sys/mman.h>
@@ -111,7 +112,7 @@ struct LockLevels {
         level3_in_use = true;
         // wait until there are no level1 holders anymore except the
         // ones that are waiting on level2 (we are holding lock2)
-        while (level1_holders.size() > n_level2) {
+        while (level1_holders.size() > static_cast<size_t>(n_level2)) {
             pthread_cond_wait(&level3_cv, &mutex1);
         }
         // don't release the lock!
@@ -161,7 +162,7 @@ struct OnDiskInvertedLists::OngoingPrefetch {
                 cs += idx[i];
             }
             const idx_t* codes8 = (const idx_t*)codes;
-            idx_t n8 = n * od->code_size / 8;
+            size_t n8 = n * od->code_size / 8;
 
             for (size_t i = 0; i < n8; i++) {
                 cs += codes8[i];
@@ -187,7 +188,7 @@ struct OnDiskInvertedLists::OngoingPrefetch {
 
     const OnDiskInvertedLists* od;
 
-    explicit OngoingPrefetch(const OnDiskInvertedLists* od) : od(od) {
+    explicit OngoingPrefetch(const OnDiskInvertedLists* od_in) : od(od_in) {
         pthread_mutex_init(&mutex, nullptr);
         pthread_mutex_init(&list_ids_mutex, nullptr);
         cur_list = 0;
@@ -206,7 +207,7 @@ struct OnDiskInvertedLists::OngoingPrefetch {
     idx_t get_next_list() {
         idx_t list_no = -1;
         pthread_mutex_lock(&list_ids_mutex);
-        if (cur_list >= 0 && cur_list < list_ids.size()) {
+        if (cur_list >= 0 && static_cast<size_t>(cur_list) < list_ids.size()) {
             list_no = list_ids[cur_list++];
         }
         pthread_mutex_unlock(&list_ids_mutex);
@@ -320,7 +321,7 @@ void OnDiskInvertedLists::update_totsize(size_t new_size) {
             slots.push_back(Slot(totsize, new_size - totsize));
         }
     } else {
-        assert(!"not implemented");
+        assert(false && "not implemented");
     }
 
     totsize = new_size;
@@ -347,17 +348,17 @@ void OnDiskInvertedLists::update_totsize(size_t new_size) {
 
 OnDiskOneList::OnDiskOneList() : size(0), capacity(0), offset(INVALID_OFFSET) {}
 
-OnDiskInvertedLists::Slot::Slot(size_t offset, size_t capacity)
-        : offset(offset), capacity(capacity) {}
+OnDiskInvertedLists::Slot::Slot(size_t offset_in, size_t capacity_in)
+        : offset(offset_in), capacity(capacity_in) {}
 
 OnDiskInvertedLists::Slot::Slot() : offset(0), capacity(0) {}
 
 OnDiskInvertedLists::OnDiskInvertedLists(
-        size_t nlist,
-        size_t code_size,
-        const char* filename)
-        : InvertedLists(nlist, code_size),
-          filename(filename),
+        size_t nlist_in,
+        size_t code_size_in,
+        const char* filename_in)
+        : InvertedLists(nlist_in, code_size_in),
+          filename(filename_in),
           totsize(0),
           ptr(nullptr),
           pre_mapped(false),
@@ -418,7 +419,8 @@ void OnDiskInvertedLists::update_entries(
         size_t n_entry,
         const idx_t* ids_in,
         const uint8_t* codes_in) {
-    FAISS_THROW_IF_NOT(!read_only);
+    FAISS_THROW_IF_MSG(
+            read_only, "cannot modify a read-only OnDiskInvertedLists");
     if (n_entry == 0) {
         return;
     }
@@ -435,7 +437,8 @@ size_t OnDiskInvertedLists::add_entries(
         size_t n_entry,
         const idx_t* ids,
         const uint8_t* code) {
-    FAISS_THROW_IF_NOT(!read_only);
+    FAISS_THROW_IF_MSG(
+            read_only, "cannot modify a read-only OnDiskInvertedLists");
     locks->lock_1(list_no);
     size_t o = list_size(list_no);
     resize_locked(list_no, n_entry + o);
@@ -445,7 +448,8 @@ size_t OnDiskInvertedLists::add_entries(
 }
 
 void OnDiskInvertedLists::resize(size_t list_no, size_t new_size) {
-    FAISS_THROW_IF_NOT(!read_only);
+    FAISS_THROW_IF_MSG(
+            read_only, "cannot modify a read-only OnDiskInvertedLists");
     locks->lock_1(list_no);
     resize_locked(list_no, new_size);
     locks->unlock_1(list_no);
@@ -620,7 +624,7 @@ size_t OnDiskInvertedLists::merge_from_multiple(
     double t0 = getmillisecs(), last_t = t0;
 
 #pragma omp parallel for num_threads(num_omp_threads)
-    for (size_t j = 0; j < nlist; j++) {
+    for (int64_t j = 0; j < static_cast<int64_t>(nlist); j++) {
         List& l = lists[j];
         for (int i = 0; i < n_il; i++) {
             const InvertedLists* il = ils[i];
@@ -673,7 +677,7 @@ size_t OnDiskInvertedLists::merge_from_1(
 }
 
 void OnDiskInvertedLists::crop_invlists(size_t l0, size_t l1) {
-    FAISS_THROW_IF_NOT(0 <= l0 && l0 <= l1 && l1 <= nlist);
+    FAISS_THROW_IF_NOT(l0 <= l1 && l1 <= nlist);
 
     std::vector<List> new_lists(l1 - l0);
     memcpy(new_lists.data(), &lists[l0], (l1 - l0) * sizeof(List));
@@ -724,12 +728,17 @@ void OnDiskInvertedListsIOHook::write(const InvertedLists* ils, IOWriter* f)
 
 InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
         const {
-    OnDiskInvertedLists* od = new OnDiskInvertedLists();
+    auto od = std::make_unique<OnDiskInvertedLists>();
     od->read_only = io_flags & IO_FLAG_READ_ONLY;
     READ1(od->nlist);
     READ1(od->code_size);
     // this is a POD object
     READVECTOR(od->lists);
+    FAISS_THROW_IF_NOT_FMT(
+            od->lists.size() == od->nlist,
+            "OnDisk inverted lists: read %zu lists for nlist %zu",
+            od->lists.size(),
+            od->nlist);
     {
         std::vector<OnDiskInvertedLists::Slot> v;
         READVECTOR(v);
@@ -769,7 +778,7 @@ InvertedLists* OnDiskInvertedListsIOHook::read(IOReader* f, int io_flags)
     if (!(io_flags & IO_FLAG_SKIP_IVF_DATA)) {
         od->do_mmap();
     }
-    return od;
+    return od.release();
 }
 
 /**
@@ -801,7 +810,19 @@ InvertedLists* read_ArrayInvertedLists_MMAP(
         OnDiskInvertedLists::List& l = ails->lists[i];
         l.size = l.capacity = sizes[i];
         l.offset = o;
-        o += l.size * (sizeof(idx_t) + ails->code_size);
+        size_t elem_size = add_no_overflow(
+                sizeof(idx_t), ails->code_size, "OnDisk inverted list element");
+        size_t list_bytes =
+                mul_no_overflow(l.size, elem_size, "OnDisk inverted list");
+        o = add_no_overflow(o, list_bytes, "OnDisk inverted list offset");
+        FAISS_THROW_IF_NOT_FMT(
+                o <= ails->totsize,
+                "inverted list %zu at offset %zu with %zu bytes exceeds "
+                "mapped buffer size %zu",
+                i,
+                l.offset,
+                list_bytes,
+                ails->totsize);
     }
 
     // updating the read pointer appropriately, this is needed when the IVF
@@ -817,7 +838,7 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
         size_t nlist,
         size_t code_size,
         const std::vector<size_t>& sizes) const {
-    auto ails = new OnDiskInvertedLists();
+    auto ails = std::make_unique<OnDiskInvertedLists>();
     ails->nlist = nlist;
     ails->code_size = code_size;
     // currently this is set to true only when reading
@@ -830,7 +851,8 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
     }
 
     if (io_flags & IO_FLAG_READ_MMAP) {
-        return read_ArrayInvertedLists_MMAP(f, ails, sizes);
+        read_ArrayInvertedLists_MMAP(f, ails.get(), sizes);
+        return ails.release();
     }
 
     FileIOReader* reader = dynamic_cast<FileIOReader*>(f);
@@ -860,12 +882,24 @@ InvertedLists* OnDiskInvertedListsIOHook::read_ArrayInvertedLists(
         OnDiskInvertedLists::List& l = ails->lists[i];
         l.size = l.capacity = sizes[i];
         l.offset = o;
-        o += l.size * (sizeof(idx_t) + ails->code_size);
+        size_t elem_size = add_no_overflow(
+                sizeof(idx_t), ails->code_size, "OnDisk inverted list element");
+        size_t list_bytes =
+                mul_no_overflow(l.size, elem_size, "OnDisk inverted list");
+        o = add_no_overflow(o, list_bytes, "OnDisk inverted list offset");
+        FAISS_THROW_IF_NOT_FMT(
+                o <= ails->totsize,
+                "inverted list %zu at offset %zu with %zu bytes exceeds "
+                "mapped file size %zu",
+                i,
+                l.offset,
+                list_bytes,
+                ails->totsize);
     }
     // resume normal reading of file
     fseek(fdesc, o, SEEK_SET);
 
-    return ails;
+    return ails.release();
 }
 
 } // namespace faiss

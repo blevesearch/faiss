@@ -17,7 +17,9 @@
 #include <faiss/AutoTune.h>
 #include <faiss/IVFlib.h>
 #include <faiss/IndexBinaryIVF.h>
+#include <faiss/IndexFlat.h>
 #include <faiss/IndexIVF.h>
+#include <faiss/IndexIVFRaBitQ.h>
 #include <faiss/clone_index.h>
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/IDSelector.h>
@@ -52,10 +54,10 @@ std::unique_ptr<Index> make_index(
         MetricType metric,
         const std::vector<float>& x) {
     assert(x.size() % d == 0);
-    idx_t nb = x.size() / d;
+    idx_t local_nb = x.size() / d;
     std::unique_ptr<Index> index(index_factory(d, index_type, metric));
-    index->train(nb, x.data());
-    index->add(nb, x.data());
+    index->train(local_nb, x.data());
+    index->add(local_nb, x.data());
     return index;
 }
 
@@ -118,6 +120,93 @@ int test_params_override(const char* index_key, MetricType metric) {
  * Test subsets
  *************************************************************/
 
+/*************************************************************
+ * Test ensure_topk_full behavior
+ *************************************************************/
+
+// With a tight max_codes budget the default search (ensure_topk_full=false)
+// should truncate results, yielding -1 placeholders. With ensure_topk_full=true
+// the same budget becomes soft: the probe loop keeps running until k raw
+// candidates have been scanned, so placeholders disappear (data permitting).
+int test_ensure_topk_full(const char* index_key, MetricType metric) {
+    std::vector<float> xb = make_data(nb);
+    auto index = make_index(index_key, metric, xb);
+    std::vector<float> xq = make_data(nq);
+
+    constexpr int k = 10;
+    // Budget: smaller than k codes per query. Guaranteed truncation when
+    // ensure_topk_full is false.
+    const size_t tight_budget = k / 2;
+
+    IVFSearchParameters p;
+    p.nprobe = 32;
+    p.max_codes = tight_budget;
+    p.ensure_topk_full = false;
+    auto res_tight = search_index_with_params(index.get(), xq.data(), &p);
+
+    p.ensure_topk_full = true;
+    auto res_full = search_index_with_params(index.get(), xq.data(), &p);
+
+    size_t miss_tight =
+            std::count(res_tight.begin(), res_tight.end(), (idx_t)-1);
+    size_t miss_full = std::count(res_full.begin(), res_full.end(), (idx_t)-1);
+
+    // ensure_topk_full=true must produce at least as many valid slots as
+    // ensure_topk_full=false; in practice it must strictly reduce -1 count
+    // given our tight budget.
+    if (miss_full > miss_tight) {
+        return 1;
+    }
+    if (miss_tight == 0) {
+        // Test assumption violated: budget should have caused truncation.
+        return 2;
+    }
+    return 0;
+}
+
+// Regression test: when all three new fields are left at defaults the
+// search behaves identically to a search with no params at all. This is the
+// backward-compatibility guarantee for pre-existing baseline callers.
+int test_defaults_preserve_baseline(const char* index_key, MetricType metric) {
+    std::vector<float> xb = make_data(nb);
+    auto index = make_index(index_key, metric, xb);
+    std::vector<float> xq = make_data(nq);
+
+    ParameterSpace ps;
+    ps.set_index_parameter(index.get(), "nprobe", 4);
+    auto res_no_params = search_index(index.get(), xq.data());
+
+    IVFSearchParameters p; // default-constructed: all new fields at 0/false
+    p.nprobe = 4;
+    auto res_default_params =
+            search_index_with_params(index.get(), xq.data(), &p);
+
+    if (res_no_params != res_default_params) {
+        return 1;
+    }
+    return 0;
+}
+
+// IDSelectorWithContext that delegates the verdict to an inner IDSelector while
+// exercising the context parameters. Used to prove that a scanner (a) returns
+// results identical to the plain is_member path and (b) actually routes through
+// is_member_with_context — n_context_calls counts how often the context path
+// fired, so a scanner that silently dropped the hook is detectable.
+struct ContextSelector : IDSelectorWithContext {
+    const IDSelector& inner;
+    mutable size_t n_context_calls = 0;
+    explicit ContextSelector(const IDSelector& inner) : inner(inner) {}
+    bool is_member(idx_t id) const override {
+        return inner.is_member(id);
+    }
+    bool is_member_with_context(idx_t id, const IDScanContext& ctx)
+            const override {
+        (void)ctx;
+        ++n_context_calls;
+        return inner.is_member(id);
+    }
+};
+
 int test_selector(const char* index_key) {
     std::vector<float> xb = make_data(nb); // database vectors
     std::vector<float> xq = make_data(nq);
@@ -125,7 +214,7 @@ int test_selector(const char* index_key) {
 
     std::vector<float> sub_xb;
     std::vector<idx_t> kept;
-    for (idx_t i = 0; i < nb; i++) {
+    for (size_t i = 0; i < nb; i++) {
         if (i % 10 == 2) {
             kept.push_back(i);
             sub_xb.insert(
@@ -156,6 +245,74 @@ int test_selector(const char* index_key) {
     }
 
     return 0;
+}
+
+// Runs the same membership set (every id where i % 10 == 2) through a plain
+// IDSelectorBatch and through a ContextSelector wrapping it, on an
+// already-trained index. Returns:
+//   0 if the context path fired AND labels are byte-identical to the plain
+//   path, 1 if the results diverged (a correctness regression), 2 if the
+//   scanner never routed through is_member_with_context (the hook was
+//     silently dropped for this index type).
+int check_ctx_matches_plain(Index& index) {
+    std::vector<float> xq = make_data(nq);
+
+    std::vector<idx_t> kept;
+    for (size_t i = 0; i < nb; i++) {
+        if (i % 10 == 2) {
+            kept.push_back(i);
+        }
+    }
+    IDSelectorBatch batch(kept.size(), kept.data());
+
+    // Plain IDSelector path.
+    IVFSearchParameters plain_params;
+    plain_params.max_codes = 0;
+    plain_params.nprobe = 3;
+    plain_params.sel = &batch;
+    auto plain_result =
+            search_index_with_params(&index, xq.data(), &plain_params);
+
+    // IDSelectorWithContext path over the same membership set.
+    ContextSelector ctx_sel(batch);
+    IVFSearchParameters ctx_params;
+    ctx_params.max_codes = 0;
+    ctx_params.nprobe = 3;
+    ctx_params.sel = &ctx_sel;
+    auto ctx_result = search_index_with_params(&index, xq.data(), &ctx_params);
+
+    if (plain_result != ctx_result) {
+        return 1;
+    }
+    if (ctx_sel.n_context_calls == 0) {
+        return 2;
+    }
+    return 0;
+}
+
+// Same membership set as test_selector, but driven through an
+// IDSelectorWithContext to prove the context scan path is functionally
+// identical to — and actually exercised by — the given index type.
+int test_selector_with_context(const char* index_key) {
+    std::vector<float> xb = make_data(nb);
+    auto index = make_index(index_key, METRIC_L2, xb);
+    // nprobe is set explicitly in the IVFSearchParameters inside
+    // check_ctx_matches_plain, so no need to set it on the index here.
+    return check_ctx_matches_plain(*index);
+}
+
+// Multibit RaBitQ (nb_bits >= 2) scans through the two hand-written loops in
+// RaBitQuantizer.cpp rather than run_scan_codes1, so it needs the context hook
+// wired separately. nb_bits=3 => ex_bits=2 => scan_codes_multibit; the default
+// qb keeps a real quantized-query distance computer (no 1-bit fallback).
+int test_selector_with_context_rabitq_multibit() {
+    std::vector<float> xb = make_data(nb);
+    IndexFlatL2 quantizer(d);
+    IndexIVFRaBitQ index(
+            &quantizer, d, 32, METRIC_L2, /*own_invlists=*/true, /*nb_bits=*/3);
+    index.train(nb, xb.data());
+    index.add(nb, xb.data());
+    return check_ctx_matches_plain(index);
 }
 
 } // namespace
@@ -192,6 +349,33 @@ TEST(TPO, IVFFlatPP) {
     EXPECT_EQ(err2, 0);
 }
 
+TEST(TPOEnsureTopK, IVFFlat) {
+    EXPECT_EQ(test_ensure_topk_full("IVF32,Flat", METRIC_L2), 0);
+    EXPECT_EQ(test_ensure_topk_full("IVF32,Flat", METRIC_INNER_PRODUCT), 0);
+}
+
+TEST(TPOEnsureTopK, IVFPQ) {
+    EXPECT_EQ(test_ensure_topk_full("IVF32,PQ8np", METRIC_L2), 0);
+    EXPECT_EQ(test_ensure_topk_full("IVF32,PQ8np", METRIC_INNER_PRODUCT), 0);
+}
+
+TEST(TPOEnsureTopK, IVFSQ) {
+    EXPECT_EQ(test_ensure_topk_full("IVF32,SQ8", METRIC_L2), 0);
+    EXPECT_EQ(test_ensure_topk_full("IVF32,SQ8", METRIC_INNER_PRODUCT), 0);
+}
+
+TEST(TPODefaults, IVFFlat) {
+    EXPECT_EQ(test_defaults_preserve_baseline("IVF32,Flat", METRIC_L2), 0);
+}
+
+TEST(TPODefaults, IVFPQ) {
+    EXPECT_EQ(test_defaults_preserve_baseline("IVF32,PQ8np", METRIC_L2), 0);
+}
+
+TEST(TPODefaults, IVFSQ) {
+    EXPECT_EQ(test_defaults_preserve_baseline("IVF32,SQ8", METRIC_L2), 0);
+}
+
 TEST(TSEL, IVFFlat) {
     int err = test_selector("PCA16,IVF32,Flat");
     EXPECT_EQ(err, 0);
@@ -205,6 +389,31 @@ TEST(TSEL, IVFFPQ) {
 TEST(TSEL, IVFFSQ) {
     int err = test_selector("PCA16,IVF32,SQ8");
     EXPECT_EQ(err, 0);
+}
+
+// An IDSelectorWithContext must be functionally identical to a plain
+// IDSelector AND actually exercised (results must not silently fall back to
+// is_member) on every applicable IVF scanner. IVFFlat/IVFSQ route through
+// run_scan_codes1; IVFPQ through WrappedSearchResult::skip_entry; multibit
+// RaBitQ through its two hand-written scan loops.
+TEST(TSELCtx, IVFFlat) {
+    EXPECT_EQ(test_selector_with_context("PCA16,IVF32,Flat"), 0);
+}
+
+TEST(TSELCtx, IVFFPQ) {
+    EXPECT_EQ(test_selector_with_context("PCA16,IVF32,PQ4x8np"), 0);
+}
+
+TEST(TSELCtx, IVFFSQ) {
+    EXPECT_EQ(test_selector_with_context("PCA16,IVF32,SQ8"), 0);
+}
+
+TEST(TSELCtx, RaBitQMultibit) {
+    EXPECT_EQ(test_selector_with_context_rabitq_multibit(), 0);
+}
+
+TEST(TSELCtx, Panorama) {
+    EXPECT_EQ(test_selector_with_context("IVF32,FlatPanorama"), 0);
 }
 
 /*************************************************************
