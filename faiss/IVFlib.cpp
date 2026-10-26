@@ -18,6 +18,7 @@
 #include <faiss/MetaIndexes.h>
 #include <faiss/clone_index.h>
 #include <faiss/impl/FaissAssert.h>
+#include <faiss/impl/simd_dispatch.h>
 #include <faiss/index_io.h>
 #include <faiss/utils/distances.h>
 #include <faiss/utils/hamming.h>
@@ -36,7 +37,7 @@ void check_compatible_for_merge(const Index* index0, const Index* index1) {
         FAISS_THROW_IF_NOT_MSG(pt1, "both indexes should be pretransforms");
 
         FAISS_THROW_IF_NOT(pt0->chain.size() == pt1->chain.size());
-        for (int i = 0; i < pt0->chain.size(); i++) {
+        for (size_t i = 0; i < pt0->chain.size(); i++) {
             FAISS_THROW_IF_NOT(typeid(pt0->chain[i]) == typeid(pt1->chain[i]));
         }
 
@@ -124,7 +125,7 @@ void search_centroid(
         index = index_pre->index;
     }
     faiss::IndexIVF* index_ivf = dynamic_cast<faiss::IndexIVF*>(index);
-    assert(index_ivf);
+    FAISS_THROW_IF_NOT_MSG(index_ivf, "could not extract IVF index");
     index_ivf->quantizer->assign(n, x, centroid_ids);
 }
 
@@ -145,7 +146,7 @@ void search_and_return_centroids(
         index = index_pre->index;
     }
     faiss::IndexIVF* index_ivf = dynamic_cast<faiss::IndexIVF*>(index);
-    assert(index_ivf);
+    FAISS_THROW_IF_NOT_MSG(index_ivf, "could not extract IVF index");
 
     size_t nprobe = index_ivf->nprobe;
     std::vector<idx_t> cent_nos(n * nprobe);
@@ -179,9 +180,9 @@ void search_and_return_centroids(
     }
 }
 
-SlidingIndexWindow::SlidingIndexWindow(Index* index) : index(index) {
+SlidingIndexWindow::SlidingIndexWindow(Index* index_) : index(index_) {
     n_slice = 0;
-    IndexIVF* index_ivf = const_cast<IndexIVF*>(extract_index_ivf(index));
+    IndexIVF* index_ivf = const_cast<IndexIVF*>(extract_index_ivf(index_));
     ils = dynamic_cast<ArrayInvertedLists*>(index_ivf->invlists);
     FAISS_THROW_IF_NOT_MSG(
             ils, "only supports indexes with ArrayInvertedLists");
@@ -248,7 +249,7 @@ void SlidingIndexWindow::step(const Index* sub_index, bool remove_oldest) {
     IndexIVF* index_ivf = extract_index_ivf(index);
 
     if (remove_oldest && ils2) {
-        for (int i = 0; i < nlist; i++) {
+        for (size_t i = 0; i < nlist; i++) {
             std::vector<size_t>& sizesi = sizes[i];
             size_t amount_to_remove = sizesi[0];
             index_ivf->ntotal += ils2->ids[i].size() - amount_to_remove;
@@ -264,7 +265,7 @@ void SlidingIndexWindow::step(const Index* sub_index, bool remove_oldest) {
             sizesi[n_slice - 1] = ils->ids[i].size();
         }
     } else if (ils2) {
-        for (int i = 0; i < nlist; i++) {
+        for (size_t i = 0; i < nlist; i++) {
             index_ivf->ntotal += ils2->ids[i].size();
             shift_and_add(ils->ids[i], 0, ils2->ids[i]);
             shift_and_add(ils->codes[i], 0, ils2->codes[i]);
@@ -272,7 +273,7 @@ void SlidingIndexWindow::step(const Index* sub_index, bool remove_oldest) {
         }
         n_slice++;
     } else if (remove_oldest) {
-        for (int i = 0; i < nlist; i++) {
+        for (size_t i = 0; i < nlist; i++) {
             size_t amount_to_remove = sizes[i][0];
             index_ivf->ntotal -= amount_to_remove;
             remove_from_begin(ils->ids[i], amount_to_remove);
@@ -295,7 +296,8 @@ void SlidingIndexWindow::step(const Index* sub_index, bool remove_oldest) {
 ArrayInvertedLists* get_invlist_range(const Index* index, long i0, long i1) {
     const IndexIVF* ivf = extract_index_ivf(index);
 
-    FAISS_THROW_IF_NOT(0 <= i0 && i0 <= i1 && i1 <= ivf->nlist);
+    FAISS_THROW_IF_NOT(
+            0 <= i0 && i0 <= i1 && static_cast<size_t>(i1) <= ivf->nlist);
 
     const InvertedLists* src = ivf->invlists;
 
@@ -318,12 +320,14 @@ void set_invlist_range(
         ArrayInvertedLists* src) {
     IndexIVF* ivf = extract_index_ivf(index);
 
-    FAISS_THROW_IF_NOT(0 <= i0 && i0 <= i1 && i1 <= ivf->nlist);
+    FAISS_THROW_IF_NOT(
+            0 <= i0 && i0 <= i1 && static_cast<size_t>(i1) <= ivf->nlist);
 
     ArrayInvertedLists* dst = dynamic_cast<ArrayInvertedLists*>(ivf->invlists);
     FAISS_THROW_IF_NOT_MSG(dst, "only ArrayInvertedLists supported");
     FAISS_THROW_IF_NOT(
-            src->nlist == i1 - i0 && dst->code_size == src->code_size);
+            src->nlist == static_cast<size_t>(i1 - i0) &&
+            dst->code_size == src->code_size);
 
     size_t ntotal = index->ntotal;
     for (long i = i0; i < i1; i++) {
@@ -341,7 +345,7 @@ static size_t count_ndis(
         const idx_t* Iq) {
     size_t nb_dis = 0;
     const InvertedLists* il = index_ivf->invlists;
-    for (idx_t i = 0; i < n_list_scan; i++) {
+    for (size_t i = 0; i < n_list_scan; i++) {
         if (Iq[i] >= 0) {
             nb_dis += il->list_size(Iq[i]);
         }
@@ -456,12 +460,12 @@ void range_search_with_parameters(
 IndexIVFResidualQuantizer* ivf_residual_from_quantizer(
         const ResidualQuantizer& rq,
         int nlevel) {
-    FAISS_THROW_IF_NOT(nlevel > 0 && nlevel + 1 < rq.M);
+    FAISS_THROW_IF_NOT(nlevel > 0 && static_cast<size_t>(nlevel + 1) < rq.M);
 
     std::vector<size_t> nbits(nlevel);
     std::copy(rq.nbits.begin(), rq.nbits.begin() + nlevel, nbits.begin());
     std::unique_ptr<ResidualCoarseQuantizer> rcq(
-            new ResidualCoarseQuantizer(rq.d, nbits));
+            new ResidualCoarseQuantizer(static_cast<int>(rq.d), nbits));
 
     // set the coarse quantizer from the 2 first quantizers
     rcq->rq.initialize_from(rq);
@@ -476,7 +480,7 @@ IndexIVFResidualQuantizer* ivf_residual_from_quantizer(
 
     // build a IVFResidualQuantizer from that
     std::vector<size_t> nbits_refined;
-    for (int i = nlevel; i < rq.M; i++) {
+    for (size_t i = nlevel; i < rq.M; i++) {
         nbits_refined.push_back(rq.nbits[i]);
     }
     std::unique_ptr<IndexIVFResidualQuantizer> index(
@@ -488,7 +492,8 @@ IndexIVFResidualQuantizer* ivf_residual_from_quantizer(
                     faiss::METRIC_L2,
                     rq.search_type));
     index->own_fields = true;
-    rcq.release();
+    // Ownership transferred to index via own_fields = true
+    (void)rcq.release();
     index->by_residual = true;
     index->rq.initialize_from(rq, nlevel);
     index->is_trained = true;
@@ -512,39 +517,43 @@ void ivf_residual_add_from_flat_codes(
     const ResidualQuantizer& rq = index->rq;
 
     // populate inverted lists
-#pragma omp parallel if (nb > 10000) num_threads(num_omp_threads)
-    {
-        std::vector<uint8_t> tmp_code(index->code_size);
-        std::vector<float> tmp(rq.d);
-        int nt = omp_get_num_threads();
-        int rank = omp_get_thread_num();
+    with_simd_level([&]<SIMDLevel SL>() {
+#pragma omp parallel num_threads(num_omp_threads)
+        {
+            std::vector<uint8_t> tmp_code(index->rq.code_size);
+            std::vector<float> tmp(rq.d);
+            int nt = omp_get_num_threads();
+            int rank = omp_get_thread_num();
 
 #pragma omp for
-        for (idx_t i = 0; i < nb; i++) {
-            const uint8_t* code = &raw_codes[i * code_size];
-            BitstringReader rd(code, code_size);
-            idx_t list_no = rd.read(rcq->rq.tot_bits);
+            for (idx_t i = 0; i < static_cast<idx_t>(nb); i++) {
+                const uint8_t* code = &raw_codes[i * code_size];
+                BitstringReader rd(code, code_size);
+                idx_t list_no = rd.read(static_cast<int>(rcq->rq.tot_bits));
 
-            if (list_no % nt ==
-                rank) { // each thread takes care of 1/nt of the invlists
-                // copy AQ indexes one by one
-                BitstringWriter wr(tmp_code.data(), tmp_code.size());
-                for (int j = 0; j < rq.M; j++) {
-                    int nbit = rq.nbits[j];
-                    wr.write(rd.read(nbit), nbit);
+                if (list_no % nt ==
+                    rank) { // each thread takes care of 1/nt of the invlists
+                    // copy AQ indexes one by one
+                    BitstringWriter wr(tmp_code.data(), tmp_code.size());
+                    for (size_t j = 0; j < rq.M; j++) {
+                        int nbit = static_cast<int>(rq.nbits[j]);
+                        wr.write(rd.read(nbit), nbit);
+                    }
+                    // we need to recompute the norm
+                    // decode first, does not use the norm component, so that's
+                    // ok
+                    index->rq.decode(tmp_code.data(), tmp.data(), 1);
+                    float norm = fvec_norm_L2sqr<SL>(tmp.data(), rq.d);
+                    wr.write(
+                            rq.encode_norm(norm),
+                            static_cast<int>(rq.norm_bits));
+
+                    // add code to the inverted list
+                    invlists.add_entry(list_no, i, tmp_code.data());
                 }
-                // we need to recompute the norm
-                // decode first, does not use the norm component, so that's
-                // ok
-                index->rq.decode(tmp_code.data(), tmp.data(), 1);
-                float norm = fvec_norm_L2sqr(tmp.data(), rq.d);
-                wr.write(rq.encode_norm(norm), rq.norm_bits);
-
-                // add code to the inverted list
-                invlists.add_entry(list_no, i, tmp_code.data());
             }
         }
-    }
+    });
     index->ntotal += nb;
 }
 
@@ -583,8 +592,12 @@ void handle_ivf(
                 static_cast<faiss::IndexIVF*>(faiss::clone_index(clone));
         if (generate_ids) {
             // Assume the quantizer does not natively support add_with_ids.
-            sharded_index->quantizer =
-                    new IndexIDMap2(sharded_index->quantizer);
+            // The IDMap wraps the cloned quantizer; own_fields makes it delete
+            // that quantizer when sharded_index (which owns the IDMap) is
+            // freed.
+            auto* id_quantizer = new IndexIDMap2(sharded_index->quantizer);
+            id_quantizer->own_fields = true;
+            sharded_index->quantizer = id_quantizer;
             sharded_index->quantizer->add_with_ids(
                     sharded_centroids[i].size() / index->quantizer->d,
                     sharded_centroids[i].data(),
@@ -595,10 +608,18 @@ void handle_ivf(
                     sharded_centroids[i].data());
         }
         char fname[256];
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
         snprintf(fname, 256, filename_template.c_str(), i);
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         faiss::write_index(sharded_index, fname);
         delete sharded_index;
     }
+    delete clone;
 }
 
 void handle_binary_ivf(
@@ -634,8 +655,13 @@ void handle_binary_ivf(
                 faiss::clone_binary_index(clone));
         if (generate_ids) {
             // Assume the quantizer does not natively support add_with_ids.
-            sharded_index->quantizer =
+            // The IDMap wraps the cloned quantizer; own_fields makes it delete
+            // that quantizer when sharded_index (which owns the IDMap) is
+            // freed.
+            auto* id_quantizer =
                     new IndexBinaryIDMap2(sharded_index->quantizer);
+            id_quantizer->own_fields = true;
+            sharded_index->quantizer = id_quantizer;
             sharded_index->quantizer->add_with_ids(
                     sharded_centroids[i].size() / reconstruction_size,
                     sharded_centroids[i].data(),
@@ -646,10 +672,18 @@ void handle_binary_ivf(
                     sharded_centroids[i].data());
         }
         char fname[256];
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
         snprintf(fname, 256, filename_template.c_str(), i);
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         faiss::write_index_binary(sharded_index, fname);
         delete sharded_index;
     }
+    delete clone;
 }
 
 template <typename IndexType>

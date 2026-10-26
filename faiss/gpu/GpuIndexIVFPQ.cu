@@ -93,8 +93,8 @@ GpuIndexIVFPQ::GpuIndexIVFPQ(
     // instance
     this->is_trained = false;
 
-    FAISS_THROW_IF_NOT_MSG(
-            !config.use_cuvs,
+    FAISS_THROW_IF_MSG(
+            config.use_cuvs,
             "GpuIndexIVFPQ: cuVS does not support separate coarseQuantizer");
 
     verifyPQSettings_();
@@ -171,8 +171,8 @@ void GpuIndexIVFPQ::copyTo(faiss::IndexIVFPQ* index) const {
     DeviceScope scope(config_.device);
 
     // We must have the indices in order to copy to ourselves
-    FAISS_THROW_IF_NOT_MSG(
-            ivfpqConfig_.indicesOptions != INDICES_IVF,
+    FAISS_THROW_IF_MSG(
+            ivfpqConfig_.indicesOptions == INDICES_IVF,
             "Cannot copy to CPU as GPU index doesn't retain "
             "indices (INDICES_IVF)");
 
@@ -424,10 +424,10 @@ void GpuIndexIVFPQ::train(idx_t n, const float* x) {
         cuvs::neighbors::ivf_pq::index_params cuvs_index_params;
         cuvs_index_params.n_lists = nlist;
         cuvs_index_params.metric = metricFaissToCuvs(metric_type, false);
-        cuvs_index_params.kmeans_trainset_fraction =
-                static_cast<double>(cp.max_points_per_centroid * nlist) /
-                static_cast<double>(n);
-        cuvs_index_params.kmeans_n_iters = cp.niter;
+        // kmeans_trainset_fraction and kmeans_n_iters intentionally left
+        // at cuVS defaults (0.5 and 20). Faiss's cp.max_points_per_centroid
+        // (256) was designed for CPU k-means and produces severely
+        // underparameterized training at scale through cuVS.
         cuvs_index_params.pq_bits = bitsPerCode_;
         cuvs_index_params.pq_dim = subQuantizers_;
         cuvs_index_params.conservative_memory_allocation = false;

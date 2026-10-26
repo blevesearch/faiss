@@ -10,6 +10,7 @@
 #ifndef FAISS_CLUSTERING_H
 #define FAISS_CLUSTERING_H
 #include <faiss/Index.h>
+#include <faiss/impl/ClusteringInitialization.h>
 
 #include <vector>
 
@@ -57,6 +58,31 @@ struct ClusteringParameters {
     /// Whether to use splitmix64-based random number generator for subsampling,
     /// which is faster, but may pick duplicate points.
     bool use_faster_subsampling = false;
+
+    /// Initialization method for centroids.
+    /// RANDOM: uniform random sampling (default, current behavior)
+    /// KMEANS_PLUS_PLUS: k-means++ (O(nkd), better quality)
+    /// AFK_MC2: Assumption-Free K-MC² (O(nd) + O(mk²d), fast approximation)
+    ClusteringInitMethod init_method = ClusteringInitMethod::RANDOM;
+
+    /// Chain length for AFK-MC² initialization.
+    /// Only used when init_method = AFK_MC2.
+    /// Longer chains give better approximation but are slower.
+    uint16_t afkmc2_chain_length = 50;
+
+    /// Early stop threshold, the range is [0, 1].
+    /// The value of 0 implies a default Faiss behavior,
+    /// so the training process stops only if an error
+    /// is unchanged from the previous iteration.
+    double early_stop_threshold = 0.0;
+
+    /// Whether to use the SuperKMeans (super fast k-means) variant instead of
+    /// the vanilla Clustering implementation. Only honored by callers that
+    /// explicitly support it (e.g. IVF level-1 quantizer training). Cannot be
+    /// combined with a user-provided clustering index: SuperKMeans assigns
+    /// with its own index, so callers that supply both get an exception rather
+    /// than a silent downgrade to vanilla Clustering.
+    bool use_super_kmeans = false;
 };
 
 struct ClusteringIterationStats {

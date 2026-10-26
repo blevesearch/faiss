@@ -13,6 +13,7 @@ import platform
 import faiss
 import unittest
 
+from common_faiss_tests import for_all_simd_levels
 from faiss.contrib import datasets
 
 faiss.omp_set_num_threads(4)
@@ -50,8 +51,8 @@ def compute_binary_terms_ref(codebooks):
     M, K, d = codebooks.shape
 
     codebooks_t = np.swapaxes(codebooks, 1, 2)  # [M, d, K]
-    binaries = 2 * codebooks.dot(codebooks_t)   # [M, K, M, K]
-    binaries = np.swapaxes(binaries, 1, 2)      # [M, M, K, K]
+    binaries = 2 * codebooks.dot(codebooks_t)  # [M, K, M, K]
+    binaries = np.swapaxes(binaries, 1, 2)  # [M, M, K, K]
 
     return binaries
 
@@ -117,6 +118,7 @@ def icm_encode_ref(x, codebooks, codes):
     return codes
 
 
+@for_all_simd_levels
 class TestComponents(unittest.TestCase):
 
     def test_decode(self):
@@ -125,7 +127,7 @@ class TestComponents(unittest.TestCase):
         n = 500
         M = 4
         nbits = 6
-        K = (1 << nbits)
+        K = 1 << nbits
 
         rs = np.random.RandomState(123)
         x = rs.rand(n, d).astype(np.float32)
@@ -146,15 +148,17 @@ class TestComponents(unittest.TestCase):
 
         np.testing.assert_allclose(decoded_x, decoded_x_ref, rtol=1e-6)
 
-    @unittest.skipIf(platform.system() == 'Windows',
-                     'Does not work on Windows after numpy 2 upgrade.')
+    @unittest.skipIf(
+        platform.system() == "Windows",
+        "Does not work on Windows after numpy 2 upgrade.",
+    )
     def test_update_codebooks(self):
         """Test codebooks updatation."""
         d = 16
         n = 500
         M = 4
         nbits = 6
-        K = (1 << nbits)
+        K = 1 << nbits
 
         # set a larger value to make the updating process more stable
         lambd = 1e-2
@@ -176,7 +180,9 @@ class TestComponents(unittest.TestCase):
 
         ref_codebooks = update_codebooks_ref(x, codes, K, lambd)
 
-        np.testing.assert_allclose(new_codebooks, ref_codebooks, rtol=1e-3, atol=1e-3)
+        np.testing.assert_allclose(
+            new_codebooks, ref_codebooks, rtol=1e-3, atol=1e-3
+        )
 
     def test_update_codebooks_with_double(self):
         """If the data is not zero-centering, it would be more accurate to
@@ -206,7 +212,7 @@ class TestComponents(unittest.TestCase):
         n = 500
         M = 4
         nbits = 6
-        K = (1 << nbits)
+        K = 1 << nbits
 
         rs = np.random.RandomState(123)
         x = rs.rand(n, d).astype(np.float32)
@@ -221,16 +227,14 @@ class TestComponents(unittest.TestCase):
         codebooks = codebooks.reshape(M, K, d).copy()
         ref_binaries = compute_binary_terms_ref(codebooks)
 
-        np.testing.assert_allclose(
-            binaries, ref_binaries, rtol=1e-4, atol=1e-4
-        )
+        np.testing.assert_allclose(binaries, ref_binaries, rtol=1e-4, atol=1e-4)
 
     def test_compute_unary_terms(self):
         d = 16
         n = 500
         M = 4
         nbits = 6
-        K = (1 << nbits)
+        K = 1 << nbits
 
         rs = np.random.RandomState(123)
         x = rs.rand(n, d).astype(np.float32)
@@ -252,7 +256,7 @@ class TestComponents(unittest.TestCase):
         n = 500
         M = 4
         nbits = 6
-        K = (1 << nbits)
+        K = 1 << nbits
 
         rs = np.random.RandomState(123)
 
@@ -274,12 +278,7 @@ class TestComponents(unittest.TestCase):
 
         # do icm encoding given binary and unary terms
         lsq = faiss.LocalSearchQuantizer(d, M, nbits)
-        lsq.icm_encode_step(
-            sp(new_codes),
-            sp(unaries),
-            sp(binaries),
-            n,
-            1)
+        lsq.icm_encode_step(sp(new_codes), sp(unaries), sp(binaries), n, 1)
 
         # do icm encoding given binary and unary terms in Python
         ref_codes = icm_encode_step_ref(unaries, binaries, codes)
@@ -290,7 +289,7 @@ class TestComponents(unittest.TestCase):
         n = 500
         M = 4
         nbits = 4
-        K = (1 << nbits)
+        K = 1 << nbits
 
         rs = np.random.RandomState(123)
         x = rs.rand(n, d).astype(np.float32)
@@ -311,12 +310,7 @@ class TestComponents(unittest.TestCase):
         new_codes = codes.copy()
 
         # do icm encoding given binary and unary terms
-        lsq.icm_encode_step(
-            sp(new_codes),
-            sp(unaries),
-            sp(binaries),
-            n,
-            1)
+        lsq.icm_encode_step(sp(new_codes), sp(unaries), sp(binaries), n, 1)
 
         # do icm encoding without pre-computed unary and binary terms in Python
         codebooks = faiss.vector_float_to_array(lsq.codebooks)
@@ -332,6 +326,7 @@ def eval_codec(q, xb):
     return ((xb - decoded) ** 2).sum()
 
 
+@for_all_simd_levels
 class TestLocalSearchQuantizer(unittest.TestCase):
 
     def test_training(self):
@@ -372,7 +367,8 @@ class TestIndexLocalSearchQuantizer(unittest.TestCase):
 
         AQ = faiss.AdditiveQuantizer
         ir2 = faiss.IndexLocalSearchQuantizer(
-            ds.d, 4, 5, faiss.METRIC_L2, AQ.ST_norm_float)
+            ds.d, 4, 5, faiss.METRIC_L2, AQ.ST_norm_float
+        )
 
         ir2.train(ds.get_train())  # just to set flags properly
         ir2.lsq.codebooks = ir.lsq.codebooks
@@ -416,22 +412,18 @@ class TestIndexLocalSearchQuantizer(unittest.TestCase):
         self.assertEqual(index.lsq.M, 5)
         self.assertEqual(index.lsq.K, 1 << 6)
         self.assertEqual(
-            index.lsq.search_type,
-            faiss.AdditiveQuantizer.ST_norm_qint8
+            index.lsq.search_type, faiss.AdditiveQuantizer.ST_norm_qint8
         )
 
         index = faiss.index_factory(20, "LSQ5x6_Ncqint8")
         self.assertEqual(
-            index.lsq.search_type,
-            faiss.AdditiveQuantizer.ST_norm_cqint8
+            index.lsq.search_type, faiss.AdditiveQuantizer.ST_norm_cqint8
         )
 
         index = faiss.index_factory(20, "LSQ5x6_Ncqint4")
         self.assertEqual(
-            index.lsq.search_type,
-            faiss.AdditiveQuantizer.ST_norm_cqint4
+            index.lsq.search_type, faiss.AdditiveQuantizer.ST_norm_cqint4
         )
-
 
 
 class TestIndexIVFLocalSearchQuantizer(unittest.TestCase):
@@ -442,14 +434,12 @@ class TestIndexIVFLocalSearchQuantizer(unittest.TestCase):
         self.assertEqual(index.lsq.M, 5)
         self.assertEqual(index.lsq.K, 1 << 6)
         self.assertEqual(
-            index.lsq.search_type,
-            faiss.AdditiveQuantizer.ST_norm_qint8
+            index.lsq.search_type, faiss.AdditiveQuantizer.ST_norm_qint8
         )
 
         index = faiss.index_factory(20, "IVF1024,LSQ5x6_Ncqint8")
         self.assertEqual(
-            index.lsq.search_type,
-            faiss.AdditiveQuantizer.ST_norm_cqint8
+            index.lsq.search_type, faiss.AdditiveQuantizer.ST_norm_cqint8
         )
 
     def eval_index_accuracy(self, factory_key):
@@ -660,8 +650,9 @@ class TestIndexIVFProductLocalSearchQuantizer(unittest.TestCase):
     def test_index_accuracy(self):
         self.eval_index_accuracy("IVF32,PLSQ2x2x5_Nqint8")
 
-    @unittest.skipIf(platform.system() == 'Windows',
-                     'Does not work on Windows-2022+.')
+    @unittest.skipIf(
+        platform.system() == "Windows", "Does not work on Windows-2022+."
+    )
     def test_index_accuracy2(self):
         """check that the error is in the same ballpark as LSQ."""
         inter1 = self.eval_index_accuracy("IVF32,PLSQ2x2x5_Nqint8")

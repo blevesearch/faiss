@@ -13,6 +13,7 @@ set(FAISS_C_SRC
   AutoTune_c.cpp
   Clustering_c.cpp
   IndexFlat_c.cpp
+  IndexHNSW_c.cpp
   IndexIVFFlat_c.cpp
   IndexIVF_c.cpp
   IndexIVF_c_ex.cpp
@@ -27,6 +28,7 @@ set(FAISS_C_SRC
   IndexBinary_c_ex.cpp
   IndexBinaryIVF_c.cpp
   IndexBinaryIVF_c_ex.cpp
+  IndexBinaryFlat_c.cpp
   IndexScalarQuantizer_c.cpp
   MetaIndexes_c.cpp
   clone_index_c.cpp
@@ -36,17 +38,22 @@ set(FAISS_C_SRC
   index_io_c_ex.cpp
   impl/AuxIndexStructures_c.cpp
   impl/io_c.cpp
+  invlists/DirectMap_c.cpp
   utils/distances_c.cpp
   utils/utils_c.cpp
 )
 
 add_library(faiss_c ${FAISS_C_SRC})
-if(FAISS_OPT_LEVEL STREQUAL "generic")
+if(FAISS_OPT_LEVEL STREQUAL "generic" OR FAISS_OPT_LEVEL STREQUAL "dd")
   target_link_libraries(faiss_c PRIVATE faiss)
 elseif(FAISS_OPT_LEVEL STREQUAL "avx2")
   target_link_libraries(faiss_c PRIVATE faiss_avx2)
 elseif(FAISS_OPT_LEVEL STREQUAL "avx512")
   target_link_libraries(faiss_c PRIVATE faiss_avx512)
+elseif(FAISS_OPT_LEVEL STREQUAL "avx512_spr")
+  target_link_libraries(faiss_c PRIVATE faiss_avx512_spr)
+elseif(FAISS_OPT_LEVEL STREQUAL "sve")
+  target_link_libraries(faiss_c PRIVATE faiss_sve)
 endif()
 
 add_library(faiss_c_avx2 ${FAISS_C_SRC})
@@ -85,7 +92,7 @@ endif()
 if(NOT WIN32)
   # Architecture mode to support AVX512 extensions available since Intel(R) Sapphire Rapids.
   # Ref: https://networkbuilders.intel.com/solutionslibrary/intel-avx-512-fp16-instruction-set-for-intel-xeon-processor-based-products-technology-guide
-  target_compile_options(faiss_c_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-march=sapphirerapids -mtune=sapphirerapids>)
+  target_compile_options(faiss_c_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-mavx2 -mfma -mf16c -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mavx512vpopcntdq -mavx512bitalg -mpopcnt -mavx512fp16 -mavx512bf16>)
 else()
   target_compile_options(faiss_c_avx512_spr PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/arch:AVX512>)
 endif()
@@ -116,6 +123,14 @@ if(NOT WIN32)
   endif()
 endif()
 
+# faiss headers used by the C API (e.g. faiss/impl/HNSW.h) include <omp.h>,
+# and faiss links OpenMP privately, so the C API needs its own OpenMP usage
+# requirements to find the header (notably on macOS with libomp).
+find_package(OpenMP REQUIRED)
+foreach(tgt faiss_c faiss_c_avx2 faiss_c_avx512 faiss_c_avx512_spr faiss_c_sve)
+  target_link_libraries(${tgt} PRIVATE OpenMP::OpenMP_CXX)
+endforeach()
+
 function(faiss_install_headers headers p)
   foreach(h ${headers})
     get_filename_component(f ${h} DIRECTORY)
@@ -129,6 +144,7 @@ file(GLOB FAISS_C_API_HEADERS
      RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
      "*.h"
      "impl/*.h"
+     "invlists/*.h"
      "utils/*.h")
 
 faiss_install_headers("${FAISS_C_API_HEADERS}" c_api)
@@ -171,6 +187,10 @@ endif()
 
 add_executable(example_c EXCLUDE_FROM_ALL example_c.c)
 target_link_libraries(example_c PRIVATE faiss_c)
+
+add_executable(example_search_params_ivf_c EXCLUDE_FROM_ALL
+  example_search_params_ivf_c.c)
+target_link_libraries(example_search_params_ivf_c PRIVATE faiss_c)
 
 if(FAISS_ENABLE_GPU)
   add_subdirectory(gpu)

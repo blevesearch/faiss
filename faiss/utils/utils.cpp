@@ -8,6 +8,7 @@
 // -*- c++ -*-
 
 #include <faiss/Index.h>
+#include <faiss/utils/simd_levels.h>
 #include <faiss/utils/utils.h>
 
 #include <cassert>
@@ -30,6 +31,7 @@
 #include <algorithm>
 #include <set>
 #include <type_traits>
+#include <unordered_set>
 #include <vector>
 
 #include <faiss/impl/AuxIndexStructures.h>
@@ -116,16 +118,22 @@ std::string get_compile_options() {
     options += "OPTIMIZE ";
 #endif
 
-#ifdef __AVX512F__
-    options += "AVX512 ";
-#elif defined(__AVX2__)
-    options += "AVX2 ";
-#elif defined(__ARM_FEATURE_SVE)
-    options += "SVE NEON ";
-#elif defined(__aarch64__)
-    options += "NEON ";
+#ifdef FAISS_ENABLE_DD
+    // Dynamic Dispatch mode: report DD and all available SIMD levels
+    options += "DD ";
+    int supported = SIMDConfig::supported_simd_levels;
+    for (int i = 0; i < static_cast<int>(SIMDLevel::COUNT); ++i) {
+        auto level = static_cast<SIMDLevel>(i);
+        if ((supported & (1 << i)) && level != SIMDLevel::NONE) {
+            options += to_string(level) + " ";
+        }
+    }
 #else
-    options += "GENERIC ";
+    // Static mode: report the compiled-in SIMD level
+    SIMDLevel level = SIMDConfig::get_level();
+    if (level != SIMDLevel::NONE) {
+        options += to_string(level) + " ";
+    }
 #endif
 
 #ifdef FAISS_ENABLE_SVS
@@ -181,7 +189,7 @@ size_t get_mem_usage_kb() {
         char buf[256];
         if (!fgets(buf, 256, f))
             break;
-        if (sscanf(buf, "VmRSS: %ld kB", &sz) == 1)
+        if (sscanf(buf, "VmRSS: %zu kB", &sz) == 1)
             break;
     }
     fclose(f);
@@ -301,7 +309,7 @@ size_t merge_result_table_with(
         std::vector<float> tmpD(k);
 
 #pragma omp for
-        for (int64_t i = 0; i < n; i++) {
+        for (int64_t i = 0; i < static_cast<int64_t>(n); i++) {
             int64_t* lI0 = I0 + i * k;
             float* lD0 = D0 + i * k;
             const int64_t* lI1 = I1 + i * k;
@@ -356,39 +364,20 @@ size_t ranklist_intersection_size(
         const int64_t* v2_in) {
     if (k2 > k1)
         return ranklist_intersection_size(k2, v2_in, k1, v1);
-    int64_t* v2 = new int64_t[k2];
-    memcpy(v2, v2_in, sizeof(int64_t) * k2);
-    std::sort(v2, v2 + k2);
-    { // de-dup v2
-        int64_t prev = -1;
-        size_t wp = 0;
-        for (size_t i = 0; i < k2; i++) {
-            if (v2[i] != prev) {
-                v2[wp++] = prev = v2[i];
-            }
+    // erase-on-hit avoids double-counting; negatives are padding, not IDs
+    std::unordered_set<int64_t> remaining;
+    remaining.reserve(k2);
+    for (size_t i = 0; i < k2; i++) {
+        if (v2_in[i] >= 0) {
+            remaining.insert(v2_in[i]);
         }
-        k2 = wp;
     }
-    const int64_t seen_flag = int64_t{1} << 60;
     size_t count = 0;
     for (size_t i = 0; i < k1; i++) {
-        int64_t q = v1[i];
-        size_t i0 = 0, i1 = k2;
-        while (i0 + 1 < i1) {
-            size_t imed = (i1 + i0) / 2;
-            int64_t piv = v2[imed] & ~seen_flag;
-            if (piv <= q)
-                i0 = imed;
-            else
-                i1 = imed;
-        }
-        if (v2[i0] == q) {
+        if (remaining.erase(v1[i]) != 0) {
             count++;
-            v2[i0] |= seen_flag;
         }
     }
-    delete[] v2;
-
     return count;
 }
 
@@ -431,10 +420,10 @@ void bincode_hist(size_t n, size_t nbits, const uint8_t* codes, int* hist) {
     std::vector<int> accu(d * 256);
     const uint8_t* c = codes;
     for (size_t i = 0; i < n; i++)
-        for (int j = 0; j < d; j++)
+        for (size_t j = 0; j < d; j++)
             accu[j * 256 + *c++]++;
     memset(hist, 0, sizeof(*hist) * nbits);
-    for (int i = 0; i < d; i++) {
+    for (size_t i = 0; i < d; i++) {
         const int* ai = accu.data() + i * 256;
         int* hi = hist + i * 8;
         for (int j = 0; j < 256; j++)
@@ -456,7 +445,7 @@ uint64_t ivec_checksum(size_t n, const int32_t* assigned) {
 uint64_t bvec_checksum(size_t n, const uint8_t* a) {
     uint64_t cs = ivec_checksum(n / 4, (const int32_t*)a);
     for (size_t i = n / 4 * 4; i < n; i++) {
-        cs = cs * 65713 + a[n] * 1686049;
+        cs = cs * 65713 + a[i] * 1686049;
     }
     return cs;
 }
@@ -494,7 +483,7 @@ const float* fvecs_maybe_subsample(
     std::vector<int> subset(*n);
     rand_perm(subset.data(), *n, seed);
     float* x_subset = new float[n2 * d];
-    for (int64_t i = 0; i < n2; i++)
+    for (int64_t i = 0; i < static_cast<int64_t>(n2); i++)
         memcpy(&x_subset[i * d], &x[subset[i] * size_t(d)], sizeof(x[0]) * d);
     *n = n2;
     return x_subset;

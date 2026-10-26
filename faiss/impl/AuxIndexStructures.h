@@ -18,6 +18,8 @@
 #include <mutex>
 #include <vector>
 
+#include <faiss/impl/InvertedListScannerStats.h>
+
 #include <faiss/MetricType.h>
 #include <faiss/impl/platform_macros.h>
 
@@ -92,6 +94,7 @@ struct RangeQueryResult {
     idx_t qno;   //< id of the query
     size_t nres; //< nb of results for this query
     RangeSearchPartialResult* pres;
+    InvertedListScannerStats stats;
 
     /// called by search function to report a new result
     void add(float dis, idx_t id);
@@ -167,34 +170,6 @@ struct TimeoutCallback : InterruptCallback {
     bool want_interrupt() override;
     void set_timeout(double timeout_in_seconds);
     static void reset(double timeout_in_seconds);
-};
-
-/// set implementation optimized for fast access.
-struct VisitedTable {
-    std::vector<uint8_t> visited;
-    uint8_t visno;
-
-    explicit VisitedTable(int size) : visited(size), visno(1) {}
-
-    /// set flag #no to true
-    void set(int no) {
-        visited[no] = visno;
-    }
-
-    /// get flag #no
-    bool get(int no) const {
-        return visited[no] == visno;
-    }
-
-    /// reset all flags to false
-    void advance() {
-        visno++;
-        if (visno == 250) {
-            // 250 rather than 255 because sometimes we use visno and visno+1
-            memset(visited.data(), 0, sizeof(visited[0]) * visited.size());
-            visno = 1;
-        }
-    }
 };
 
 } // namespace faiss
