@@ -67,12 +67,16 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
         auto* tgt = reinterpret_cast<faiss::Index*>(target);
         auto* src = reinterpret_cast<faiss::Index*>(source);
 
-        assert(tgt && src);
+        if (tgt == nullptr || src == nullptr) {
+            return -1;
+        }
 
         // -------- IndexIVFScalarQuantizer --------
         if (auto* tgt_ivfsq = dynamic_cast<faiss::IndexIVFScalarQuantizer*>(tgt)) {
             auto* src_ivfsq = dynamic_cast<faiss::IndexIVFScalarQuantizer*>(src);
-            assert(src_ivfsq);
+            if (src_ivfsq == nullptr) {
+                return -1;
+            }
 
             tgt_ivfsq->quantizer = clone_index(src_ivfsq->quantizer);
             tgt_ivfsq->is_trained = true;
@@ -83,7 +87,9 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
         // --------- IndexSQ ---------
         if (auto* tgt_sq = dynamic_cast<faiss::IndexScalarQuantizer*>(tgt)) {
             auto* src_sq = dynamic_cast<faiss::IndexScalarQuantizer*>(src);
-            assert(src_sq);
+            if (src_sq == nullptr) {
+                return -1;
+            }
 
             tgt_sq->is_trained = true;
             tgt_sq->sq = src_sq->sq;
@@ -93,7 +99,9 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
         // -------- IndexIVFRaBitQ --------
         if (auto* tgt_rabitq = dynamic_cast<faiss::IndexIVFRaBitQ*>(tgt)) {
             auto* src_rabitq = dynamic_cast<faiss::IndexIVFRaBitQ*>(src);
-            assert(src_rabitq);
+            if (src_rabitq == nullptr) {
+                return -1;
+            }
 
             tgt_rabitq->quantizer = clone_index(src_rabitq->quantizer);
             tgt_rabitq->is_trained = true;
