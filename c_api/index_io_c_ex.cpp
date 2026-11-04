@@ -10,12 +10,78 @@
 // More I/O code for indexes
 
 #include "index_io_c_ex.h"
+#include <cstring>
 #include <faiss/impl/io.h>
 #include <faiss/index_io.h>
 #include "macros_impl.h"
 
 using faiss::Index;
 using faiss::IndexBinary;
+
+namespace {
+
+/** Counts bytes and stores nothing. Used to size a buffer before filling it. */
+struct CountingIOWriter : faiss::IOWriter {
+    size_t total = 0;
+
+    size_t operator()(const void*, size_t size, size_t nitems) override {
+        total += size * nitems;
+        return nitems;
+    }
+};
+
+/** Writes into a fixed caller-provided buffer, refusing to overrun it. */
+struct FixedBufIOWriter : faiss::IOWriter {
+    uint8_t* buf;
+    size_t capacity;
+    size_t pos = 0;
+    bool overflowed = false;
+
+    FixedBufIOWriter(uint8_t* b, size_t cap) : buf(b), capacity(cap) {}
+
+    size_t operator()(const void* ptr, size_t size, size_t nitems) override {
+        const size_t n = size * nitems;
+        if (pos + n > capacity) {
+            // Report short so write_index fails rather than scribbling past
+            // the end of memory the caller owns.
+            overflowed = true;
+            return 0;
+        }
+        memcpy(buf + pos, ptr, n);
+        pos += n;
+        return nitems;
+    }
+};
+
+} // namespace
+
+int faiss_index_serialized_size(const FaissIndex* idx, size_t* size) {
+    try {
+        CountingIOWriter counter;
+        faiss::write_index(reinterpret_cast<const Index*>(idx), &counter);
+        *size = counter.total;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_write_index_into_buf(
+        const FaissIndex* idx,
+        uint8_t* buf,
+        size_t capacity,
+        size_t* written) {
+    try {
+        if (buf == nullptr && capacity != 0) {
+            return -1;
+        }
+        FixedBufIOWriter writer(buf, capacity);
+        faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
+        if (writer.overflowed) {
+            return -1;
+        }
+        *written = writer.pos;
+    }
+    CATCH_AND_HANDLE
+}
 
 int faiss_write_index_buf(const FaissIndex* idx, size_t* size, uint8_t** buf) {
     try {
