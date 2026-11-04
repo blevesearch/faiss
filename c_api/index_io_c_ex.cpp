@@ -83,6 +83,38 @@ int faiss_write_index_into_buf(
     CATCH_AND_HANDLE
 }
 
+int faiss_index_binary_serialized_size(
+        const FaissIndexBinary* idx,
+        size_t* size) {
+    try {
+        CountingIOWriter counter;
+        faiss::write_index_binary(
+                reinterpret_cast<const IndexBinary*>(idx), &counter);
+        *size = counter.total;
+    }
+    CATCH_AND_HANDLE
+}
+
+int faiss_write_index_binary_into_buf(
+        const FaissIndexBinary* idx,
+        uint8_t* buf,
+        size_t capacity,
+        size_t* written) {
+    try {
+        if (buf == nullptr && capacity != 0) {
+            return -1;
+        }
+        FixedBufIOWriter writer(buf, capacity);
+        faiss::write_index_binary(
+                reinterpret_cast<const IndexBinary*>(idx), &writer);
+        if (writer.overflowed) {
+            return -1;
+        }
+        *written = writer.pos;
+    }
+    CATCH_AND_HANDLE
+}
+
 int faiss_write_index_buf(const FaissIndex* idx, size_t* size, uint8_t** buf) {
     try {
         faiss::VectorIOWriter writer;

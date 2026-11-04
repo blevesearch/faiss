@@ -89,6 +89,38 @@ int faiss_write_index_into_buf(
         size_t capacity,
         size_t* written);
 
+/** Compute the exact number of bytes write_index_binary would emit for this
+ * index, without allocating a buffer to hold them.
+ *
+ * The binary twin of faiss_index_serialized_size. Binary indexes go through
+ * the same three-copy path as float ones -- faiss_write_index_binary_buf
+ * fills a std::vector and then mallocs a copy of it -- so they need the same
+ * treatment.
+ *
+ * @param idx    binary index to measure
+ * @param size   output, bytes faiss_write_index_binary_into_buf will write
+ */
+int faiss_index_binary_serialized_size(
+        const FaissIndexBinary* idx,
+        size_t* size);
+
+/** Serialise a binary index directly into a caller-provided buffer.
+ *
+ * The binary twin of faiss_write_index_into_buf. The buffer must be at least
+ * faiss_index_binary_serialized_size bytes; a short buffer is an error rather
+ * than an overflow.
+ *
+ * @param idx       binary index to serialise
+ * @param buf       caller-owned destination, at least `capacity` bytes
+ * @param capacity  size of buf
+ * @param written   output, bytes actually written
+ */
+int faiss_write_index_binary_into_buf(
+        const FaissIndexBinary* idx,
+        uint8_t* buf,
+        size_t capacity,
+        size_t* written);
+
 void faiss_free_buf(uint8_t** buf);
 
 #ifdef __cplusplus
