@@ -11,6 +11,7 @@
 
 #include "index_io_c_ex.h"
 #include <cstring>
+#include <vector>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/io.h>
 #include <faiss/index_io.h>
@@ -50,6 +51,67 @@ struct FixedBufIOWriter : faiss::IOWriter {
                 n,
                 capacity);
         memcpy(buf + pos, ptr, n);
+        pos += n;
+        return nitems;
+    }
+};
+
+// Accumulates into a fixed buffer and hands full chunks to a sink
+struct ChunkedIOWriter : faiss::IOWriter {
+    FaissWriteToSink write_to_sink;
+    void* sink_ptr;
+    std::vector<uint8_t> buf;
+    size_t pos = 0;
+    size_t total = 0;
+    bool failed = false;
+
+    ChunkedIOWriter(
+            FaissWriteToSink write_to_sink,
+            void* sink_ptr,
+            size_t chunk_size)
+            : write_to_sink(write_to_sink),
+              sink_ptr(sink_ptr),
+              buf(chunk_size) {}
+
+    bool flush() {
+        if (pos == 0) {
+            return true;
+        }
+        if (write_to_sink(sink_ptr, buf.data(), pos) != 0) {
+            failed = true;
+            return false;
+        }
+        total += pos;
+        pos = 0;
+        return true;
+    }
+
+    size_t operator()(const void* ptr, size_t size, size_t nitems) override {
+        if (failed) {
+            return 0;
+        }
+        size_t n = size * nitems;
+        const uint8_t* src = static_cast<const uint8_t*>(ptr);
+
+        // A write larger than the chunk buffer is passed straight through
+        // rather than split: vector blocks are already large and contiguous,
+        // and copying them into the buffer twice would defeat the point.
+        if (n >= buf.size()) {
+            if (!flush()) {
+                return 0;
+            }
+            if (write_to_sink(sink_ptr, src, n) != 0) {
+                failed = true;
+                return 0;
+            }
+            total += n;
+            return nitems;
+        }
+
+        if (pos + n > buf.size() && !flush()) {
+            return 0;
+        }
+        memcpy(buf.data() + pos, src, n);
         pos += n;
         return nitems;
     }
@@ -168,4 +230,28 @@ int faiss_read_index_binary_buf(const uint8_t* buf, size_t size, int io_flags, F
 void faiss_free_buf(uint8_t** buf) {
     free(*buf);
     *buf = nullptr;
+}
+
+
+int faiss_write_index_chunked(
+        const FaissIndex* idx,
+        FaissWriteToSink write_to_sink,
+        void* sink_ptr,
+        size_t chunk_size,
+        size_t* bytes_written) {
+    try {
+        if (write_to_sink == nullptr) {
+            return -1;
+        }
+        if (chunk_size == 0) {
+            chunk_size = 4 * 1024 * 1024; // 4MB
+        }
+        ChunkedIOWriter writer(write_to_sink, sink_ptr, chunk_size);
+        faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
+        if (writer.failed || !writer.flush()) {
+            return -1;
+        }
+        *bytes_written = writer.total;
+    }
+    CATCH_AND_HANDLE
 }

@@ -121,6 +121,28 @@ int faiss_write_index_binary_into_buf(
         size_t capacity,
         size_t* written);
 
+/** Sink for faiss_write_index_chunked. Returns 0 on success, non-zero to
+ * abort the serialisation. `data` belongs to the caller of the sink and is
+ * valid only for the duration of the call -- copy it or write it through.
+ */
+typedef int (*FaissWriteToSink)(void* sink_ptr, const uint8_t* data, size_t n);
+
+/** Serialise an index, handing it to `write_to_sink` in chunks of at most
+ * `chunk_size` bytes.
+ *
+ * @param idx            index to serialise
+ * @param write_to_sink  called with each chunk; non-zero return aborts
+ * @param sink_ptr       opaque, passed through to write_to_sink
+ * @param chunk_size     bytes to accumulate before calling write_to_sink
+ * @param bytes_written  output, total bytes handed to the sink
+ */
+int faiss_write_index_chunked(
+        const FaissIndex* idx,
+        FaissWriteToSink write_to_sink,
+        void* sink_ptr,
+        size_t chunk_size,
+        size_t* bytes_written);
+
 void faiss_free_buf(uint8_t** buf);
 
 #ifdef __cplusplus
