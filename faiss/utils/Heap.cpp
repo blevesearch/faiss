@@ -267,7 +267,7 @@ void reorder_2_heaps(
         int64_t k_base,
         const typename C::TI* __restrict base_labels,
         const float* __restrict base_distances) {
-#pragma omp parallel for if (n > 1)
+#pragma omp parallel for if (n > 1) num_threads(num_omp_threads)
     for (int64_t i = 0; i < n; i++) {
         typename C::TI* idxo = labels + i * k;
         float* diso = distances + i * k;

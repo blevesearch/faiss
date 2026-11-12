@@ -72,7 +72,7 @@ void reservoir_add_results_none(
     using T = typename C::T;
     using TI = typename C::TI;
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t qi = (int64_t)self->i0; qi < (int64_t)self->i1; qi++) {
         ReservoirTopN<C>& res = self->reservoirs[qi - (int64_t)self->i0];
         const T* dis_tab_i = dis_in + (j1 - j0) * (qi - (int64_t)self->i0) - j0;

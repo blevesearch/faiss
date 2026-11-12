@@ -166,7 +166,7 @@ static std::unique_ptr<float[]> compute_residuals(
     size_t d = quantizer->d;
     std::unique_ptr<float[]> residuals(new float[n * d]);
     // Parallelize with OpenMP (each iteration is independent)
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
     for (idx_t i = 0; i < n; i++) {
         if (list_nos[i] < 0) {
             memset(residuals.get() + i * d, 0, sizeof(float) * d);
@@ -301,7 +301,7 @@ void IndexIVFPQ::add_core_o(
     size_t n_ignore = 0;
     DirectMapAdd dm_adder(direct_map, n, xids);
 
-#pragma omp parallel reduction(+ : n_ignore)
+#pragma omp parallel reduction(+ : n_ignore) num_threads(num_omp_threads)
     {
         int nt = omp_get_num_threads();
         int rank = omp_get_thread_num();

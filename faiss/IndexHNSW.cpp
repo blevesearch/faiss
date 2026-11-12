@@ -302,7 +302,7 @@ void hnsw_add_vertices_deterministic(
             }
             Edge* base = reverse_edges.get();
 
-#pragma omp parallel if (total > 100)
+#pragma omp parallel if (total > 100) num_threads(num_omp_threads)
             {
                 std::unique_ptr<DistanceComputer> dis(make_distance_computer());
                 // Not schedule(dynamic): the libomp dynamic dispatcher

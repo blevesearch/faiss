@@ -127,7 +127,7 @@ void reservoir_add_results_avx512(
     const __m512i vstep = _mm512_set_epi32(
             15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int64_t qi = (int64_t)self->i0; qi < (int64_t)self->i1; qi++) {
         ReservoirTopN<C>& res = self->reservoirs[qi - (int64_t)self->i0];
         const float* dis_tab_i =

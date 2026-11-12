@@ -80,7 +80,7 @@ void hammings_knn_hc_impl(
     const size_t block_size = hamming_batch_size;
     for (size_t j0 = 0; j0 < n2; j0 += block_size) {
         const size_t j1 = std::min(j0 + block_size, n2);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < static_cast<int64_t>(ha->nh); i++) {
             HammingComputer hc(bs1 + i * bytes_per_code, bytes_per_code);
 
@@ -163,7 +163,7 @@ void hammings_knn_mc_impl(
     const size_t block_size = hamming_batch_size;
     for (size_t j0 = 0; j0 < nb; j0 += block_size) {
         const size_t j1 = std::min(j0 + block_size, nb);
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
         for (int64_t i = 0; i < static_cast<int64_t>(na); ++i) {
             for (size_t j = j0; j < j1; ++j) {
                 if (!sel || sel->is_member(j)) {
@@ -202,7 +202,7 @@ void hamming_range_search_impl(
         size_t code_size,
         RangeSearchResult* res,
         const faiss::IDSelector* sel) {
-#pragma omp parallel
+#pragma omp parallel num_threads(num_omp_threads)
     {
         RangeSearchPartialResult pres(res);
 
@@ -264,7 +264,7 @@ void generalized_hammings_knn_hc_impl(
         ha->heapify();
     }
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(num_omp_threads)
     for (int i = 0; i < na; i++) {
         const uint8_t* __restrict ca = a + i * code_size;
         const uint8_t* __restrict cb = b;

@@ -254,7 +254,7 @@ void IndexIVFScalarQuantizer::decode_vectors(
     if (by_residual) {
         FAISS_THROW_IF_NOT_MSG(
                 list_nos, "decode_vectors with by_residual requires list_nos");
-#pragma omp parallel for if (n > 1000)
+#pragma omp parallel for if (n > 1000) num_threads(num_omp_threads)
         for (idx_t i = 0; i < n; i++) {
             std::vector<float> centroid(d);
             quantizer->reconstruct(list_nos[i], centroid.data());

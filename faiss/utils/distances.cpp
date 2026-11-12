@@ -617,6 +617,15 @@ int distance_compute_min_k_reservoir = 100;
 // queries, for the case where nx < nthreads and the database is large.
 static constexpr size_t kDbParallelMinVectors = 10000;
 
+// Thread count for the database-parallel kNN path, capped by bleve's
+// num_omp_threads.
+static int db_parallel_num_threads() {
+    return std::max(
+            1,
+            std::min(
+                    omp_get_max_threads(), static_cast<int>(num_omp_threads)));
+}
+
 template <class C>
 static void knn_db_parallel_impl(
         const float* x,
@@ -631,7 +640,7 @@ static void knn_db_parallel_impl(
     using T = typename C::T;
     using TI = typename C::TI;
 
-    int nt = omp_get_max_threads();
+    int nt = db_parallel_num_threads();
     const size_t bs_y = distance_compute_blas_database_bs;
 
     // Per-thread result heaps: nt threads x nx queries x k results
@@ -653,7 +662,9 @@ static void knn_db_parallel_impl(
         }
     }
 
-#pragma omp parallel num_threads(num_omp_threads)
+    // Keep num_threads(nt): the per-thread buffers and database slices
+    // assume exactly nt threads. bleve's cap is applied to nt instead.
+#pragma omp parallel num_threads(nt)
     {
         int tid = omp_get_thread_num();
         size_t j_begin = static_cast<size_t>(tid) * ny / nt;
@@ -768,7 +779,7 @@ static bool should_use_db_parallel(
     if (sel) {
         return false;
     }
-    int nt = omp_get_max_threads();
+    int nt = db_parallel_num_threads();
     size_t min_ny = std::max(
             kDbParallelMinVectors,
             static_cast<size_t>(nt) *
