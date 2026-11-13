@@ -79,6 +79,18 @@ int faiss_IndexBinaryIVF_get_centroids_and_cardinality(
 
 int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* source);
 
+/** Report whether `other` can be merged into `index`, WITHOUT modifying
+ * either.
+ *
+ * @param index  merge target
+ * @param other  candidate source
+ * @param ok     output, 1 if the merge may proceed, 0 if not
+ */
+int faiss_IndexBinaryIVF_check_compatible_for_merge(
+        const FaissIndexBinary* index,
+        const FaissIndexBinary* other,
+        int* ok);
+
 #ifdef __cplusplus
 }
 #endif

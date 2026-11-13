@@ -62,6 +62,15 @@ int faiss_IndexIVF_search_closest_eligible_centroids(
     CATCH_AND_HANDLE
 }
 
+// Replace an IVF index's coarse quantizer, respecting ownership.
+static void replace_owned_quantizer(faiss::IndexIVF* ivf, faiss::Index* q) {
+    if (ivf->own_fields) {
+        delete ivf->quantizer;
+    }
+    ivf->quantizer = q;
+    ivf->own_fields = true;
+}
+
 int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
     try {
         auto* tgt = reinterpret_cast<faiss::Index*>(target);
@@ -78,7 +87,8 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
                 return -1;
             }
 
-            tgt_ivfsq->quantizer = clone_index(src_ivfsq->quantizer);
+            replace_owned_quantizer(
+                    tgt_ivfsq, clone_index(src_ivfsq->quantizer));
             tgt_ivfsq->is_trained = true;
             tgt_ivfsq->sq = src_ivfsq->sq;
             return 0;
@@ -103,7 +113,8 @@ int faiss_Set_quantizers(FaissIndex* target, FaissIndex* source) {
                 return -1;
             }
 
-            tgt_rabitq->quantizer = clone_index(src_rabitq->quantizer);
+            replace_owned_quantizer(
+                    tgt_rabitq, clone_index(src_rabitq->quantizer));
             tgt_rabitq->is_trained = true;
             tgt_rabitq->rabitq = src_rabitq->rabitq;
             return 0;

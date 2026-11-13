@@ -121,3 +121,25 @@ int faiss_Index_dist_compute(
     CATCH_AND_HANDLE
 }
 }
+
+int faiss_Index_check_compatible_for_merge(
+        const FaissIndex* index,
+        const FaissIndex* other,
+        int* ok) {
+    try {
+        *ok = 0;
+        auto target = dynamic_cast<const faiss::IndexIVF*>(
+                reinterpret_cast<const faiss::Index*>(index));
+        auto src = reinterpret_cast<const faiss::Index*>(other);
+        if (target == nullptr || src == nullptr) {
+            return 0; // not IVF: not compatible, but not an error either
+        }
+        try {
+            target->check_compatible_for_merge(*src);
+            *ok = 1;
+        } catch (const std::exception&) {
+            *ok = 0;
+        }
+    }
+    CATCH_AND_HANDLE
+}

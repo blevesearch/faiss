@@ -28,6 +28,18 @@ int faiss_Index_reconstruct_batch(
 
 int faiss_Index_merge_from(FaissIndex* index, FaissIndex* other, idx_t add_id);
 
+/** Report whether `other` can be merged into `index`, WITHOUT modifying
+ * either.
+ *
+ * @param index  merge target
+ * @param other  candidate source
+ * @param ok     output, 1 if the merge may proceed, 0 if not
+ */
+int faiss_Index_check_compatible_for_merge(
+        const FaissIndex* index,
+        const FaissIndex* other,
+        int* ok);
+
 /** Return an approximate size estimate in bytes for the index.
  * 
  *
