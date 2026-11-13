@@ -128,3 +128,25 @@ int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* sour
     CATCH_AND_HANDLE
 }
 }
+
+int faiss_IndexBinaryIVF_check_compatible_for_merge(
+        const FaissIndexBinary* index,
+        const FaissIndexBinary* other,
+        int* ok) {
+    try {
+        *ok = 0;
+        auto target = dynamic_cast<const faiss::IndexBinaryIVF*>(
+                reinterpret_cast<const faiss::IndexBinary*>(index));
+        auto src = reinterpret_cast<const faiss::IndexBinary*>(other);
+        if (target == nullptr || src == nullptr) {
+            return 0;
+        }
+        try {
+            target->check_compatible_for_merge(*src);
+            *ok = 1;
+        } catch (const std::exception&) {
+            *ok = 0;
+        }
+    }
+    CATCH_AND_HANDLE
+}
