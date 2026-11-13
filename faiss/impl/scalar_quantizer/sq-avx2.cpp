@@ -1,0 +1,906 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#ifdef COMPILE_SIMD_AVX2
+
+#include <faiss/impl/simdlib/simdlib_avx2.h>
+
+#include <cstring>
+
+#include <faiss/impl/scalar_quantizer/codecs.h>
+#include <faiss/impl/scalar_quantizer/distance_computers.h>
+#include <faiss/impl/scalar_quantizer/quantizers.h>
+#include <faiss/impl/scalar_quantizer/scanners.h>
+#include <faiss/impl/scalar_quantizer/similarities.h>
+
+namespace faiss {
+
+namespace scalar_quantizer {
+
+using simd8float32 = faiss::simd8float32_tpl<SIMDLevel::AVX2>;
+
+namespace {
+
+FAISS_ALWAYS_INLINE uint16_t load_u16(const uint8_t* ptr) {
+    uint16_t value;
+    std::memcpy(&value, ptr, sizeof(value));
+    return value;
+}
+
+FAISS_ALWAYS_INLINE uint32_t load_u32(const uint8_t* ptr) {
+    uint32_t value;
+    std::memcpy(&value, ptr, sizeof(value));
+    return value;
+}
+
+FAISS_ALWAYS_INLINE uint32_t load_u24(const uint8_t* ptr) {
+    return static_cast<uint32_t>(ptr[0]) |
+            (static_cast<uint32_t>(ptr[1]) << 8) |
+            (static_cast<uint32_t>(ptr[2]) << 16);
+}
+
+FAISS_ALWAYS_INLINE __m256i unpack_8x1bit_to_u32(const uint8_t* code, int i) {
+    const uint32_t packed = code[static_cast<size_t>(i) >> 3];
+    const __m256i shifts = _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7);
+    const __m256i indices =
+            _mm256_srlv_epi32(_mm256_set1_epi32(packed), shifts);
+    return _mm256_and_si256(indices, _mm256_set1_epi32(0x1));
+}
+
+FAISS_ALWAYS_INLINE __m256i unpack_8x2bit_to_u32(const uint8_t* code, int i) {
+    const uint32_t packed = load_u16(code + (static_cast<size_t>(i) >> 2));
+    const __m256i shifts = _mm256_setr_epi32(0, 2, 4, 6, 8, 10, 12, 14);
+    const __m256i indices =
+            _mm256_srlv_epi32(_mm256_set1_epi32(packed), shifts);
+    return _mm256_and_si256(indices, _mm256_set1_epi32(0x3));
+}
+
+FAISS_ALWAYS_INLINE __m256i unpack_8x3bit_to_u32(const uint8_t* code, int i) {
+    const uint32_t packed =
+            load_u24(code + ((static_cast<size_t>(i) >> 3) * 3));
+    const __m256i shifts = _mm256_setr_epi32(0, 3, 6, 9, 12, 15, 18, 21);
+    const __m256i indices =
+            _mm256_srlv_epi32(_mm256_set1_epi32(packed), shifts);
+    return _mm256_and_si256(indices, _mm256_set1_epi32(0x7));
+}
+
+FAISS_ALWAYS_INLINE __m256i unpack_8x4bit_to_u32(const uint8_t* code, int i) {
+    const uint32_t packed = load_u32(code + (static_cast<size_t>(i) >> 1));
+    const __m256i shifts = _mm256_setr_epi32(0, 4, 8, 12, 16, 20, 24, 28);
+    const __m256i indices =
+            _mm256_srlv_epi32(_mm256_set1_epi32(packed), shifts);
+    return _mm256_and_si256(indices, _mm256_set1_epi32(0xf));
+}
+
+} // namespace
+
+/**********************************************************
+ * Codecs
+ **********************************************************/
+
+template <>
+struct Codec8bit<SIMDLevel::AVX2> : Codec8bit<SIMDLevel::NONE> {
+    static FAISS_ALWAYS_INLINE simd8float32
+    decode_8_components(const uint8_t* code, size_t i) {
+        const uint64_t c8 = *(uint64_t*)(code + i);
+
+        const __m128i i8 = _mm_set1_epi64x(c8);
+        const __m256i i32 = _mm256_cvtepu8_epi32(i8);
+        const __m256 f8 = _mm256_cvtepi32_ps(i32);
+        const __m256 half_one_255 = _mm256_set1_ps(0.5f / 255.f);
+        const __m256 one_255 = _mm256_set1_ps(1.f / 255.f);
+        return simd8float32(_mm256_fmadd_ps(f8, one_255, half_one_255));
+    }
+};
+
+template <>
+struct Codec4bit<SIMDLevel::AVX2> : Codec4bit<SIMDLevel::NONE> {
+    static FAISS_ALWAYS_INLINE simd8float32
+    decode_8_components(const uint8_t* code, size_t i) {
+        uint32_t c4 = *(uint32_t*)(code + (i >> 1));
+        uint32_t mask = 0x0f0f0f0f;
+        uint32_t c4ev = c4 & mask;
+        uint32_t c4od = (c4 >> 4) & mask;
+
+        // the 8 lower bytes of c8 contain the values
+        __m128i c8 =
+                _mm_unpacklo_epi8(_mm_set1_epi32(c4ev), _mm_set1_epi32(c4od));
+        __m128i c4lo = _mm_cvtepu8_epi32(c8);
+        __m128i c4hi = _mm_cvtepu8_epi32(_mm_srli_si128(c8, 4));
+        __m256i i8 = _mm256_castsi128_si256(c4lo);
+        i8 = _mm256_insertf128_si256(i8, c4hi, 1);
+        __m256 f8 = _mm256_cvtepi32_ps(i8);
+        __m256 half = _mm256_set1_ps(0.5f);
+        f8 = _mm256_add_ps(f8, half);
+        __m256 one_255 = _mm256_set1_ps(1.f / 15.f);
+        return simd8float32(_mm256_mul_ps(f8, one_255));
+    }
+};
+
+template <>
+struct Codec6bit<SIMDLevel::AVX2> : Codec6bit<SIMDLevel::NONE> {
+    /* Load 6 bytes that represent 8 6-bit values, return them as a
+     * 8*32 bit vector register */
+    static FAISS_ALWAYS_INLINE __m256i load6(const uint16_t* code16) {
+        const __m128i perm = _mm_set_epi8(
+                -1, 5, 5, 4, 4, 3, -1, 3, -1, 2, 2, 1, 1, 0, -1, 0);
+        const __m256i shifts = _mm256_set_epi32(2, 4, 6, 0, 2, 4, 6, 0);
+
+        // load 6 bytes
+        __m128i c1 =
+                _mm_set_epi16(0, 0, 0, 0, 0, code16[2], code16[1], code16[0]);
+
+        // put in 8 * 32 bits
+        __m128i c2 = _mm_shuffle_epi8(c1, perm);
+        __m256i c3 = _mm256_cvtepi16_epi32(c2);
+
+        // shift and mask out useless bits
+        __m256i c4 = _mm256_srlv_epi32(c3, shifts);
+        __m256i c5 = _mm256_and_si256(_mm256_set1_epi32(63), c4);
+        return c5;
+    }
+
+    static FAISS_ALWAYS_INLINE simd8float32
+    decode_8_components(const uint8_t* code, size_t i) {
+        // // Faster code for Intel CPUs or AMD Zen3+, just keeping it here
+        // // for the reference, maybe, it becomes used one day.
+        // const uint16_t* data16 = (const uint16_t*)(code + (i >> 2) * 3);
+        // const uint32_t* data32 = (const uint32_t*)data16;
+        // const uint64_t val = *data32 + ((uint64_t)data16[2] << 32);
+        // const uint64_t vext = _pdep_u64(val, 0x3F3F3F3F3F3F3F3FULL);
+        // const __m128i i8 = _mm_set1_epi64x(vext);
+        // const __m256i i32 = _mm256_cvtepi8_epi32(i8);
+        // const __m256 f8 = _mm256_cvtepi32_ps(i32);
+        // const __m256 half_one_255 = _mm256_set1_ps(0.5f / 63.f);
+        // const __m256 one_255 = _mm256_set1_ps(1.f / 63.f);
+        // return _mm256_fmadd_ps(f8, one_255, half_one_255);
+
+        __m256i i8 = load6((const uint16_t*)(code + (i >> 2) * 3));
+        __m256 f8 = _mm256_cvtepi32_ps(i8);
+        // this could also be done with bit manipulations but it is
+        // not obviously faster
+        const __m256 half_one_255 = _mm256_set1_ps(0.5f / 63.f);
+        const __m256 one_255 = _mm256_set1_ps(1.f / 63.f);
+        return simd8float32(_mm256_fmadd_ps(f8, one_255, half_one_255));
+    }
+};
+
+/**********************************************************
+ * Quantizers (uniform and non-uniform)
+ **********************************************************/
+
+template <class Codec>
+struct QuantizerTemplate<
+        Codec,
+        QuantizerTemplateScaling::UNIFORM,
+        SIMDLevel::AVX2>
+        : QuantizerTemplate<
+                  Codec,
+                  QuantizerTemplateScaling::UNIFORM,
+                  SIMDLevel::NONE> {
+    QuantizerTemplate(size_t d, const std::vector<float>& trained)
+            : QuantizerTemplate<
+                      Codec,
+                      QuantizerTemplateScaling::UNIFORM,
+                      SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m256 xi = Codec::decode_8_components(code, i).f;
+        return simd8float32(_mm256_fmadd_ps(
+                xi, _mm256_set1_ps(this->vdiff), _mm256_set1_ps(this->vmin)));
+    }
+
+    /// Raw codec decode without denormalization
+    FAISS_ALWAYS_INLINE simd8float32
+    decode_8_raw(const uint8_t* code, int i) const {
+        return Codec::decode_8_components(code, i);
+    }
+};
+
+template <class Codec>
+struct QuantizerTemplate<
+        Codec,
+        QuantizerTemplateScaling::NON_UNIFORM,
+        SIMDLevel::AVX2>
+        : QuantizerTemplate<
+                  Codec,
+                  QuantizerTemplateScaling::NON_UNIFORM,
+                  SIMDLevel::NONE> {
+    QuantizerTemplate(size_t d, const std::vector<float>& trained)
+            : QuantizerTemplate<
+                      Codec,
+                      QuantizerTemplateScaling::NON_UNIFORM,
+                      SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m256 xi = Codec::decode_8_components(code, i).f;
+        return simd8float32(_mm256_fmadd_ps(
+                xi,
+                _mm256_loadu_ps(this->vdiff + i),
+                _mm256_loadu_ps(this->vmin + i)));
+    }
+};
+
+/**********************************************************
+ * Lloyd-Max scalar quantizer
+ **********************************************************/
+
+// 1-bit MSE: boundary is always at centroids midpoint.
+// Encode: 8 comparisons → 1 byte via movemask.
+// Decode: gather 8 centroids via index unpack.
+// NOLINTNEXTLINE(facebook-hte-MisplacedTemplateSpecialization,facebook-hte-ShadowingClass)
+template <>
+struct QuantizerLloydMax<1, SIMDLevel::AVX2>
+        : QuantizerLloydMax<1, SIMDLevel::NONE> {
+    using Base = QuantizerLloydMax<1, SIMDLevel::NONE>;
+
+    QuantizerLloydMax(size_t d, const std::vector<float>& trained)
+            : Base(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        return simd8float32(_mm256_i32gather_ps(
+                this->centroids, unpack_8x1bit_to_u32(code, i), sizeof(float)));
+    }
+
+    void encode_vector(const float* x, uint8_t* code) const final {
+        __m256 boundary = _mm256_set1_ps(this->boundaries[0]);
+        for (size_t i = 0; i < this->d; i += 8) {
+            __m256 vals = _mm256_loadu_ps(x + i);
+            int mask = _mm256_movemask_ps(
+                    _mm256_cmp_ps(vals, boundary, _CMP_GT_OQ));
+            code[i / 8] = static_cast<uint8_t>(mask);
+        }
+    }
+
+    void decode_vector(const uint8_t* code, float* x) const final {
+        for (size_t i = 0; i < this->d; i += 8) {
+            simd8float32 xi =
+                    reconstruct_8_components(code, static_cast<int>(i));
+            _mm256_storeu_ps(x + i, xi.f);
+        }
+    }
+};
+
+// 2-bit MSE: 4 centroids, 3 boundaries.
+// Encode: branchless index = sum of 3 comparisons per component.
+// Decode: gather via index unpack.
+// NOLINTNEXTLINE(facebook-hte-MisplacedTemplateSpecialization,facebook-hte-ShadowingClass)
+template <>
+struct QuantizerLloydMax<2, SIMDLevel::AVX2>
+        : QuantizerLloydMax<2, SIMDLevel::NONE> {
+    using Base = QuantizerLloydMax<2, SIMDLevel::NONE>;
+
+    QuantizerLloydMax(size_t d, const std::vector<float>& trained)
+            : Base(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        return simd8float32(_mm256_i32gather_ps(
+                this->centroids, unpack_8x2bit_to_u32(code, i), sizeof(float)));
+    }
+
+    void encode_vector(const float* x, uint8_t* code) const final {
+        // 3 boundaries → branchless: idx = (x>b0) + (x>b1) + (x>b2)
+        // _mm256_cmp_ps returns all-ones (-1 as int32) for true,
+        // so we negate the sum to get positive indices.
+        __m256 b0 = _mm256_set1_ps(this->boundaries[0]);
+        __m256 b1 = _mm256_set1_ps(this->boundaries[1]);
+        __m256 b2 = _mm256_set1_ps(this->boundaries[2]);
+        for (size_t i = 0; i < this->d; i += 8) {
+            __m256 vals = _mm256_loadu_ps(x + i);
+            __m256i gt0 =
+                    _mm256_castps_si256(_mm256_cmp_ps(vals, b0, _CMP_GT_OQ));
+            __m256i gt1 =
+                    _mm256_castps_si256(_mm256_cmp_ps(vals, b1, _CMP_GT_OQ));
+            __m256i gt2 =
+                    _mm256_castps_si256(_mm256_cmp_ps(vals, b2, _CMP_GT_OQ));
+            // Each gt is 0 or -1 (0xFFFFFFFF). Sum = -(index).
+            __m256i idx = _mm256_sub_epi32(
+                    _mm256_setzero_si256(),
+                    _mm256_add_epi32(_mm256_add_epi32(gt0, gt1), gt2));
+            // Pack 8 x 2-bit indices into 2 bytes.
+            // Store to temp array and pack scalarly - faster than
+            // extract+permute.
+            alignas(32) int32_t idx_array[8];
+            _mm256_store_si256((__m256i*)idx_array, idx);
+            for (int j = 0; j < 8; j++) {
+                this->encode_index(
+                        static_cast<uint8_t>(idx_array[j] & 0x3), code, i + j);
+            }
+        }
+    }
+
+    void decode_vector(const uint8_t* code, float* x) const final {
+        for (size_t i = 0; i < this->d; i += 8) {
+            simd8float32 xi =
+                    reconstruct_8_components(code, static_cast<int>(i));
+            _mm256_storeu_ps(x + i, xi.f);
+        }
+    }
+};
+
+// 3-bit and 4-bit Lloyd-Max: use branchless comparison chain for encode.
+// k boundaries → idx = sum of k-1 comparisons.
+#define DEFINE_LLOYD_MAX_AVX2_MULTIBIT(NBITS, UNPACK_EXPR)                   \
+    template <>                                                              \
+    struct QuantizerLloydMax<NBITS, SIMDLevel::AVX2>                         \
+            : QuantizerLloydMax<NBITS, SIMDLevel::NONE> {                    \
+        using Base = QuantizerLloydMax<NBITS, SIMDLevel::NONE>;              \
+                                                                             \
+        QuantizerLloydMax(size_t d, const std::vector<float>& trained)       \
+                : Base(d, trained) {                                         \
+            assert(d % 8 == 0);                                              \
+        }                                                                    \
+                                                                             \
+        FAISS_ALWAYS_INLINE simd8float32                                     \
+        reconstruct_8_components(const uint8_t* code, int i) const {         \
+            return simd8float32(_mm256_i32gather_ps(                         \
+                    this->centroids, (UNPACK_EXPR), sizeof(float)));         \
+        }                                                                    \
+                                                                             \
+        void decode_vector(const uint8_t* code, float* x) const final {      \
+            for (size_t i = 0; i < this->d; i += 8) {                        \
+                simd8float32 xi =                                            \
+                        reconstruct_8_components(code, static_cast<int>(i)); \
+                _mm256_storeu_ps(x + i, xi.f);                               \
+            }                                                                \
+        }                                                                    \
+    }
+
+DEFINE_LLOYD_MAX_AVX2_MULTIBIT(3, unpack_8x3bit_to_u32(code, i));
+DEFINE_LLOYD_MAX_AVX2_MULTIBIT(4, unpack_8x4bit_to_u32(code, i));
+
+#undef DEFINE_LLOYD_MAX_AVX2_MULTIBIT
+
+// 8-bit Lloyd-Max: indices are raw bytes, no bit packing.
+template <>
+struct QuantizerLloydMax<8, SIMDLevel::AVX2>
+        : QuantizerLloydMax<8, SIMDLevel::NONE> {
+    using Base = QuantizerLloydMax<8, SIMDLevel::NONE>;
+
+    QuantizerLloydMax(size_t d, const std::vector<float>& trained)
+            : Base(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        const __m128i packed = _mm_loadl_epi64(
+                (const __m128i*)(code + static_cast<size_t>(i)));
+        const __m256i indices = _mm256_cvtepu8_epi32(packed);
+        return simd8float32(
+                _mm256_i32gather_ps(this->centroids, indices, sizeof(float)));
+    }
+
+    void decode_vector(const uint8_t* code, float* x) const final {
+        for (size_t i = 0; i < this->d; i += 8) {
+            simd8float32 xi =
+                    reconstruct_8_components(code, static_cast<int>(i));
+            _mm256_storeu_ps(x + i, xi.f);
+        }
+    }
+};
+
+/**********************************************************
+ * FP16 Quantizer
+ **********************************************************/
+
+template <>
+struct QuantizerFP16<SIMDLevel::AVX2> : QuantizerFP16<SIMDLevel::NONE> {
+    QuantizerFP16(size_t d, const std::vector<float>& trained)
+            : QuantizerFP16<SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m128i codei = _mm_loadu_si128((const __m128i*)(code + 2 * i));
+        return simd8float32(_mm256_cvtph_ps(codei));
+    }
+};
+
+/**********************************************************
+ * BF16 Quantizer
+ **********************************************************/
+
+template <>
+struct QuantizerBF16<SIMDLevel::AVX2> : QuantizerBF16<SIMDLevel::NONE> {
+    QuantizerBF16(size_t d, const std::vector<float>& trained)
+            : QuantizerBF16<SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m128i code_128i = _mm_loadu_si128((const __m128i*)(code + 2 * i));
+        __m256i code_256i = _mm256_cvtepu16_epi32(code_128i);
+        code_256i = _mm256_slli_epi32(code_256i, 16);
+        return simd8float32(_mm256_castsi256_ps(code_256i));
+    }
+};
+
+/**********************************************************
+ * 8bit Direct Quantizer
+ **********************************************************/
+
+template <>
+struct Quantizer8bitDirect<SIMDLevel::AVX2>
+        : Quantizer8bitDirect<SIMDLevel::NONE> {
+    Quantizer8bitDirect(size_t d, const std::vector<float>& trained)
+            : Quantizer8bitDirect<SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m128i x8 = _mm_loadl_epi64((__m128i*)(code + i)); // 8 * int8
+        __m256i y8 = _mm256_cvtepu8_epi32(x8);              // 8 * int32
+        return simd8float32(_mm256_cvtepi32_ps(y8));        // 8 * float32
+    }
+};
+
+/**********************************************************
+ * 8bit Direct Signed Quantizer
+ **********************************************************/
+
+template <>
+struct Quantizer8bitDirectSigned<SIMDLevel::AVX2>
+        : Quantizer8bitDirectSigned<SIMDLevel::NONE> {
+    Quantizer8bitDirectSigned(size_t d, const std::vector<float>& trained)
+            : Quantizer8bitDirectSigned<SIMDLevel::NONE>(d, trained) {
+        assert(d % 8 == 0);
+    }
+
+    FAISS_ALWAYS_INLINE simd8float32
+    reconstruct_8_components(const uint8_t* code, int i) const {
+        __m128i x8 = _mm_loadl_epi64((__m128i*)(code + i)); // 8 * int8
+        __m256i y8 = _mm256_cvtepu8_epi32(x8);              // 8 * int32
+        __m256i c8 = _mm256_set1_epi32(128);
+        __m256i z8 = _mm256_sub_epi32(y8, c8); // subtract 128 from all lanes
+        return simd8float32(_mm256_cvtepi32_ps(z8)); // 8 * float32
+    }
+};
+
+/**********************************************************
+ * SimilarityL2 and SimilarityIP
+ **********************************************************/
+
+template <>
+struct SimilarityL2<SIMDLevel::AVX2> {
+    static constexpr int simdwidth = 8;
+    static constexpr SIMDLevel simd_level = SIMDLevel::AVX2;
+    static constexpr MetricType metric_type = METRIC_L2;
+
+    const float *y, *yi;
+
+    explicit SimilarityL2(const float* y) : y(y), yi(nullptr) {}
+    simd8float32 accu8 = {};
+
+    FAISS_ALWAYS_INLINE void begin_8() {
+        accu8.clear();
+        yi = y;
+    }
+
+    FAISS_ALWAYS_INLINE void add_8_components(simd8float32 x) {
+        __m256 yiv = _mm256_loadu_ps(yi);
+        yi += 8;
+        __m256 tmp = _mm256_sub_ps(yiv, x.f);
+        accu8 = simd8float32(_mm256_fmadd_ps(tmp, tmp, accu8.f));
+    }
+
+    FAISS_ALWAYS_INLINE void add_8_components_2(
+            simd8float32 x,
+            simd8float32 y_2) {
+        __m256 tmp = _mm256_sub_ps(y_2.f, x.f);
+        accu8 = simd8float32(_mm256_fmadd_ps(tmp, tmp, accu8.f));
+    }
+
+    FAISS_ALWAYS_INLINE float result_8() {
+        const __m128 sum = _mm_add_ps(
+                _mm256_castps256_ps128(accu8.f),
+                _mm256_extractf128_ps(accu8.f, 1));
+        const __m128 v0 = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(0, 0, 3, 2));
+        const __m128 v1 = _mm_add_ps(sum, v0);
+        __m128 v2 = _mm_shuffle_ps(v1, v1, _MM_SHUFFLE(0, 0, 0, 1));
+        const __m128 v3 = _mm_add_ps(v1, v2);
+        return _mm_cvtss_f32(v3);
+    }
+
+    static void adjust_query_for_raw_decode(
+            const float* x,
+            float* q_adj,
+            size_t d,
+            float vmin,
+            float vdiff,
+            float& scale_factor,
+            float& bias) {
+        float inv_vdiff = (vdiff != 0) ? 1.0f / vdiff : 0.0f;
+        for (size_t i = 0; i < d; i++) {
+            q_adj[i] = (x[i] - vmin) * inv_vdiff;
+        }
+        scale_factor = vdiff * vdiff;
+        bias = 0;
+    }
+};
+
+template <>
+struct SimilarityIP<SIMDLevel::AVX2> {
+    static constexpr int simdwidth = 8;
+    static constexpr SIMDLevel simd_level = SIMDLevel::AVX2;
+    static constexpr MetricType metric_type = METRIC_INNER_PRODUCT;
+
+    const float *y, *yi;
+
+    float accu;
+
+    explicit SimilarityIP(const float* y) : y(y), yi(nullptr), accu(0) {}
+
+    simd8float32 accu8 = {};
+
+    FAISS_ALWAYS_INLINE void begin_8() {
+        accu8.clear();
+        yi = y;
+    }
+
+    FAISS_ALWAYS_INLINE void add_8_components(simd8float32 x) {
+        __m256 yiv = _mm256_loadu_ps(yi);
+        yi += 8;
+        accu8.f = _mm256_fmadd_ps(yiv, x.f, accu8.f);
+    }
+
+    FAISS_ALWAYS_INLINE void add_8_components_2(
+            simd8float32 x1,
+            simd8float32 x2) {
+        accu8.f = _mm256_fmadd_ps(x1.f, x2.f, accu8.f);
+    }
+
+    FAISS_ALWAYS_INLINE float result_8() {
+        const __m128 sum = _mm_add_ps(
+                _mm256_castps256_ps128(accu8.f),
+                _mm256_extractf128_ps(accu8.f, 1));
+        const __m128 v0 = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(0, 0, 3, 2));
+        const __m128 v1 = _mm_add_ps(sum, v0);
+        __m128 v2 = _mm_shuffle_ps(v1, v1, _MM_SHUFFLE(0, 0, 0, 1));
+        const __m128 v3 = _mm_add_ps(v1, v2);
+        return _mm_cvtss_f32(v3);
+    }
+
+    static void adjust_query_for_raw_decode(
+            const float* x,
+            float* q_adj,
+            size_t d,
+            float vmin,
+            float vdiff,
+            float& scale_factor,
+            float& bias) {
+        float sum_q = 0;
+        for (size_t i = 0; i < d; i++) {
+            q_adj[i] = x[i];
+            sum_q += x[i];
+        }
+        scale_factor = vdiff;
+        bias = vmin * sum_q;
+    }
+};
+
+/**********************************************************
+ * Distance computers
+ **********************************************************/
+
+template <class Quantizer, class Similarity>
+struct DCTemplate<Quantizer, Similarity, SIMDLevel::AVX2> : SQDistanceComputer {
+    using Sim = Similarity;
+
+    Quantizer quant;
+
+    // Pre-adjusted query buffer for uniform quantizers
+    std::vector<float> q_adj;
+    float scale_factor = 0;
+    float bias = 0;
+
+    static constexpr bool has_decode_raw() {
+        return requires(const Quantizer& q, const uint8_t* c, int i) {
+            { q.decode_8_raw(c, i) };
+        };
+    }
+
+    DCTemplate(size_t d, const std::vector<float>& trained)
+            : quant(d, trained) {
+        if constexpr (has_decode_raw()) {
+            q_adj.resize(d);
+        }
+    }
+
+    float compute_distance(const float* x, const uint8_t* code) const {
+        Similarity sim(x);
+        sim.begin_8();
+        for (size_t i = 0; i < quant.d; i += 8) {
+            simd8float32 xi =
+                    quant.reconstruct_8_components(code, static_cast<int>(i));
+            sim.add_8_components(xi);
+        }
+        return sim.result_8();
+    }
+
+    float compute_code_distance(const uint8_t* code1, const uint8_t* code2)
+            const {
+        Similarity sim(nullptr);
+        sim.begin_8();
+        for (size_t i = 0; i < quant.d; i += 8) {
+            simd8float32 x1 =
+                    quant.reconstruct_8_components(code1, static_cast<int>(i));
+            simd8float32 x2 =
+                    quant.reconstruct_8_components(code2, static_cast<int>(i));
+            sim.add_8_components_2(x1, x2);
+        }
+        return sim.result_8();
+    }
+
+    void set_query(const float* x) final {
+        q = x;
+        if constexpr (has_decode_raw()) {
+            Sim::adjust_query_for_raw_decode(
+                    x,
+                    q_adj.data(),
+                    quant.d,
+                    quant.vmin,
+                    quant.vdiff,
+                    scale_factor,
+                    bias);
+        }
+    }
+
+    float query_to_code_predecoded(const uint8_t* code) const {
+        Similarity sim(q_adj.data());
+        sim.begin_8();
+        for (size_t i = 0; i < quant.d; i += 8) {
+            simd8float32 xi = quant.decode_8_raw(code, static_cast<int>(i));
+            sim.add_8_components(xi);
+        }
+        return bias + scale_factor * sim.result_8();
+    }
+
+    float symmetric_dis(idx_t i, idx_t j) override {
+        return compute_code_distance(
+                codes + i * code_size, codes + j * code_size);
+    }
+
+    float query_to_code(const uint8_t* code) const final {
+        if constexpr (has_decode_raw()) {
+            return query_to_code_predecoded(code);
+        } else {
+            return compute_distance(q, code);
+        }
+    }
+
+    void query_to_codes_batch_4(
+            const uint8_t* code_0,
+            const uint8_t* code_1,
+            const uint8_t* code_2,
+            const uint8_t* code_3,
+            float& dis0,
+            float& dis1,
+            float& dis2,
+            float& dis3) const final {
+        Similarity sim0(q);
+        Similarity sim1(q);
+        Similarity sim2(q);
+        Similarity sim3(q);
+
+        sim0.begin_8();
+        sim1.begin_8();
+        sim2.begin_8();
+        sim3.begin_8();
+
+        for (size_t i = 0; i < quant.d; i += 8) {
+            const int ii = static_cast<int>(i);
+            simd8float32 xi0 = quant.reconstruct_8_components(code_0, ii);
+            simd8float32 xi1 = quant.reconstruct_8_components(code_1, ii);
+            simd8float32 xi2 = quant.reconstruct_8_components(code_2, ii);
+            simd8float32 xi3 = quant.reconstruct_8_components(code_3, ii);
+            sim0.add_8_components(xi0);
+            sim1.add_8_components(xi1);
+            sim2.add_8_components(xi2);
+            sim3.add_8_components(xi3);
+        }
+
+        dis0 = sim0.result_8();
+        dis1 = sim1.result_8();
+        dis2 = sim2.result_8();
+        dis3 = sim3.result_8();
+    }
+};
+
+template <class Similarity>
+struct DistanceComputerByte<Similarity, SIMDLevel::AVX2> : SQDistanceComputer {
+    using Sim = Similarity;
+
+    int d;
+    std::vector<uint8_t> tmp;
+
+    DistanceComputerByte(int d, const std::vector<float>&) : d(d), tmp(d) {
+        FAISS_THROW_IF_NOT(d % 16 == 0);
+    }
+
+    int compute_code_distance(const uint8_t* code1, const uint8_t* code2)
+            const {
+        // __m256i accu = _mm256_setzero_ps ();
+        __m256i accu = _mm256_setzero_si256();
+        for (int i = 0; i < d; i += 16) {
+            // load 16 bytes, convert to 16 uint16_t
+            __m256i c1 = _mm256_cvtepu8_epi16(
+                    _mm_loadu_si128((__m128i*)(code1 + i)));
+            __m256i c2 = _mm256_cvtepu8_epi16(
+                    _mm_loadu_si128((__m128i*)(code2 + i)));
+            __m256i prod32;
+            if (Sim::metric_type == METRIC_INNER_PRODUCT) {
+                prod32 = _mm256_madd_epi16(c1, c2);
+            } else {
+                __m256i diff = _mm256_sub_epi16(c1, c2);
+                prod32 = _mm256_madd_epi16(diff, diff);
+            }
+            accu = _mm256_add_epi32(accu, prod32);
+        }
+        __m128i sum = _mm256_extractf128_si256(accu, 0);
+        sum = _mm_add_epi32(sum, _mm256_extractf128_si256(accu, 1));
+        sum = _mm_hadd_epi32(sum, sum);
+        sum = _mm_hadd_epi32(sum, sum);
+        return _mm_cvtsi128_si32(sum);
+    }
+
+    void set_query(const float* x) final {
+        /*
+        for (int i = 0; i < d; i += 8) {
+            __m256 xi = _mm256_loadu_ps (x + i);
+            __m256i ci = _mm256_cvtps_epi32(xi);
+        */
+        for (int i = 0; i < d; i++) {
+            tmp[i] = int(x[i]);
+        }
+    }
+
+    int compute_distance(const float* x, const uint8_t* code) {
+        set_query(x);
+        return compute_code_distance(tmp.data(), code);
+    }
+
+    float symmetric_dis(idx_t i, idx_t j) override {
+        return compute_code_distance(
+                codes + i * code_size, codes + j * code_size);
+    }
+
+    float query_to_code(const uint8_t* code) const final {
+        return compute_code_distance(tmp.data(), code);
+    }
+};
+
+template <class Similarity>
+struct DistanceComputerByteSigned<Similarity, SIMDLevel::AVX2>
+        : SQDistanceComputer {
+    using Sim = Similarity;
+
+    int d;
+    std::vector<uint8_t> tmp;
+
+    DistanceComputerByteSigned(int d, const std::vector<float>&)
+            : d(d), tmp(d) {
+        FAISS_THROW_IF_NOT(d % 16 == 0);
+    }
+
+    int compute_code_distance(const uint8_t* code1, const uint8_t* code2)
+            const {
+        // codes store value + 128. madd_epi16 is signed, so IP unbiases the
+        // bytes before multiplying; for L2 the +128 cancels in the difference.
+        // Only dispatched for d % 16 == 0, so the loop needs no tail.
+        __m256i accu = _mm256_setzero_si256();
+        for (int i = 0; i < d; i += 16) {
+            __m256i c1 = _mm256_cvtepu8_epi16(
+                    _mm_loadu_si128((const __m128i*)(code1 + i)));
+            __m256i c2 = _mm256_cvtepu8_epi16(
+                    _mm_loadu_si128((const __m128i*)(code2 + i)));
+            __m256i prod32;
+            if (Sim::metric_type == METRIC_INNER_PRODUCT) {
+                const __m256i bias = _mm256_set1_epi16(128);
+                c1 = _mm256_sub_epi16(c1, bias);
+                c2 = _mm256_sub_epi16(c2, bias);
+                prod32 = _mm256_madd_epi16(c1, c2);
+            } else {
+                __m256i diff = _mm256_sub_epi16(c1, c2);
+                prod32 = _mm256_madd_epi16(diff, diff);
+            }
+            accu = _mm256_add_epi32(accu, prod32);
+        }
+        __m128i sum = _mm256_extractf128_si256(accu, 0);
+        sum = _mm_add_epi32(sum, _mm256_extractf128_si256(accu, 1));
+        sum = _mm_hadd_epi32(sum, sum);
+        sum = _mm_hadd_epi32(sum, sum);
+        return _mm_cvtsi128_si32(sum);
+    }
+
+    void set_query(const float* x) final {
+        for (int i = 0; i < d; i++) {
+            tmp[i] = uint8_t(int(x[i]) + 128);
+        }
+    }
+
+    int compute_distance(const float* x, const uint8_t* code) {
+        set_query(x);
+        return compute_code_distance(tmp.data(), code);
+    }
+
+    float symmetric_dis(idx_t i, idx_t j) override {
+        return compute_code_distance(
+                codes + i * code_size, codes + j * code_size);
+    }
+
+    float query_to_code(const uint8_t* code) const final {
+        return compute_code_distance(tmp.data(), code);
+    }
+};
+
+/**********************************************************
+ * TurboQuant masked_sum AVX2 specialization
+ **********************************************************/
+
+template <SIMDLevel SL0>
+float turboq_masked_sum(const float* arr, const uint8_t* bits, size_t d);
+
+template <>
+float turboq_masked_sum<SIMDLevel::AVX2>(
+        const float* arr,
+        const uint8_t* bits,
+        size_t d) {
+    const __m256i bit_masks = _mm256_set_epi32(128, 64, 32, 16, 8, 4, 2, 1);
+    __m256 acc = _mm256_setzero_ps();
+    size_t full_bytes = d / 8;
+    for (size_t byte_idx = 0; byte_idx < full_bytes; byte_idx++) {
+        __m256i byte_broadcast =
+                _mm256_set1_epi32(static_cast<int>(bits[byte_idx]));
+        __m256i masked = _mm256_and_si256(byte_broadcast, bit_masks);
+        __m256i cmp = _mm256_cmpeq_epi32(masked, bit_masks);
+        __m256 mask = _mm256_castsi256_ps(cmp);
+        __m256 vals = _mm256_loadu_ps(arr + byte_idx * 8);
+        acc = _mm256_add_ps(acc, _mm256_and_ps(mask, vals));
+    }
+    __m128 hi = _mm256_extractf128_ps(acc, 1);
+    __m128 lo = _mm256_castps256_ps128(acc);
+    __m128 sum128 = _mm_add_ps(lo, hi);
+    __m128 shuf = _mm_movehdup_ps(sum128);
+    __m128 sums = _mm_add_ps(sum128, shuf);
+    shuf = _mm_movehl_ps(shuf, sums);
+    sums = _mm_add_ss(sums, shuf);
+    float result = _mm_cvtss_f32(sums);
+    size_t tail_start = full_bytes * 8;
+    if (tail_start < d) {
+        uint8_t last_byte = bits[full_bytes];
+        for (size_t j = tail_start; j < d; j++) {
+            if (last_byte & (1 << (j - tail_start))) {
+                result += arr[j];
+            }
+        }
+    }
+    return result;
+}
+
+} // namespace scalar_quantizer
+} // namespace faiss
+
+#define THE_LEVEL_TO_DISPATCH SIMDLevel::AVX2
+#include <faiss/impl/scalar_quantizer/sq-dispatch.h>
+
+#endif // COMPILE_SIMD_AVX2

@@ -18,10 +18,10 @@ namespace faiss {
  * IndexRefine
  ***************************************************/
 
-IndexRefine::IndexRefine(Index* base_index, Index* refine_index)
-        : Index(base_index->d, base_index->metric_type),
-          base_index(base_index),
-          refine_index(refine_index) {
+IndexRefine::IndexRefine(Index* base_index_in, Index* refine_index_in)
+        : Index(base_index_in->d, base_index_in->metric_type),
+          base_index(base_index_in),
+          refine_index(refine_index_in) {
     own_fields = own_refine_index = false;
     if (refine_index != nullptr) {
         FAISS_THROW_IF_NOT(base_index->d == refine_index->d);
@@ -58,36 +58,6 @@ void IndexRefine::reset() {
     ntotal = 0;
 }
 
-namespace {
-
-using idx_t = faiss::idx_t;
-
-template <class C>
-static void reorder_2_heaps(
-        idx_t n,
-        idx_t k,
-        idx_t* __restrict labels,
-        float* __restrict distances,
-        idx_t k_base,
-        const idx_t* __restrict base_labels,
-        const float* __restrict base_distances) {
-#pragma omp parallel for if (n > 1) num_threads(num_omp_threads)
-    for (idx_t i = 0; i < n; i++) {
-        idx_t* idxo = labels + i * k;
-        float* diso = distances + i * k;
-        const idx_t* idxi = base_labels + i * k_base;
-        const float* disi = base_distances + i * k_base;
-
-        heap_heapify<C>(k, diso, idxo, disi, idxi, k);
-        if (k_base != k) { // add remaining elements
-            heap_addn<C>(k, diso, idxo, disi + k, idxi + k, k_base - k);
-        }
-        heap_reorder<C>(k, diso, idxo);
-    }
-}
-
-} // anonymous namespace
-
 void IndexRefine::search(
         idx_t n,
         const float* x,
@@ -114,6 +84,8 @@ void IndexRefine::search(
 
     FAISS_THROW_IF_NOT(k > 0);
     FAISS_THROW_IF_NOT(is_trained);
+    FAISS_THROW_IF_NOT_MSG(
+            n <= INT64_MAX / k_base, "n * k_base would overflow int64");
     idx_t* base_labels = labels;
     float* base_distances = distances;
     std::unique_ptr<idx_t[]> del1;
@@ -129,8 +101,8 @@ void IndexRefine::search(
     base_index->search(
             n, x, k_base, base_distances, base_labels, base_index_params);
 
-    for (int i = 0; i < n * k_base; i++) {
-        assert(base_labels[i] >= -1 && base_labels[i] < ntotal);
+    for (idx_t i = 0; i < n * k_base; i++) {
+        FAISS_THROW_IF_NOT(base_labels[i] >= -1 && base_labels[i] < ntotal);
     }
 
     // parallelize over queries
@@ -155,12 +127,12 @@ void IndexRefine::search(
 
     // sort and store result
     if (metric_type == METRIC_L2) {
-        typedef CMax<float, idx_t> C;
+        using C = CMax<float, idx_t>;
         reorder_2_heaps<C>(
                 n, k, labels, distances, k_base, base_labels, base_distances);
 
     } else if (metric_type == METRIC_INNER_PRODUCT) {
-        typedef CMin<float, idx_t> C;
+        using C = CMin<float, idx_t>;
         reorder_2_heaps<C>(
                 n, k, labels, distances, k_base, base_labels, base_distances);
     } else {
@@ -184,9 +156,19 @@ void IndexRefine::range_search(
     SearchParameters* base_index_params =
             (params != nullptr) ? params->base_index_params : nullptr;
 
-    base_index->range_search(n, x, radius, result, base_index_params);
+    const float kf = (params != nullptr) ? params->k_factor : this->k_factor;
 
-#pragma omp parallel if (n > 1)
+    const bool is_similarity = is_similarity_metric(metric_type);
+
+    // Scale the base_index search radius by k_factor. Results are filtered to
+    // the exact radius below, so this only affects recall, not correctness; it
+    // is up to the user to pick a k_factor that widens the base search for
+    // their metric.
+    const float base_radius = radius * kf;
+
+    base_index->range_search(n, x, base_radius, result, base_index_params);
+
+#pragma omp parallel if (n > 1) num_threads(num_omp_threads)
     {
         std::unique_ptr<DistanceComputer> dc(
                 refine_index->get_distance_computer());
@@ -205,6 +187,25 @@ void IndexRefine::range_search(
             }
         }
     }
+
+    // Exact filtering done here, as base index's approximations
+    // can fall outside the specified exact radius.
+    const std::vector<size_t> prev_lims(result->lims, result->lims + n + 1);
+    size_t wp = 0;
+    for (idx_t i = 0; i < n; i++) {
+        for (size_t j = prev_lims[i]; j < prev_lims[i + 1]; j++) {
+            const float dis = result->distances[j];
+            const bool within = is_similarity
+                    ? CMin<float, idx_t>::cmp(radius, dis)
+                    : CMax<float, idx_t>::cmp(radius, dis);
+            if (within) {
+                result->labels[wp] = result->labels[j];
+                result->distances[wp] = result->distances[j];
+                wp++;
+            }
+        }
+        result->lims[i + 1] = wp;
+    }
 }
 
 void IndexRefine::reconstruct(idx_t key, float* recons) const {
@@ -221,7 +222,7 @@ void IndexRefine::sa_encode(idx_t n, const float* x, uint8_t* bytes) const {
     base_index->sa_encode(n, x, tmp1.get());
     std::unique_ptr<uint8_t[]> tmp2(new uint8_t[n * cs2]);
     refine_index->sa_encode(n, x, tmp2.get());
-    for (size_t i = 0; i < n; i++) {
+    for (idx_t i = 0; i < n; i++) {
         uint8_t* b = bytes + i * (cs1 + cs2);
         memcpy(b, tmp1.get() + cs1 * i, cs1);
         memcpy(b + cs1, tmp2.get() + cs2 * i, cs2);
@@ -230,10 +231,9 @@ void IndexRefine::sa_encode(idx_t n, const float* x, uint8_t* bytes) const {
 
 void IndexRefine::sa_decode(idx_t n, const uint8_t* bytes, float* x) const {
     size_t cs1 = base_index->sa_code_size(), cs2 = refine_index->sa_code_size();
-    std::unique_ptr<uint8_t[]> tmp2(
-            new uint8_t[n * refine_index->sa_code_size()]);
-    for (size_t i = 0; i < n; i++) {
-        memcpy(tmp2.get() + i * cs2, bytes + i * (cs1 + cs2), cs2);
+    std::unique_ptr<uint8_t[]> tmp2(new uint8_t[n * cs2]);
+    for (idx_t i = 0; i < n; i++) {
+        memcpy(tmp2.get() + i * cs2, bytes + i * (cs1 + cs2) + cs1, cs2);
     }
 
     refine_index->sa_decode(n, tmp2.get(), x);
@@ -252,10 +252,10 @@ IndexRefine::~IndexRefine() {
  * IndexRefineFlat
  ***************************************************/
 
-IndexRefineFlat::IndexRefineFlat(Index* base_index)
+IndexRefineFlat::IndexRefineFlat(Index* base_index_in)
         : IndexRefine(
-                  base_index,
-                  new IndexFlat(base_index->d, base_index->metric_type)) {
+                  base_index_in,
+                  new IndexFlat(base_index_in->d, base_index_in->metric_type)) {
     is_trained = base_index->is_trained;
     own_refine_index = true;
     FAISS_THROW_IF_NOT_MSG(
@@ -263,8 +263,8 @@ IndexRefineFlat::IndexRefineFlat(Index* base_index)
             "base_index should be empty in the beginning");
 }
 
-IndexRefineFlat::IndexRefineFlat(Index* base_index, const float* xb)
-        : IndexRefine(base_index, nullptr) {
+IndexRefineFlat::IndexRefineFlat(Index* base_index_in, const float* xb)
+        : IndexRefine(base_index_in, nullptr) {
     is_trained = base_index->is_trained;
     refine_index = new IndexFlat(base_index->d, base_index->metric_type);
     own_refine_index = true;
@@ -301,6 +301,8 @@ void IndexRefineFlat::search(
 
     FAISS_THROW_IF_NOT(k > 0);
     FAISS_THROW_IF_NOT(is_trained);
+    FAISS_THROW_IF_NOT_MSG(
+            n <= INT64_MAX / k_base, "n * k_base would overflow int64");
     idx_t* base_labels = labels;
     float* base_distances = distances;
     std::unique_ptr<idx_t[]> del1;
@@ -316,8 +318,8 @@ void IndexRefineFlat::search(
     base_index->search(
             n, x, k_base, base_distances, base_labels, base_index_params);
 
-    for (int i = 0; i < n * k_base; i++) {
-        assert(base_labels[i] >= -1 && base_labels[i] < ntotal);
+    for (idx_t i = 0; i < n * k_base; i++) {
+        FAISS_THROW_IF_NOT(base_labels[i] >= -1 && base_labels[i] < ntotal);
     }
 
     // compute refined distances
@@ -328,12 +330,12 @@ void IndexRefineFlat::search(
 
     // sort and store result
     if (metric_type == METRIC_L2) {
-        typedef CMax<float, idx_t> C;
+        using C = CMax<float, idx_t>;
         reorder_2_heaps<C>(
                 n, k, labels, distances, k_base, base_labels, base_distances);
 
     } else if (metric_type == METRIC_INNER_PRODUCT) {
-        typedef CMin<float, idx_t> C;
+        using C = CMin<float, idx_t>;
         reorder_2_heaps<C>(
                 n, k, labels, distances, k_base, base_labels, base_distances);
     } else {
@@ -356,7 +358,7 @@ void IndexRefinePanorama::search(
     if (params_in) {
         params = dynamic_cast<const IndexRefineSearchParameters*>(params_in);
         FAISS_THROW_IF_NOT_MSG(
-                params, "IndexRefineFlat params have incorrect type");
+                params, "IndexRefinePanorama params have incorrect type");
     }
 
     idx_t k_base = (params != nullptr) ? idx_t(k * params->k_factor)
@@ -371,6 +373,8 @@ void IndexRefinePanorama::search(
 
     FAISS_THROW_IF_NOT(k > 0);
     FAISS_THROW_IF_NOT(is_trained);
+    FAISS_THROW_IF_NOT_MSG(
+            n <= INT64_MAX / k_base, "n * k_base would overflow int64");
 
     std::unique_ptr<idx_t[]> del1;
     std::unique_ptr<float[]> del2;
@@ -382,8 +386,8 @@ void IndexRefinePanorama::search(
     base_index->search(
             n, x, k_base, base_distances, base_labels, base_index_params);
 
-    for (int i = 0; i < n * k_base; i++) {
-        assert(base_labels[i] >= -1 && base_labels[i] < ntotal);
+    for (idx_t i = 0; i < n * k_base; i++) {
+        FAISS_THROW_IF_NOT(base_labels[i] >= -1 && base_labels[i] < ntotal);
     }
 
     refine_index->search_subset(

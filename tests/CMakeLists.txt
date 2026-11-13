@@ -10,38 +10,91 @@ set(FAISS_TEST_SRC
   test_ivfpq_indexing.cpp
   test_lowlevel_ivf.cpp
   test_ivf_index.cpp
-  test_merge.cpp
   test_omp_threads.cpp
-  test_ondisk_ivf.cpp
   test_pairs_decoding.cpp
   test_params_override.cpp
   test_pq_encoding.cpp
   test_sliding_ivf.cpp
   test_threaded_index.cpp
   test_transfer_invlists.cpp
-  test_mem_leak.cpp
   test_cppcontrib_sa_decode.cpp
   test_cppcontrib_uintreader.cpp
   test_simdlib.cpp
   test_approx_topk.cpp
   test_RCQ_cropping.cpp
-  test_distances_simd.cpp
   test_heap.cpp
-  test_code_distance.cpp
+  test_pq_code_distance.cpp
   test_hnsw.cpp
+  test_NSG_compressed_graph.cpp
   test_partitioning.cpp
   test_fastscan_perf.cpp
-  test_disable_pq_sdc_tables.cpp
+  test_pqfs_unaligned.cpp
   test_common_ivf_empty_index.cpp
+  test_ivf_early_termination.cpp
   test_callback.cpp
   test_utils.cpp
   test_hamming.cpp
-  test_mmap.cpp
   test_zerocopy.cpp
+  test_scalar_quantizer.cpp
+  test_factory_tools.cpp
+  test_custom_result_handler.cpp
+  test_fastscan_filter.cpp
+  test_single_query_collect_handler.cpp
+  # These tests work in both static and DD modes (uniform SIMDConfig API)
+  test_distances_simd.cpp
+  test_simd_levels.cpp
+  test_fast_scan_distance_to_code.cpp
+  test_rabitq_fastscan.cpp
+  test_super_kmeans_foundations.cpp
 )
+
+# Tests that use POSIX APIs or have platform-specific issues on Windows
+if(NOT WIN32)
+  list(APPEND FAISS_TEST_SRC
+    test_merge.cpp
+    test_ondisk_ivf.cpp
+    test_disable_pq_sdc_tables.cpp
+    test_mmap.cpp
+  )
+endif()
 
 if(FAISS_ENABLE_SVS)
   list(APPEND FAISS_TEST_SRC test_svs.cpp)
+endif()
+
+# DD-only tests; x86-specific raw-intrinsic tests are added separately below.
+if(FAISS_OPT_LEVEL STREQUAL "dd")
+  list(APPEND FAISS_TEST_SRC
+    test_distances_dispatch.cpp
+    test_simd_perf.cpp
+  )
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|amd64|AMD64)")
+    list(APPEND FAISS_TEST_SRC
+      test_rabitq_simd.cpp
+      test_rabitq_simd_dd.cpp
+      test_simd_levels_x86_avx2.cpp
+      test_simd_levels_x86_avx512.cpp
+    )
+    # Set SIMD compile flags per file
+    # test_simd_levels_x86_avx2.cpp and test_simd_levels_x86_avx512.cpp
+    # contain raw intrinsics and need their respective SIMD flags.
+    if(NOT WIN32)
+      set_source_files_properties(test_simd_levels_x86_avx2.cpp
+        PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma;-mf16c;-mpopcnt"
+      )
+      set_source_files_properties(test_simd_levels_x86_avx512.cpp
+        PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma;-mf16c;-mpopcnt;-mavx512f;-mavx512cd;-mavx512vl;-mavx512dq;-mavx512bw"
+      )
+    else()
+      # MSVC
+      set_source_files_properties(test_simd_levels_x86_avx2.cpp
+        PROPERTIES COMPILE_OPTIONS "/arch:AVX2"
+      )
+      set_source_files_properties(test_simd_levels_x86_avx512.cpp
+        PROPERTIES COMPILE_OPTIONS "/arch:AVX512"
+      )
+    endif()
+  endif()
 endif()
 
 add_executable(faiss_test ${FAISS_TEST_SRC})
@@ -55,7 +108,7 @@ include(../cmake/link_to_faiss_lib.cmake)
 link_to_faiss_lib(faiss_test)
 
 if (FAISS_ENABLE_PYTHON)
-  target_link_libraries(faiss_test PUBLIC faiss_example_external_module)
+  add_dependencies(faiss_test faiss_example_external_module)
 endif()
 
 include(FetchContent)
@@ -97,4 +150,14 @@ target_link_libraries(faiss_test PRIVATE
 
 # Defines `gtest_discover_tests()`.
 include(GoogleTest)
-gtest_discover_tests(faiss_test)
+if(CMAKE_CROSSCOMPILING)
+  # Skip test discovery when cross-compiling: the binary cannot run on the
+  # host, so gtest_discover_tests() would fail.  The build itself verifies
+  # that the binary compiles and links correctly.
+elseif(WIN32)
+  # On Windows, defer test discovery to ctest time (PRE_TEST) instead of
+  # build time (POST_BUILD) because faiss.dll is not in PATH during build.
+  gtest_discover_tests(faiss_test DISCOVERY_MODE PRE_TEST)
+else()
+  gtest_discover_tests(faiss_test)
+endif()

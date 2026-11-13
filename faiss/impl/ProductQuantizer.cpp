@@ -13,12 +13,16 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <type_traits>
 
 #include <algorithm>
 
 #include <faiss/IndexFlat.h>
 #include <faiss/VectorTransform.h>
 #include <faiss/impl/FaissAssert.h>
+// NOLINTNEXTLINE(facebook-hte-InlineHeader)
+#include <faiss/impl/pq_code_distance/pq_code_distance-inl.h>
+#include <faiss/impl/simd_dispatch.h>
 #include <faiss/utils/distances.h>
 
 extern "C" {
@@ -47,8 +51,8 @@ namespace faiss {
  * PQ implementation
  *********************************************/
 
-ProductQuantizer::ProductQuantizer(size_t d, size_t M, size_t nbits)
-        : Quantizer(d, 0), M(M), nbits(nbits), assign_index(nullptr) {
+ProductQuantizer::ProductQuantizer(size_t d_in, size_t M_in, size_t nbits_in)
+        : Quantizer(d_in, 0), M(M_in), nbits(nbits_in), assign_index(nullptr) {
     set_derived_values();
 }
 
@@ -56,14 +60,15 @@ ProductQuantizer::ProductQuantizer() : ProductQuantizer(0, 1, 0) {}
 
 void ProductQuantizer::set_derived_values() {
     // quite a few derived values
+    FAISS_THROW_IF_NOT_MSG(M > 0, "M must be > 0");
     FAISS_THROW_IF_NOT_MSG(
             d % M == 0,
             "The dimension of the vector (d) should be a multiple of the number of subquantizers (M)");
     dsub = d / M;
-    code_size = (nbits * M + 7) / 8;
     FAISS_THROW_IF_MSG(nbits > 24, "nbits larger than 24 is not practical.");
+    code_size = (nbits * M + 7) / 8;
     ksub = 1 << nbits;
-    centroids.resize(d * ksub);
+    centroids.resize(mul_no_overflow(d, (size_t)ksub, "PQ centroids"));
     verbose = false;
     train_type = Train_default;
 }
@@ -137,8 +142,8 @@ void ProductQuantizer::train(size_t n, const float* x) {
         }
 
         std::unique_ptr<float[]> xslice(new float[n * dsub]);
-        for (int m = 0; m < M; m++) {
-            for (int j = 0; j < n; j++)
+        for (size_t m = 0; m < M; m++) {
+            for (size_t j = 0; j < n; j++)
                 memcpy(xslice.get() + j * dsub,
                        x + j * d + m * dsub,
                        dsub * sizeof(float));
@@ -177,7 +182,7 @@ void ProductQuantizer::train(size_t n, const float* x) {
 
             if (verbose) {
                 clus.verbose = true;
-                printf("Training PQ slice %d/%zd\n", m, M);
+                printf("Training PQ slice %zd/%zd\n", m, M);
             }
             IndexFlatL2 index(dsub);
             clus.train(n, xslice.get(), assign_index ? *assign_index : index);
@@ -195,14 +200,16 @@ void ProductQuantizer::train(size_t n, const float* x) {
         IndexFlatL2 index(dsub);
 
         clus.train(n * M, x, assign_index ? *assign_index : index);
-        for (int m = 0; m < M; m++) {
+        for (size_t m = 0; m < M; m++) {
             set_params(clus.centroids.data(), m);
         }
     }
 }
 
-template <class PQEncoder>
-void compute_code(const ProductQuantizer& pq, const float* x, uint8_t* code) {
+namespace {
+
+template <class PQEncoder, SIMDLevel SL>
+void compute_1_code(const ProductQuantizer& pq, const float* x, uint8_t* code) {
     std::vector<float> distances(pq.ksub);
 
     // It seems to be meaningless to allocate std::vector<float> distances.
@@ -248,7 +255,7 @@ void compute_code(const ProductQuantizer& pq, const float* x, uint8_t* code) {
         uint64_t idxm = 0;
         if (pq.transposed_centroids.empty()) {
             // the regular version
-            idxm = fvec_L2sqr_ny_nearest(
+            idxm = fvec_L2sqr_ny_nearest<SL>(
                     distances.data(),
                     xsub,
                     pq.get_centroids(m, 0),
@@ -256,7 +263,7 @@ void compute_code(const ProductQuantizer& pq, const float* x, uint8_t* code) {
                     pq.ksub);
         } else {
             // transposed centroids are available, use'em
-            idxm = fvec_L2sqr_ny_nearest_y_transposed(
+            idxm = fvec_L2sqr_ny_nearest_y_transposed<SL>(
                     distances.data(),
                     xsub,
                     pq.transposed_centroids.data() + m * pq.ksub,
@@ -270,20 +277,24 @@ void compute_code(const ProductQuantizer& pq, const float* x, uint8_t* code) {
     }
 }
 
+} // namespace
+
 void ProductQuantizer::compute_code(const float* x, uint8_t* code) const {
-    switch (nbits) {
-        case 8:
-            faiss::compute_code<PQEncoder8>(*this, x, code);
-            break;
+    with_simd_level_with_sve([&]<SIMDLevel SL>() {
+        switch (nbits) {
+            case 8:
+                compute_1_code<PQEncoder8, SL>(*this, x, code);
+                break;
 
-        case 16:
-            faiss::compute_code<PQEncoder16>(*this, x, code);
-            break;
+            case 16:
+                compute_1_code<PQEncoder16, SL>(*this, x, code);
+                break;
 
-        default:
-            faiss::compute_code<PQEncoderGeneric>(*this, x, code);
-            break;
-    }
+            default:
+                compute_1_code<PQEncoderGeneric, SL>(*this, x, code);
+                break;
+        }
+    }); // with_simd_level_with_sve
 }
 
 template <class PQDecoder>
@@ -314,8 +325,9 @@ void ProductQuantizer::decode(const uint8_t* code, float* x) const {
 }
 
 void ProductQuantizer::decode(const uint8_t* code, float* x, size_t n) const {
+    int64_t n_signed = n;
 #pragma omp parallel for if (n > 100) num_threads(num_omp_threads)
-    for (int64_t i = 0; i < n; i++) {
+    for (int64_t i = 0; i < n_signed; i++) {
         this->decode(code + code_size * i, x + d * i);
     }
 }
@@ -345,7 +357,8 @@ void ProductQuantizer::compute_codes_with_assign_index(
         const float* x,
         uint8_t* codes,
         size_t n) {
-    FAISS_THROW_IF_NOT(assign_index && assign_index->d == dsub);
+    FAISS_THROW_IF_NOT(
+            assign_index && static_cast<size_t>(assign_index->d) == dsub);
 
     for (size_t m = 0; m < M; m++) {
         assign_index->reset();
@@ -407,10 +420,11 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
         return;
     }
 
+    int64_t n_signed = n;
     if (dsub < 16) { // simple direct computation
 
 #pragma omp parallel for num_threads(num_omp_threads)
-        for (int64_t i = 0; i < n; i++)
+        for (int64_t i = 0; i < n_signed; i++)
             compute_code(x + i * d, codes + i * code_size);
 
     } else { // worthwhile to use BLAS
@@ -418,7 +432,7 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
         compute_distance_tables(n, x, dis_tables.get());
 
 #pragma omp parallel for num_threads(num_omp_threads)
-        for (int64_t i = 0; i < n; i++) {
+        for (int64_t i = 0; i < n_signed; i++) {
             uint8_t* code = codes + i * code_size;
             const float* tab = dis_tables.get() + i * ksub * M;
             compute_code_from_distance_table(tab, code);
@@ -428,51 +442,54 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
 
 void ProductQuantizer::compute_distance_table(const float* x, float* dis_table)
         const {
-    if (transposed_centroids.empty()) {
-        // use regular version
+    with_simd_level_with_sve([&]<SIMDLevel SL>() {
+        if (transposed_centroids.empty()) {
+            // use regular version
+            for (size_t m = 0; m < M; m++) {
+                fvec_L2sqr_ny<SL>(
+                        dis_table + m * ksub,
+                        x + m * dsub,
+                        get_centroids(m, 0),
+                        dsub,
+                        ksub);
+            }
+        } else {
+            // transposed centroids are available, use'em
+            for (size_t m = 0; m < M; m++) {
+                fvec_L2sqr_ny_transposed<SL>(
+                        dis_table + m * ksub,
+                        x + m * dsub,
+                        transposed_centroids.data() + m * ksub,
+                        centroids_sq_lengths.data() + m * ksub,
+                        dsub,
+                        M * ksub,
+                        ksub);
+            }
+        }
+    });
+}
+
+void ProductQuantizer::compute_inner_prod_table(
+        const float* x,
+        float* dis_table) const {
+    with_simd_level([&]<SIMDLevel SL>() {
         for (size_t m = 0; m < M; m++) {
-            fvec_L2sqr_ny(
+            fvec_inner_products_ny<SL>(
                     dis_table + m * ksub,
                     x + m * dsub,
                     get_centroids(m, 0),
                     dsub,
                     ksub);
         }
-    } else {
-        // transposed centroids are available, use'em
-        for (size_t m = 0; m < M; m++) {
-            fvec_L2sqr_ny_transposed(
-                    dis_table + m * ksub,
-                    x + m * dsub,
-                    transposed_centroids.data() + m * ksub,
-                    centroids_sq_lengths.data() + m * ksub,
-                    dsub,
-                    M * ksub,
-                    ksub);
-        }
-    }
-}
-
-void ProductQuantizer::compute_inner_prod_table(
-        const float* x,
-        float* dis_table) const {
-    size_t m;
-
-    for (m = 0; m < M; m++) {
-        fvec_inner_products_ny(
-                dis_table + m * ksub,
-                x + m * dsub,
-                get_centroids(m, 0),
-                dsub,
-                ksub);
-    }
+    });
 }
 
 void ProductQuantizer::compute_distance_tables(
         size_t nx,
         const float* x,
         float* dis_tables) const {
-#if defined(__AVX2__) || defined(__aarch64__)
+    int64_t nx_signed = nx;
+#if defined(COMPILE_SIMD_AVX2) || defined(COMPILE_SIMD_ARM_NEON)
     if (dsub == 2 && nbits < 8) { // interesting for a narrow range of settings
         compute_PQ_dis_tables_dsub2(
                 d, ksub, centroids.data(), nx, x, false, dis_tables);
@@ -481,13 +498,13 @@ void ProductQuantizer::compute_distance_tables(
             if (dsub < 16) {
 
 #pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
-        for (int64_t i = 0; i < nx; i++) {
+        for (int64_t i = 0; i < nx_signed; i++) {
             compute_distance_table(x + i * d, dis_tables + i * ksub * M);
         }
 
     } else { // use BLAS
 
-        for (int m = 0; m < M; m++) {
+        for (size_t m = 0; m < M; m++) {
             pairwise_L2sqr(
                     dsub,
                     nx,
@@ -506,7 +523,8 @@ void ProductQuantizer::compute_inner_prod_tables(
         size_t nx,
         const float* x,
         float* dis_tables) const {
-#if defined(__AVX2__) || defined(__aarch64__)
+    int64_t nx_signed = nx;
+#if defined(COMPILE_SIMD_AVX2) || defined(COMPILE_SIMD_ARM_NEON)
     if (dsub == 2 && nbits < 8) {
         compute_PQ_dis_tables_dsub2(
                 d, ksub, centroids.data(), nx, x, true, dis_tables);
@@ -515,14 +533,14 @@ void ProductQuantizer::compute_inner_prod_tables(
             if (dsub < 16) {
 
 #pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
-        for (int64_t i = 0; i < nx; i++) {
+        for (int64_t i = 0; i < nx_signed; i++) {
             compute_inner_prod_table(x + i * d, dis_tables + i * ksub * M);
         }
 
     } else { // use BLAS
 
         // compute distance tables
-        for (int m = 0; m < M; m++) {
+        for (size_t m = 0; m < M; m++) {
             FINTEGER ldc = ksub * M, nxi = nx, ksubi = ksub, dsubi = dsub,
                      di = d;
             float one = 1.0, zero = 0;
@@ -566,7 +584,7 @@ void pq_estimators_from_tables_Mmul4(
         float dis = 0;
         const float* dt = dis_table;
 
-        for (size_t m = 0; m < M; m += 4) {
+        for (int m = 0; m < M; m += 4) {
             float dism = 0;
             dism = dt[*codes++];
             dt += ksub;
@@ -638,7 +656,7 @@ void pq_estimators_from_tables(
     for (size_t j = 0; j < ncodes; j++) {
         float dis = 0;
         const float* __restrict dt = dis_table;
-        for (int m = 0; m < M; m++) {
+        for (size_t m = 0; m < M; m++) {
             dis += dt[*codes++];
             dt += ksub;
         }
@@ -686,10 +704,11 @@ void pq_knn_search_with_tables(
         HeapArray<C>* res,
         bool init_finalize_heap) {
     size_t k = res->k, nx = res->nh;
+    int64_t nx_signed = nx;
     size_t ksub = pq.ksub, M = pq.M;
 
 #pragma omp parallel for if (nx > 1) num_threads(num_omp_threads)
-    for (int64_t i = 0; i < nx; i++) {
+    for (int64_t i = 0; i < nx_signed; i++) {
         /* query preparation for asymmetric search: compute look-up tables */
         const float* dis_table = dis_tables + i * ksub * M;
 
@@ -703,8 +722,28 @@ void pq_knn_search_with_tables(
 
         switch (nbits) {
             case 8:
-                pq_estimators_from_tables<uint8_t, C>(
-                        pq, codes, ncodes, dis_table, k, heap_dis, heap_ids);
+                if (ksub == 256) {
+                    constexpr bool max_heap =
+                            std::is_same_v<C, CMax<float, int64_t>>;
+                    pq_code_distance::pq_scan_8bit(
+                            M,
+                            dis_table,
+                            codes,
+                            ncodes,
+                            k,
+                            heap_dis,
+                            heap_ids,
+                            max_heap);
+                } else {
+                    pq_estimators_from_tables<uint8_t, C>(
+                            pq,
+                            codes,
+                            ncodes,
+                            dis_table,
+                            k,
+                            heap_dis,
+                            heap_ids);
+                }
                 break;
 
             case 16:
@@ -785,22 +824,24 @@ void ProductQuantizer::compute_sdc_table() {
     sdc_table.resize(M * ksub * ksub);
 
     if (dsub < 4) {
+        with_simd_level_with_sve([&]<SIMDLevel SL>() {
 #pragma omp parallel for num_threads(num_omp_threads)
-        for (int mk = 0; mk < M * ksub; mk++) {
-            // allow omp to schedule in a more fine-grained way
-            // `collapse` is not supported in OpenMP 2.x
-            int m = mk / ksub;
-            int k = mk % ksub;
-            const float* cents = centroids.data() + m * ksub * dsub;
-            const float* centi = cents + k * dsub;
-            float* dis_tab = sdc_table.data() + m * ksub * ksub;
-            fvec_L2sqr_ny(dis_tab + k * ksub, centi, cents, dsub, ksub);
-        }
+            for (int64_t mk = 0; mk < static_cast<int64_t>(M * ksub); mk++) {
+                // allow omp to schedule in a more fine-grained way
+                // `collapse` is not supported in OpenMP 2.x
+                int m = mk / ksub;
+                int k = mk % ksub;
+                const float* cents = centroids.data() + m * ksub * dsub;
+                const float* centi = cents + k * dsub;
+                float* dis_tab = sdc_table.data() + m * ksub * ksub;
+                fvec_L2sqr_ny<SL>(dis_tab + k * ksub, centi, cents, dsub, ksub);
+            }
+        });
     } else {
         // NOTE: it would disable the omp loop in pairwise_L2sqr
         // but still accelerate especially when M >= 4
 #pragma omp parallel for num_threads(num_omp_threads)
-        for (int m = 0; m < M; m++) {
+        for (int64_t m = 0; m < static_cast<int64_t>(M); m++) {
             const float* cents = centroids.data() + m * ksub * dsub;
             float* dis_tab = sdc_table.data() + m * ksub * ksub;
             pairwise_L2sqr(
@@ -819,33 +860,46 @@ void ProductQuantizer::search_sdc(
     FAISS_THROW_IF_NOT(sdc_table.size() == M * ksub * ksub);
     FAISS_THROW_IF_NOT(nbits == 8);
     size_t k = res->k;
+    int64_t nq_signed = nq;
 
-#pragma omp parallel for num_threads(num_omp_threads)
-    for (int64_t i = 0; i < nq; i++) {
-        /* Compute distances and keep smallest values */
-        idx_t* heap_ids = res->ids + i * k;
-        float* heap_dis = res->val + i * k;
-        const uint8_t* qcode = qcodes + i * code_size;
+#pragma omp parallel num_threads(num_omp_threads)
+    {
+        // One allocation per OMP thread instead of one per query.
+        std::vector<const float*> q_row(M);
+#pragma omp for
+        for (int64_t i = 0; i < nq_signed; i++) {
+            idx_t* heap_ids = res->ids + i * k;
+            float* heap_dis = res->val + i * k;
+            const uint8_t* qcode = qcodes + i * code_size;
 
-        if (init_finalize_heap)
-            maxheap_heapify(k, heap_dis, heap_ids);
+            if (init_finalize_heap)
+                maxheap_heapify(k, heap_dis, heap_ids);
 
-        const uint8_t* bcode = bcodes;
-        for (size_t j = 0; j < nb; j++) {
-            float dis = 0;
-            const float* tab = sdc_table.data();
-            for (int m = 0; m < M; m++) {
-                dis += tab[bcode[m] + qcode[m] * ksub];
-                tab += ksub * ksub;
+            // Precompute per-subquantizer row pointers: q_row[m] points to
+            // sdc_table[m*ksub^2 + qcode[m]*ksub], eliminating M
+            // multiplications and M pointer advances per database vector in the
+            // j-loop.
+            const float* sdc = sdc_table.data();
+            for (size_t m = 0; m < M; m++) {
+                q_row[m] = sdc + m * (size_t)(ksub * ksub) +
+                        (size_t)qcode[m] * ksub;
             }
-            if (dis < heap_dis[0]) {
-                maxheap_replace_top(k, heap_dis, heap_ids, dis, j);
+
+            const uint8_t* bcode = bcodes;
+            for (size_t j = 0; j < nb; j++) {
+                float dis = 0;
+                for (size_t m = 0; m < M; m++) {
+                    dis += q_row[m][bcode[m]];
+                }
+                if (dis < heap_dis[0]) {
+                    maxheap_replace_top(k, heap_dis, heap_ids, dis, j);
+                }
+                bcode += code_size;
             }
-            bcode += code_size;
+
+            if (init_finalize_heap)
+                maxheap_reorder(k, heap_dis, heap_ids);
         }
-
-        if (init_finalize_heap)
-            maxheap_reorder(k, heap_dis, heap_ids);
     }
 }
 

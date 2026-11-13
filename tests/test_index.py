@@ -5,6 +5,7 @@
 
 """this is a basic test script for simple indices work"""
 from __future__ import absolute_import, division, print_function
+
 # no unicode_literals because it messes up in py2
 
 import numpy as np
@@ -12,17 +13,18 @@ import unittest
 import faiss
 import re
 
-from common_faiss_tests import get_dataset, get_dataset_2
+from common_faiss_tests import for_all_simd_levels, get_dataset, get_dataset_2
 from faiss.contrib.evaluation import check_ref_knn_with_draws
 
 
 class TestModuleInterface(unittest.TestCase):
 
     def test_version_attribute(self):
-        assert hasattr(faiss, '__version__')
-        assert re.match('^\\d+\\.\\d+\\.\\d+$', faiss.__version__)
+        assert hasattr(faiss, "__version__")
+        assert re.match("^\\d+\\.\\d+\\.\\d+$", faiss.__version__)
 
 
+@for_all_simd_levels
 class TestIndexFlat(unittest.TestCase):
 
     def do_test(self, nq, metric_type=faiss.METRIC_L2, k=10):
@@ -39,7 +41,9 @@ class TestIndexFlat(unittest.TestCase):
         D1, I1 = index.search(xq, k)
 
         if metric_type == faiss.METRIC_L2:
-            all_dis = ((xq.reshape(nq, 1, d) - xb.reshape(1, nb, d)) ** 2).sum(2)
+            all_dis = ((xq.reshape(nq, 1, d) - xb.reshape(1, nb, d)) ** 2).sum(
+                2
+            )
             Iref = all_dis.argsort(axis=1)[:, :k]
         else:
             all_dis = np.dot(xq, xb.T)
@@ -59,18 +63,17 @@ class TestIndexFlat(unittest.TestCase):
         lims, D2, I2 = index.range_search(xq, radius)
 
         for i in range(nq):
-            l0, l1 = lims[i:i + 2]
+            l0, l1 = lims[i : i + 2]
             _, Il = D2[l0:l1], I2[l0:l1]
             if metric_type == faiss.METRIC_L2:
-                Ilref, = np.where(all_dis[i] < radius)
+                (Ilref,) = np.where(all_dis[i] < radius)
             else:
-                Ilref, = np.where(all_dis[i] > radius)
+                (Ilref,) = np.where(all_dis[i] > radius)
             Il.sort()
             Ilref.sort()
             np.testing.assert_equal(Il, Ilref)
             np.testing.assert_almost_equal(
-                all_dis[i, Ilref], D2[l0:l1],
-                decimal=5
+                all_dis[i, Ilref], D2[l0:l1], decimal=5
             )
 
     def set_blas_blocks(self, small):
@@ -109,7 +112,144 @@ class TestIndexFlat(unittest.TestCase):
     def test_with_blas_reservoir_ip(self):
         self.do_test(200, faiss.METRIC_INNER_PRODUCT, k=150)
 
+    def test_empty_query_batch(self):
+        """search()/range_search() with nq=0 must not enter an OpenMP
+        parallel region with num_threads(0), which is unspecified
+        behavior. An empty batch always has nq * d below
+        distance_compute_blas_threshold, so this exercises the non-BLAS
+        exhaustive_{inner_product,L2sqr}_seq path unconditionally."""
+        d = 32
+        nb = 1000
+        _, xb, _ = get_dataset_2(d, 0, nb, 1)
+        xq_empty = np.empty((0, d), dtype="float32")
 
+        for metric_type in (faiss.METRIC_L2, faiss.METRIC_INNER_PRODUCT):
+            with self.subTest(metric_type=metric_type):
+                index = faiss.IndexFlat(d, metric_type)
+                index.add(xb)
+
+                D, I = index.search(xq_empty, 10)
+                self.assertEqual(D.shape, (0, 10))
+                self.assertEqual(I.shape, (0, 10))
+
+                lims, _, _ = index.range_search(xq_empty, 1.0)
+                np.testing.assert_array_equal(
+                    lims, np.zeros(1, dtype=np.int64)
+                )
+
+    def test_empty_index_with_blas(self):
+        # The threshold is what makes this a regression test: it puts the
+        # search in a configuration that would otherwise select the BLAS path,
+        # which returns early on an empty database without ever initializing
+        # the result handler. k covers the Top1, heap, and reservoir handlers.
+        saved_threshold = faiss.cvar.distance_compute_blas_threshold
+        faiss.cvar.distance_compute_blas_threshold = 1
+        try:
+            xq = np.arange(5, dtype="float32").reshape(-1, 1)
+            for metric_type in (faiss.METRIC_L2, faiss.METRIC_INNER_PRODUCT):
+                expected_distance = (
+                    np.finfo("float32").max
+                    if metric_type == faiss.METRIC_L2
+                    else np.finfo("float32").min
+                )
+                index = faiss.IndexFlat(1, metric_type)
+                for k in (1, 10, 150):
+                    with self.subTest(metric_type=metric_type, k=k):
+                        D = np.full((len(xq), k), 42, dtype="float32")
+                        I = np.full((len(xq), k), 99, dtype="int64")
+                        index.search(xq, k, D=D, I=I)
+                        np.testing.assert_array_equal(D, expected_distance)
+                        np.testing.assert_array_equal(I, -1)
+        finally:
+            faiss.cvar.distance_compute_blas_threshold = saved_threshold
+
+
+@for_all_simd_levels
+class TestDbParallelSearch(unittest.TestCase):
+    """Test the database-parallel search path that activates when
+    the number of queries is smaller than the thread count and the
+    database is large enough. Validates correctness for both IP and L2
+    metrics, multiple k values, and edge cases."""
+
+    def _check(self, metric_type, nq, nb, k):
+        d = 64
+        np.random.seed(1234)
+        xb = np.random.random((nb, d)).astype("float32")
+        xq = np.random.random((nq, d)).astype("float32")
+
+        index = faiss.IndexFlat(d, metric_type)
+        index.add(xb)
+        D, I = index.search(xq, k)
+
+        # compute ground truth with numpy
+        if metric_type == faiss.METRIC_L2:
+            all_dis = ((xq.reshape(nq, 1, d) - xb.reshape(1, nb, d)) ** 2).sum(
+                2
+            )
+            Iref = all_dis.argsort(axis=1)[:, :k]
+        else:
+            all_dis = np.dot(xq, xb.T)
+            Iref = all_dis.argsort(axis=1)[:, ::-1][:, :k]
+
+        Dref = all_dis[np.arange(nq)[:, None], Iref]
+        np.testing.assert_almost_equal(Dref, D, decimal=5)
+
+    def test_ip_single_query(self):
+        """nx=1, triggers db-parallel when nthreads > 1"""
+        self._check(faiss.METRIC_INNER_PRODUCT, nq=1, nb=20000, k=10)
+
+    def test_ip_few_queries(self):
+        """nx=4, typical case for db-parallel"""
+        self._check(faiss.METRIC_INNER_PRODUCT, nq=4, nb=20000, k=10)
+
+    def test_l2_single_query(self):
+        self._check(faiss.METRIC_L2, nq=1, nb=20000, k=10)
+
+    def test_l2_few_queries(self):
+        self._check(faiss.METRIC_L2, nq=4, nb=20000, k=10)
+
+    def test_ip_k1(self):
+        """k=1 uses Top1BlockResultHandler in original path"""
+        self._check(faiss.METRIC_INNER_PRODUCT, nq=2, nb=20000, k=1)
+
+    def test_l2_k1(self):
+        self._check(faiss.METRIC_L2, nq=2, nb=20000, k=1)
+
+    def test_ip_large_k(self):
+        """k=200 uses ReservoirBlockResultHandler in original path"""
+        self._check(faiss.METRIC_INNER_PRODUCT, nq=2, nb=20000, k=200)
+
+    def test_l2_large_k(self):
+        self._check(faiss.METRIC_L2, nq=2, nb=20000, k=200)
+
+    def test_thread_scaling(self):
+        """Verify results are identical across different thread counts."""
+        d = 64
+        nb = 30000
+        nq = 2
+        k = 10
+        np.random.seed(42)
+        xb = np.random.random((nb, d)).astype("float32")
+        xq = np.random.random((nq, d)).astype("float32")
+
+        index = faiss.IndexFlatIP(d)
+        index.add(xb)
+
+        saved_nt = faiss.omp_get_max_threads()
+        try:
+            faiss.omp_set_num_threads(1)
+            D1, I1 = index.search(xq, k)
+
+            for nt in [2, 4, 8]:
+                faiss.omp_set_num_threads(nt)
+                Dn, In = index.search(xq, k)
+                np.testing.assert_array_equal(I1, In)
+                np.testing.assert_almost_equal(D1, Dn, decimal=5)
+        finally:
+            faiss.omp_set_num_threads(saved_nt)
+
+
+@for_all_simd_levels
 class TestIndexFlatL2(unittest.TestCase):
     def test_indexflat_l2_sync_norms_1(self):
         d = 32
@@ -145,6 +285,7 @@ class TestIndexFlatL2(unittest.TestCase):
         np.testing.assert_equal(D3, D1)
 
 
+@for_all_simd_levels
 class TestIndexFlatL2Panorama(unittest.TestCase):
     def test_indexflat_l2_panorama(self):
         d = 32
@@ -179,18 +320,18 @@ class TestIndexFlatL2Panorama(unittest.TestCase):
         lims, D2, I2 = index.range_search(xq, radius)
 
         for i in range(nq):
-            l0, l1 = lims[i:i + 2]
+            l0, l1 = lims[i : i + 2]
             _, Il = D2[l0:l1], I2[l0:l1]
-            Ilref, = np.where(all_dis[i] < radius)
+            (Ilref,) = np.where(all_dis[i] < radius)
             Il.sort()
             Ilref.sort()
             np.testing.assert_equal(Il, Ilref)
             np.testing.assert_almost_equal(
-                all_dis[i, Ilref], D2[l0:l1],
-                decimal=5
+                all_dis[i, Ilref], D2[l0:l1], decimal=5
             )
 
 
+@for_all_simd_levels
 class EvalIVFPQAccuracy(unittest.TestCase):
 
     def test_IndexIVFPQ(self):
@@ -207,7 +348,7 @@ class EvalIVFPQAccuracy(unittest.TestCase):
 
         coarse_quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFPQ(coarse_quantizer, d, 32, 8, 8)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.train(xt)
         index.add(xb)
         index.nprobe = 4
@@ -230,7 +371,6 @@ class EvalIVFPQAccuracy(unittest.TestCase):
         ref_recons = index.reconstruct_n(0, nb)
         new_recons = index2.reconstruct_n(0, nb)
         self.assertTrue(np.all(ref_recons == new_recons))
-
 
     def test_IMI(self):
         d = 32
@@ -283,7 +423,6 @@ class EvalIVFPQAccuracy(unittest.TestCase):
         # should return the same result
         self.assertGreater(n_ok, 165)
 
-
     def test_IMI_2(self):
         d = 32
         nb = 1000
@@ -315,9 +454,6 @@ class EvalIVFPQAccuracy(unittest.TestCase):
         self.assertGreater(n_ok, 165)
 
 
-
-
-
 class TestMultiIndexQuantizer(unittest.TestCase):
 
     def test_search_k1(self):
@@ -343,6 +479,7 @@ class TestMultiIndexQuantizer(unittest.TestCase):
         self.assertEqual(np.abs(D1[:, :1] - D5[:, :1]).max(), 0)
 
 
+@for_all_simd_levels
 class TestScalarQuantizer(unittest.TestCase):
 
     def test_4variants_ivf(self):
@@ -365,19 +502,21 @@ class TestScalarQuantizer(unittest.TestCase):
         nok = {}
 
         nprobe = 64  # Probe all centroids, only exercise residual quantizer.
-        index = faiss.IndexIVFFlat(quantizer, d, ncent,
-                                   faiss.METRIC_L2)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index = faiss.IndexIVFFlat(quantizer, d, ncent, faiss.METRIC_L2)
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.nprobe = nprobe
         index.train(xt)
         index.add(xb)
         D, I = index.search(xq, 10)
-        nok['flat'] = (I[:, 0] == I_ref[:, 0]).sum()
+        nok["flat"] = (I[:, 0] == I_ref[:, 0]).sum()
 
-        for qname in "QT_4bit QT_4bit_uniform QT_8bit QT_8bit_uniform QT_fp16 QT_bf16".split():
+        for qname in (
+            "QT_4bit QT_4bit_uniform QT_8bit QT_8bit_uniform QT_fp16 QT_bf16"
+        ).split():
             qtype = getattr(faiss.ScalarQuantizer, qname)
-            index = faiss.IndexIVFScalarQuantizer(quantizer, d, ncent,
-                                                  qtype, faiss.METRIC_L2)
+            index = faiss.IndexIVFScalarQuantizer(
+                quantizer, d, ncent, qtype, faiss.METRIC_L2
+            )
 
             index.nprobe = nprobe
             index.train(xt)
@@ -386,17 +525,17 @@ class TestScalarQuantizer(unittest.TestCase):
 
             nok[qname] = (I[:, 0] == I_ref[:, 0]).sum()
 
-        self.assertGreaterEqual(nok['flat'], nq * 0.6)
+        self.assertGreaterEqual(nok["flat"], nq * 0.6)
         # The tests below are a bit fragile, it happens that the
         # ordering between uniform and non-uniform are reverted,
         # probably because the dataset is small, which introduces
         # jitter
-        self.assertGreaterEqual(nok['flat'], nok['QT_8bit'])
-        self.assertGreaterEqual(nok['QT_8bit'], nok['QT_4bit'])
+        self.assertGreaterEqual(nok["flat"], nok["QT_8bit"])
+        self.assertGreaterEqual(nok["QT_8bit"], nok["QT_4bit"])
         # flaky: self.assertGreaterEqual(nok['QT_8bit'], nok['QT_8bit_uniform'])
-        self.assertGreaterEqual(nok['QT_4bit'], nok['QT_4bit_uniform'])
-        self.assertGreaterEqual(nok['QT_fp16'], nok['QT_8bit'])
-        self.assertGreaterEqual(nok['QT_bf16'], nok['QT_8bit'])
+        self.assertGreaterEqual(nok["QT_4bit"], nok["QT_4bit_uniform"])
+        self.assertGreaterEqual(nok["QT_fp16"], nok["QT_8bit"])
+        self.assertGreaterEqual(nok["QT_bf16"], nok["QT_8bit"])
 
     def test_4variants(self):
         d = 32
@@ -412,7 +551,9 @@ class TestScalarQuantizer(unittest.TestCase):
 
         nok = {}
 
-        for qname in "QT_4bit QT_4bit_uniform QT_8bit QT_8bit_uniform QT_fp16 QT_bf16".split():
+        for qname in (
+            "QT_4bit QT_4bit_uniform QT_8bit QT_8bit_uniform QT_fp16 QT_bf16"
+        ).split():
             qtype = getattr(faiss.ScalarQuantizer, qname)
             index = faiss.IndexScalarQuantizer(d, qtype, faiss.METRIC_L2)
             index.train(xt)
@@ -420,12 +561,12 @@ class TestScalarQuantizer(unittest.TestCase):
             D, I = index.search(xq, 10)
             nok[qname] = (I[:, 0] == I_ref[:, 0]).sum()
 
-        self.assertGreaterEqual(nok['QT_8bit'], nq * 0.9)
-        self.assertGreaterEqual(nok['QT_8bit'], nok['QT_4bit'])
+        self.assertGreaterEqual(nok["QT_8bit"], nq * 0.9)
+        self.assertGreaterEqual(nok["QT_8bit"], nok["QT_4bit"])
         # flaky: self.assertGreaterEqual(nok['QT_8bit'], nok['QT_8bit_uniform'])
-        self.assertGreaterEqual(nok['QT_4bit'], nok['QT_4bit_uniform'])
-        self.assertGreaterEqual(nok['QT_fp16'], nok['QT_8bit'])
-        self.assertGreaterEqual(nok['QT_bf16'], nq * 0.9)
+        self.assertGreaterEqual(nok["QT_4bit"], nok["QT_4bit_uniform"])
+        self.assertGreaterEqual(nok["QT_fp16"], nok["QT_8bit"])
+        self.assertGreaterEqual(nok["QT_bf16"], nq * 0.9)
 
 
 class TestRangeSearch(unittest.TestCase):
@@ -438,23 +579,26 @@ class TestRangeSearch(unittest.TestCase):
 
         (xt, xb, xq) = get_dataset(d, nb, nt, nq)
 
-        index = faiss.IndexFlatL2(d)
-        index.add(xb)
+        for metric, thresh in [
+            (faiss.METRIC_L2, 0.1),
+            (faiss.METRIC_L1, 0.5),
+        ]:
+            index = faiss.IndexFlat(d, metric)
+            index.add(xb)
 
-        Dref, Iref = index.search(xq, 5)
+            Dref, Iref = index.search(xq, 5)
 
-        thresh = 0.1   # *squared* distance
-        lims, D, I = index.range_search(xq, thresh)
+            lims, D, I = index.range_search(xq, thresh)
 
-        for i in range(nq):
-            Iline = I[lims[i]:lims[i + 1]]
-            Dline = D[lims[i]:lims[i + 1]]
-            for j, dis in zip(Iref[i], Dref[i]):
-                if dis < thresh:
-                    li, = np.where(Iline == j)
-                    self.assertTrue(li.size == 1)
-                    idx = li[0]
-                    self.assertGreaterEqual(1e-4, abs(Dline[idx] - dis))
+            for i in range(nq):
+                Iline = I[lims[i] : lims[i + 1]]
+                Dline = D[lims[i] : lims[i + 1]]
+                for j, dis in zip(Iref[i], Dref[i]):
+                    if dis < thresh:
+                        (li,) = np.where(Iline == j)
+                        self.assertTrue(li.size == 1)
+                        idx = li[0]
+                        self.assertGreaterEqual(1e-4, abs(Dline[idx] - dis))
 
 
 class TestSearchAndReconstruct(unittest.TestCase):
@@ -484,7 +628,7 @@ class TestSearchAndReconstruct(unittest.TestCase):
         self.assertLessEqual(recons_ref_err, 1e-6)
 
         def norm1(x):
-            return np.sqrt((x ** 2).sum(axis=1))
+            return np.sqrt((x**2).sum(axis=1))
 
         recons_err = np.mean(norm1(R_flat - xb[I_flat]))
 
@@ -516,7 +660,7 @@ class TestSearchAndReconstruct(unittest.TestCase):
 
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFFlat(quantizer, d, 32, faiss.METRIC_L2)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.nprobe = 4
         index.train(xt)
         index.add(xb)
@@ -534,7 +678,7 @@ class TestSearchAndReconstruct(unittest.TestCase):
 
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFFlatPanorama(quantizer, d, 32, nlevels)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.nprobe = 4
         index.train(xt)
         index.add(xb)
@@ -551,7 +695,7 @@ class TestSearchAndReconstruct(unittest.TestCase):
 
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFPQ(quantizer, d, 32, 8, 8)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.nprobe = 4
         index.train(xt)
         index.add(xb)
@@ -568,7 +712,7 @@ class TestSearchAndReconstruct(unittest.TestCase):
 
         quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFResidualQuantizer(quantizer, d, 32, 8, 8)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.nprobe = 4
         index.train(xt)
         index.add(xb)
@@ -606,21 +750,20 @@ class TestSearchAndReconstruct(unittest.TestCase):
         self.run_search_and_reconstruct(index, xb, xq)
 
 
-
 class TestDistancesPositive(unittest.TestCase):
 
     def test_l2_pos(self):
         """
         roundoff errors occur only with the L2 decomposition used
         with BLAS, ie. in IndexFlatL2 and with
-        n > distance_compute_blas_threshold = 20
+        n * d > distance_compute_blas_threshold
         """
 
         d = 128
-        n = 100
+        n = 5000
 
         rs = np.random.RandomState(1234)
-        x = rs.rand(n, d).astype('float32')
+        x = rs.rand(n, d).astype("float32")
 
         index = faiss.IndexFlatL2(d)
         index.add(x)
@@ -632,10 +775,10 @@ class TestDistancesPositive(unittest.TestCase):
 
 class TestShardReplicas(unittest.TestCase):
     def test_shard_flag_propagation(self):
-        d = 64                           # dimension
+        d = 64  # dimension
         nb = 1000
         rs = np.random.RandomState(1234)
-        xb = rs.rand(nb, d).astype('float32')
+        xb = rs.rand(nb, d).astype("float32")
         nlist = 10
         quantizer1 = faiss.IndexFlatL2(d)
         quantizer2 = faiss.IndexFlatL2(d)
@@ -660,10 +803,10 @@ class TestShardReplicas(unittest.TestCase):
         self.assertEqual(index.ntotal, 0)
 
     def test_replica_flag_propagation(self):
-        d = 64                           # dimension
+        d = 64  # dimension
         nb = 1000
         rs = np.random.RandomState(1234)
-        xb = rs.rand(nb, d).astype('float32')
+        xb = rs.rand(nb, d).astype("float32")
         nlist = 10
         quantizer1 = faiss.IndexFlatL2(d)
         quantizer2 = faiss.IndexFlatL2(d)
@@ -692,10 +835,10 @@ class TestReconsException(unittest.TestCase):
 
     def test_recons_exception(self):
 
-        d = 64                           # dimension
+        d = 64  # dimension
         nb = 1000
         rs = np.random.RandomState(1234)
-        xb = rs.rand(nb, d).astype('float32')
+        xb = rs.rand(nb, d).astype("float32")
         nlist = 10
         quantizer = faiss.IndexFlatL2(d)  # the other index
         index = faiss.IndexIVFFlat(quantizer, d, nlist)
@@ -705,13 +848,10 @@ class TestReconsException(unittest.TestCase):
 
         index.reconstruct(9)
 
-        self.assertRaises(
-            RuntimeError,
-            index.reconstruct, 100001
-        )
+        self.assertRaises(RuntimeError, index.reconstruct, 100001)
 
     def test_reconstruct_after_add(self):
-        index = faiss.index_factory(10, 'IVF5,SQfp16')
+        index = faiss.index_factory(10, "IVF5,SQfp16")
         index.train(faiss.randn((100, 10), 123))
         index.add(faiss.randn((100, 10), 345))
         index.make_direct_map()
@@ -736,10 +876,7 @@ class TestReconsException(unittest.TestCase):
         index.reconstruct(9)
 
         # Reconstruct >= ntotal (10), assert exception raise
-        self.assertRaises(
-            RuntimeError,
-            index.reconstruct, 10
-        )
+        self.assertRaises(RuntimeError, index.reconstruct, 10)
 
 
 class TestReconsHash(unittest.TestCase):
@@ -789,19 +926,13 @@ class TestReconsHash(unittest.TestCase):
 
         for i in range(0, 200, 13):
             if i % 3 == 0:
-                self.assertRaises(
-                    RuntimeError,
-                    index2.reconstruct, int(ids[i])
-                )
+                self.assertRaises(RuntimeError, index2.reconstruct, int(ids[i]))
             else:
                 recons = index2.reconstruct(int(ids[i]))
                 self.assertTrue(np.all(recons == ref_recons[i]))
 
         # index error should raise
-        self.assertRaises(
-            RuntimeError,
-            index.reconstruct, 20000
-        )
+        self.assertRaises(RuntimeError, index.reconstruct, 20000)
 
     def test_IVFFlat(self):
         self.do_test("IVF5,Flat")
@@ -825,7 +956,7 @@ class TestValidIndexParams(unittest.TestCase):
 
         coarse_quantizer = faiss.IndexFlatL2(d)
         index = faiss.IndexIVFPQ(coarse_quantizer, d, 32, 8, 8)
-        index.cp.min_points_per_centroid = 5    # quiet warning
+        index.cp.min_points_per_centroid = 5  # quiet warning
         index.train(xt)
         index.add(xb)
 
@@ -894,8 +1025,8 @@ class TestLargeRangeSearch(unittest.TestCase):
 class TestRandomIndex(unittest.TestCase):
 
     def test_random(self):
-        """ just check if several runs of search retrieve the
-        same results """
+        """just check if several runs of search retrieve the
+        same results"""
         index = faiss.IndexRandom(32, 1000000000)
         (xt, xb, xq) = get_dataset_2(32, 0, 0, 10)
 

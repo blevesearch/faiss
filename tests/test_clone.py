@@ -27,8 +27,9 @@ class TestClone(unittest.TestCase):
         index1 = faiss.index_factory(d, factory)
         index1.train(ds.get_train())
         if with_ids:
-            index1.add_with_ids(ds.get_database(),
-                                np.arange(ds.nb).astype("int64"))
+            index1.add_with_ids(
+                ds.get_database(), np.arange(ds.nb).astype("int64")
+            )
         else:
             index1.add(ds.get_database())
         k = 5
@@ -86,3 +87,22 @@ class TestClone(unittest.TestCase):
         self.do_test_clone("RQ3x4fs_32_Nlsq2x4")
         self.do_test_clone("PLSQ2x3x4fs_Nlsq2x4")
         self.do_test_clone("PRQ2x3x4fs_Nrq2x4")
+
+    def test_RowwiseMinMax(self):
+        # clone_Index for IndexRowwiseMinMaxBase was missing return res, so
+        # clone_index returned nullptr and leaked the clone allocation plus
+        # the deep-copied inner index.
+        d = 32
+        n = 200
+        rng = np.random.default_rng(42)
+        x = rng.standard_normal((n, d)).astype(np.float32)
+
+        for factory in ("MinMax,SQ8", "MinMaxFP16,SQ8"):
+            codec = faiss.index_factory(d, factory)
+            codec.train(x)
+            codes = codec.sa_encode(x)
+
+            codec2 = faiss.clone_index(codec)
+            self.assertEqual(type(codec), type(codec2))
+            codes2 = codec2.sa_encode(x)
+            np.testing.assert_array_equal(codes, codes2)

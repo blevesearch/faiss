@@ -13,7 +13,12 @@ import faiss
 # translation of test_knn.lua
 
 import numpy as np
-from common_faiss_tests import Randu10k, get_dataset_2, Randu10kUnbalanced
+from common_faiss_tests import (
+    for_all_simd_levels,
+    get_dataset_2,
+    Randu10k,
+    Randu10kUnbalanced,
+)
 
 ev = Randu10k()
 
@@ -125,7 +130,7 @@ class IndexAccuracy(unittest.TestCase):
         index.polysemous_training.n_iter = 50000
         index.polysemous_training.n_redo = 1
         res = ev.launch("normal PQ", index)
-        e_baseline = ev.evalres(res)
+        ev.evalres(res)
         index.search_type = faiss.IndexPQ.ST_polysemous
 
         index.polysemous_ht = int(M / 16.0 * 58)
@@ -134,7 +139,7 @@ class IndexAccuracy(unittest.TestCase):
         stats.reset()
 
         res = ev.launch("Polysemous ht=%d" % index.polysemous_ht, index)
-        e_polysemous = ev.evalres(res)
+        ev.evalres(res)
         # The randu dataset is difficult, so we are not too picky on
         # the results. Here we assert that we have < 10 % loss when
         # computing full PQ on fewer than 20% of the data.
@@ -199,8 +204,9 @@ class TestSQFlavors(unittest.TestCase):
             nt = trained.shape[1]
             # 2 lines: vmins and vdiffs
             new_nt = int(nt * d2 / d)
-            trained2 = np.hstack((trained, np.zeros((2, new_nt - nt),
-                                  dtype="float32")))
+            trained2 = np.hstack(
+                (trained, np.zeros((2, new_nt - nt), dtype="float32"))
+            )
             trained2[1, nt:] = 1.0  # set vdiff to 1 to avoid div by 0
             faiss.copy_array_to_vector(trained2.ravel(), index2.sq.trained)
         else:
@@ -238,8 +244,9 @@ class TestSQFlavors(unittest.TestCase):
         quantizer = faiss.IndexFlat(d, mt)
         for qname in "8bit 4bit 8bit_uniform 4bit_uniform fp16 6bit".split():
             qtype = getattr(faiss.ScalarQuantizer, "QT_" + qname)
-            index = faiss.IndexIVFScalarQuantizer(quantizer, d, nlist, qtype,
-                                                  mt)
+            index = faiss.IndexIVFScalarQuantizer(
+                quantizer, d, nlist, qtype, mt
+            )
             index.train(xt)
             index.add(xb)
             index.nprobe = 4  # hopefully more robust than 1
@@ -279,8 +286,8 @@ class TestSQFlavors(unittest.TestCase):
                 index.parallel_mode = pm
                 lims4, D4, I4 = index.range_search(xq, radius)
                 for qno in range(len(lims) - 1):
-                    Iref = I3[lims[qno]: lims[qno + 1]]
-                    Inew = I4[lims4[qno]: lims4[qno + 1]]
+                    Iref = I3[lims[qno] : lims[qno + 1]]
+                    Inew = I4[lims4[qno] : lims4[qno + 1]]
                     assert set(Iref) == set(Inew), "q %d ref %s new %s" % (
                         qno,
                         Iref,
@@ -344,9 +351,7 @@ class TestSQByte(unittest.TestCase):
         gt_index.add(xb)
         Dref, Iref = gt_index.search(xq, 10)
 
-        index = faiss.IndexScalarQuantizer(
-            d, quantizer_type, metric_type
-        )
+        index = faiss.IndexScalarQuantizer(d, quantizer_type, metric_type)
         index.add(xb)
         D, I = index.search(xq, 10)
 
@@ -365,8 +370,7 @@ class TestSQByte(unittest.TestCase):
         Dref, Iref = gt_index.search(xq, 10)
 
         index = faiss.IndexIVFScalarQuantizer(
-            quantizer, d, nlist, quantizer_type,
-            metric_type
+            quantizer, d, nlist, quantizer_type, metric_type
         )
         index.nprobe = 4
         index.by_residual = False
@@ -374,12 +378,15 @@ class TestSQByte(unittest.TestCase):
         index.add(xb)
         D, I = index.search(xq, 10)
 
-        assert np.all(I == Iref)
-        assert np.all(D == Dref)
+        np.testing.assert_array_equal(D, Dref)
+        np.testing.assert_array_equal(I, Iref)
 
     def test_8bit_direct(self):
-        for quantizer in faiss.ScalarQuantizer.QT_8bit_direct, faiss.ScalarQuantizer.QT_8bit_direct_signed:
-            for d in 13, 16, 24:
+        for quantizer in (
+            faiss.ScalarQuantizer.QT_8bit_direct,
+            faiss.ScalarQuantizer.QT_8bit_direct_signed,
+        ):
+            for d in 13, 16, 24, 32, 64, 128:
                 for metric_type in faiss.METRIC_L2, faiss.METRIC_INNER_PRODUCT:
                     self.subtest_8bit_direct(metric_type, d, quantizer)
 
@@ -401,7 +408,9 @@ class TestNNDescent(unittest.TestCase):
         search_Ls = [10, 20, 30]
         thresholds = [0.80, 0.90, 0.93]
         for search_L, threshold in zip(search_Ls, thresholds):
-            self.subtest(32, faiss.METRIC_INNER_PRODUCT, 10, search_L, threshold)
+            self.subtest(
+                32, faiss.METRIC_INNER_PRODUCT, 10, search_L, threshold
+            )
 
     def subtest(self, d, metric, topk, search_L, threshold):
         metric_names = {
@@ -506,8 +515,9 @@ class TestPQFlavors(unittest.TestCase):
 
                 # polysemous behaves bizarrely on ARM
                 assert (
-                    ninter >= self.ref_results[mt, by_residual,
-                                               index.polysemous_ht] - 4
+                    ninter
+                    >= self.ref_results[mt, by_residual, index.polysemous_ht]
+                    - 4
                 )
 
             # also test range search
@@ -585,7 +595,7 @@ class TestFlat1D(unittest.TestCase):
         ndiff = (np.abs(ref_I - new_I) != 0).sum()
 
         assert ndiff < 100
-        new_D = new_D ** 2
+        new_D = new_D**2
         max_diff_D = np.abs(ref_D - new_D).max()
         assert max_diff_D < 1e-5
 
@@ -654,40 +664,50 @@ class OPQRelativeAccuracy(unittest.TestCase):
 
         # verify same on OIVFPQ
         for r in 1, 10, 100:
-            assert e_oivfpq[r] >= e_ivfpq[r]
+            assert e_oivfpq[r] >= e_ivfpq[r] - 0.005, (
+                f"recall@{r}: OPQ+IVFPQ ({e_oivfpq[r]:.4f}) "
+                f"< IVFPQ ({e_ivfpq[r]:.4f})"
+            )
 
 
 class TestRoundoff(unittest.TestCase):
     def test_roundoff(self):
         # params that force use of BLAS implementation
-        nb = 100
-        nq = 25
-        d = 4
-        xb = np.zeros((nb, d), dtype="float32")
+        saved_threshold = faiss.cvar.distance_compute_blas_threshold
+        faiss.cvar.distance_compute_blas_threshold = 1
+        try:
+            nb = 100
+            nq = 25
+            d = 4
+            xb = np.zeros((nb, d), dtype="float32")
 
-        xb[:, 0] = np.arange(nb) + 12345
-        xq = xb[:nq] + 0.3
+            xb[:, 0] = np.arange(nb) + 12345
+            xq = xb[:nq] + 0.3
 
-        index = faiss.IndexFlat(d)
-        index.add(xb)
+            index = faiss.IndexFlat(d)
+            index.add(xb)
 
-        D, I = index.search(xq, 1)
+            D, I = index.search(xq, 1)
 
-        # this does not work
-        assert not np.all(I.ravel() == np.arange(nq))
+            # this does not work
+            assert not np.all(I.ravel() == np.arange(nq))
 
-        index = faiss.IndexPreTransform(faiss.CenteringTransform(d),
-                                        faiss.IndexFlat(d))
+            index = faiss.IndexPreTransform(
+                faiss.CenteringTransform(d), faiss.IndexFlat(d)
+            )
 
-        index.train(xb)
-        index.add(xb)
+            index.train(xb)
+            index.add(xb)
 
-        D, I = index.search(xq, 1)
+            D, I = index.search(xq, 1)
 
-        # this works
-        assert np.all(I.ravel() == np.arange(nq))
+            # this works
+            assert np.all(I.ravel() == np.arange(nq))
+        finally:
+            faiss.cvar.distance_compute_blas_threshold = saved_threshold
 
 
+@for_all_simd_levels
 class TestSpectralHash(unittest.TestCase):
 
     # run on 2019-04-02

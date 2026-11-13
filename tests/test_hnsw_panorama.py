@@ -19,9 +19,11 @@ import os
 import numpy as np
 
 import faiss
+from common_faiss_tests import for_all_simd_levels
 from faiss.contrib.datasets import SyntheticDataset
 
 
+@for_all_simd_levels
 class TestIndexHNSWFlatPanorama(unittest.TestCase):
     """Test Suite for IndexHNSWFlatPanorama."""
 
@@ -41,12 +43,10 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         return D, I
 
     def compute_recall(self, gt_I, test_I):
-        """Compute recall@k - fraction of ground truth results found in test results."""
+        """Compute recall@k - fraction of ground truth results found in
+        test results."""
         nq, k = gt_I.shape
-        recalls = [
-            np.isin(gt_I[i], test_I[i]).sum() 
-            for i in range(nq)
-        ]
+        recalls = [np.isin(gt_I[i], test_I[i]).sum() for i in range(nq)]
         return sum(recalls) / (nq * k)
 
     # Core functionality tests
@@ -62,7 +62,9 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         self.assertEqual(index.d, d)
         self.assertEqual(index.ntotal, 0)
         self.assertTrue(index.is_trained)
-        self.assertEqual(index.hnsw.nb_neighbors(0), 2 * M)  # Level 0 has 2*M neighbors
+        self.assertEqual(
+            index.hnsw.nb_neighbors(0), 2 * M
+        )  # Level 0 has 2*M neighbors
         self.assertEqual(index.num_panorama_levels, num_levels)
         self.assertEqual(index.metric_type, faiss.METRIC_L2)
 
@@ -121,7 +123,8 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         print(f"Recall@{k}: {recall}")
 
         # With efSearch=64, we should get reasonably good recall
-        # The threshold is lower than vanilla HNSW because of approximate distances
+        # The threshold is lower than vanilla HNSW because of approximate
+        # distances
         self.assertGreaterEqual(recall, 0.85)
 
     def test_different_panorama_levels(self):
@@ -154,6 +157,32 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
                 # More levels should still maintain reasonable recall
                 self.assertGreaterEqual(recall, 0.80)
 
+    def test_uneven_dimension_division(self):
+        """Test when n_levels doesn't evenly divide dimension."""
+        test_cases = [(65, 4), (63, 8), (100, 7), (960, 128), (964, 128)]
+
+        nb, nt, nq, k = 1000, 700, 20, 5
+
+        for d, nlevels in test_cases:
+            with self.subTest(d=d, nlevels=nlevels):
+                _, xb, xq = self.generate_data(d, nt, nb, nq, seed=789)
+
+                index = faiss.IndexHNSWFlatPanorama(d, 32, nlevels)
+                index.hnsw.efSearch = 64
+                index.add(xb)
+
+                _, I = index.search(xq, k)
+
+                _, gt_I = self.compute_ground_truth(xb, xq, k)
+
+                recall = self.compute_recall(gt_I, I)
+                self.assertGreaterEqual(
+                    recall,
+                    0.80,
+                    f"Recall too low for d={d}, nlevels={nlevels}: "
+                    f"{recall:.4f}",
+                )
+
     def test_consistency(self):
         """Test that search results are consistent across multiple searches."""
         d = 64
@@ -178,23 +207,24 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
 
     def test_io(self):
         """Test serialization and deserialization."""
-        d = 64
+        d = 964
         nb = 500
         nt = 700
         nq = 10
         k = 5
+        nlevels = 128
 
         # Generate data
         _, xb, xq = self.generate_data(d, nt, nb, nq, seed=2024)
 
-        index = faiss.IndexHNSWFlatPanorama(d, 16, 8)
+        index = faiss.IndexHNSWFlatPanorama(d, 16, nlevels)
         index.add(xb)
 
         # Get search results before saving
         D_before, I_before = index.search(xq, k)
 
         # Save and load using temporary file
-        fname = tempfile.mktemp(suffix='.index')
+        fname = tempfile.mktemp(suffix=".index")
         try:
             faiss.write_index(index, fname)
             loaded_index = faiss.read_index(fname)
@@ -202,7 +232,7 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
             self.assertIsInstance(loaded_index, faiss.IndexHNSWFlatPanorama)
             self.assertEqual(loaded_index.d, d)
             self.assertEqual(loaded_index.ntotal, nb)
-            self.assertEqual(loaded_index.num_panorama_levels, 8)
+            self.assertEqual(loaded_index.num_panorama_levels, nlevels)
 
             # Search after loading
             D_after, I_after = loaded_index.search(xq, k)
@@ -256,14 +286,18 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         index1 = faiss.index_factory(d, "HNSW32_FlatPanorama")
         self.assertIsInstance(index1, faiss.IndexHNSWFlatPanorama)
         self.assertEqual(index1.d, d)
-        self.assertEqual(index1.hnsw.nb_neighbors(0), 2 * 32)  # Level 0 has 2*M neighbors
+        self.assertEqual(
+            index1.hnsw.nb_neighbors(0), 2 * 32
+        )  # Level 0 has 2*M neighbors
         self.assertEqual(index1.num_panorama_levels, 8)  # default
 
         # Test factory creation with explicit levels
         index2 = faiss.index_factory(d, "HNSW16_FlatPanorama12")
         self.assertIsInstance(index2, faiss.IndexHNSWFlatPanorama)
         self.assertEqual(index2.d, d)
-        self.assertEqual(index2.hnsw.nb_neighbors(0), 2 * 16)  # Level 0 has 2*M neighbors
+        self.assertEqual(
+            index2.hnsw.nb_neighbors(0), 2 * 16
+        )  # Level 0 has 2*M neighbors
         self.assertEqual(index2.num_panorama_levels, 12)
 
         # Test that it works
@@ -329,7 +363,9 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         k = 5
 
         # Generate data
-        _, xb_initial, xq = self.generate_data(d, nt_initial, nb_initial, nq, seed=1111)
+        _, xb_initial, xq = self.generate_data(
+            d, nt_initial, nb_initial, nq, seed=1111
+        )
         _, xb_add, _ = self.generate_data(d, nt_add, nb_add, 1, seed=2222)
 
         index = faiss.IndexHNSWFlatPanorama(d, 16, 8)
@@ -346,7 +382,7 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         self.assertEqual(index.ntotal, nb_initial + nb_add)
         self.assertEqual(
             index.cum_sums.size(),
-            (nb_initial + nb_add) * (index.num_panorama_levels + 1)
+            (nb_initial + nb_add) * (index.num_panorama_levels + 1),
         )
 
         # Search again - should work correctly with all vectors
@@ -360,7 +396,8 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         recall = self.compute_recall(gt_I, I_after)
         print(f"Recall after adding more vectors: {recall}")
 
-        # Recall might be slightly lower than single-batch due to HNSW graph structure
+        # Recall might be slightly lower than single-batch due to HNSW
+        # graph structure
         self.assertGreaterEqual(recall, 0.80)
 
         # Verify that previously found neighbors can still be found
@@ -375,7 +412,8 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
 
         retention = float(found_count) / (nq * k)
         print(f"Retention of previous neighbors: {retention}")
-        # Should retain a reasonable number of previous neighbors (new ones might push some out)
+        # Should retain a reasonable number of previous neighbors (new ones
+        # might push some out)
         # The threshold is lower to account for the approximate nature of HNSW
         self.assertGreaterEqual(retention, 0.5)
 
@@ -410,19 +448,23 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
         for i in range(nb):
             src = perm[i]
             for j in range(index.num_panorama_levels + 1):
-                expected = cum_sums_before[src * (index.num_panorama_levels + 1) + j]
+                expected = cum_sums_before[
+                    src * (index.num_panorama_levels + 1) + j
+                ]
                 actual = cum_sums_after[i * (index.num_panorama_levels + 1) + j]
                 self.assertEqual(
-                    actual, expected,
-                    f"cum_sums not permuted correctly at i={i}, j={j}"
+                    actual,
+                    expected,
+                    f"cum_sums not permuted correctly at i={i}, j={j}",
                 )
 
         # Search after permutation
         D_after, I_after = index.search(xq, k)
 
         # Results should be identical (with permuted IDs)
-        np.testing.assert_allclose(D_before, D_after,
-                                   err_msg="Distance changed after permutation")
+        np.testing.assert_allclose(
+            D_before, D_after, err_msg="Distance changed after permutation"
+        )
 
         # The ID should be the permuted version
         # If before we found vector j, after permutation we should find
@@ -434,8 +476,9 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
                     old_id = I_before[i, j]
                     new_id = np.where(perm == old_id)[0][0]
                     self.assertEqual(
-                        I_after[i, j], new_id,
-                        f"Permuted ID mismatch at position ({i}, {j})"
+                        I_after[i, j],
+                        new_id,
+                        f"Permuted ID mismatch at position ({i}, {j})",
                     )
 
         # Verify overall recall is maintained
@@ -515,9 +558,45 @@ class TestIndexHNSWFlatPanorama(unittest.TestCase):
             for j in range(k):
                 if I[i, j] != -1:
                     self.assertIn(
-                        I[i, j], allowed_set,
-                        f"ID {I[i, j]} not in allowed set"
+                        I[i, j], allowed_set, f"ID {I[i, j]} not in allowed set"
                     )
                     count += 1
 
         print(f"IDSelectorBatch test: {count} results")
+
+    def test_panorama_stats(self):
+        """Test that ratio_dims_scanned decreases as nlevels increases."""
+        d, nb, nq, k = 128, 10000, 10, 10
+
+        rs = np.random.RandomState(42)
+        xb = rs.rand(nb, d).astype("float32")
+        xq = rs.rand(nq, d).astype("float32")
+
+        nt = faiss.omp_get_max_threads()
+        faiss.omp_set_num_threads(1)
+
+        try:
+            ratios = []
+            nlevels_list = [1, 4, 8, 16]
+            for nlevels in nlevels_list:
+                faiss.cvar.indexPanorama_stats.reset()
+
+                index = faiss.IndexHNSWFlatPanorama(d, 32, nlevels)
+                index.hnsw.efSearch = 64
+                index.add(xb)
+                index.search(xq, k)
+
+                ratio = faiss.cvar.indexPanorama_stats.ratio_dims_scanned
+                ratios.append(ratio)
+                print(f"  nlevels={nlevels:2d}  ratio={ratio:.4f}")
+
+            for i in range(1, len(ratios)):
+                self.assertLessEqual(
+                    ratios[i],
+                    ratios[i - 1],
+                    f"ratio should decrease: nlevels={nlevels_list[i]} "
+                    f"ratio={ratios[i]:.4f} > prev={ratios[i-1]:.4f}",
+                )
+            self.assertLess(ratios[-1], 1.0, "Some pruning should occur")
+        finally:
+            faiss.omp_set_num_threads(nt)

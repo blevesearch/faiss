@@ -22,7 +22,7 @@ struct TestException : public std::exception {};
 using idx_t = faiss::idx_t;
 
 struct MockIndex : public faiss::Index {
-    explicit MockIndex(idx_t d) : faiss::Index(d) {
+    explicit MockIndex(idx_t d_in) : faiss::Index(d_in) {
         resetMock();
     }
 
@@ -47,7 +47,7 @@ struct MockIndex : public faiss::Index {
             float* distances,
             idx_t* labels,
             const faiss::SearchParameters* params) const override {
-        FAISS_THROW_IF_NOT(!params);
+        FAISS_THROW_IF_MSG(params, "search params not supported");
         nCalled = n;
         xCalled = x;
         kCalled = k;
@@ -184,7 +184,7 @@ TEST(ThreadedIndex, TestReplica) {
 
         replica.add(n, x.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             EXPECT_EQ(idxs[i]->nCalled, n);
             EXPECT_EQ(idxs[i]->xCalled, x.data());
         }
@@ -195,7 +195,7 @@ TEST(ThreadedIndex, TestReplica) {
 
         replica.search(n, x.data(), k, distances.data(), labels.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             auto perReplica = n / idxs.size();
 
             EXPECT_EQ(idxs[i]->nCalled, perReplica);
@@ -233,7 +233,7 @@ TEST(ThreadedIndex, TestShards) {
 
         shards.add(n, x.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             auto perShard = n / idxs.size();
 
             EXPECT_EQ(idxs[i]->nCalled, perShard);
@@ -246,7 +246,7 @@ TEST(ThreadedIndex, TestShards) {
 
         shards.search(n, x.data(), k, distances.data(), labels.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             EXPECT_EQ(idxs[i]->nCalled, n);
             EXPECT_EQ(idxs[i]->xCalled, x.data());
             EXPECT_EQ(idxs[i]->kCalled, k);

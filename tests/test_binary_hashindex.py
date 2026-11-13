@@ -7,17 +7,21 @@ import unittest
 import numpy as np
 import faiss
 
-from common_faiss_tests import make_binary_dataset
+from common_faiss_tests import for_all_simd_levels, make_binary_dataset
 
 
 def bitvec_shuffle(a, order):
     n, d = a.shape
-    db, = order.shape
-    b = np.empty((n, db // 8), dtype='uint8')
+    (db,) = order.shape
+    b = np.empty((n, db // 8), dtype="uint8")
     faiss.bitvec_shuffle(
-        n, d * 8, db,
+        n,
+        d * 8,
+        db,
         faiss.swig_ptr(order),
-        faiss.swig_ptr(a), faiss.swig_ptr(b))
+        faiss.swig_ptr(a),
+        faiss.swig_ptr(b),
+    )
     return b
 
 
@@ -27,21 +31,22 @@ class TestSmallFuncs(unittest.TestCase):
         d = 256
         n = 1000
         rs = np.random.RandomState(123)
-        o = rs.permutation(d).astype('int32')
+        o = rs.permutation(d).astype("int32")
 
-        x = rs.randint(256, size=(n, d // 8)).astype('uint8')
+        x = rs.randint(256, size=(n, d // 8)).astype("uint8")
 
         y1 = bitvec_shuffle(x, o[:128])
         y2 = bitvec_shuffle(x, o[128:])
         y = np.hstack((y1, y2))
 
-        oinv = np.empty(d, dtype='int32')
+        oinv = np.empty(d, dtype="int32")
         oinv[o] = np.arange(d)
         z = bitvec_shuffle(y, oinv)
 
         np.testing.assert_array_equal(x, z)
 
 
+@for_all_simd_levels
 class TestRange(unittest.TestCase):
 
     def test_hash(self):
@@ -69,8 +74,8 @@ class TestRange(unittest.TestCase):
             stats.reset()
             Lnew, Dnew, Inew = index.range_search(xq, radius)
             for i in range(nq):
-                ref = Iref[Lref[i]:Lref[i + 1]]
-                new = Inew[Lnew[i]:Lnew[i + 1]]
+                ref = Iref[Lref[i] : Lref[i + 1]]
+                new = Inew[Lnew[i] : Lnew[i + 1]]
                 snew = set(new)
                 # no duplicates
                 self.assertTrue(len(new) == len(snew))
@@ -108,8 +113,8 @@ class TestRange(unittest.TestCase):
             stats.reset()
             Lnew, Dnew, Inew = index.range_search(xq, radius)
             for i in range(nq):
-                ref = Iref[Lref[i]:Lref[i + 1]]
-                new = Inew[Lnew[i]:Lnew[i + 1]]
+                ref = Iref[Lref[i] : Lref[i + 1]]
+                new = Inew[Lnew[i] : Lnew[i + 1]]
                 snew = set(new)
                 # no duplicates
                 self.assertTrue(len(new) == len(snew))
@@ -122,6 +127,7 @@ class TestRange(unittest.TestCase):
         self.assertTrue(np.all(nfound[1:] >= nfound[:-1]))
 
 
+@for_all_simd_levels
 class TestKnn(unittest.TestCase):
 
     def test_hash_and_multihash(self):
@@ -160,11 +166,20 @@ class TestKnn(unittest.TestCase):
 
             # test serialization
             index2 = faiss.deserialize_index_binary(
-                faiss.serialize_index_binary(index))
+                faiss.serialize_index_binary(index)
+            )
 
             D2, I2 = index2.search(xq, k)
             np.testing.assert_array_equal(Inew, I2)
             np.testing.assert_array_equal(Dnew, D2)
+
+            # Verify deserialized index is serializable again
+            index3 = faiss.deserialize_index_binary(
+                faiss.serialize_index_binary(index2)
+            )
+            D3, I3 = index3.search(xq, k)
+            np.testing.assert_array_equal(Inew, I3)
+            np.testing.assert_array_equal(Dnew, D3)
 
         self.assertGreater(3, abs(nfound[(0, 7)] - nfound[(1, 7)]))
         self.assertGreater(nfound[(3, 7)], nfound[(1, 7)])
@@ -187,17 +202,13 @@ class TestKnn(unittest.TestCase):
         index.nflip = 5
         k = 10
         Do, Io = index.search(xq, k)
-        self.assertTrue(
-            np.all(Do[:, 1:] >= Do[:, :-1])
-        )
+        self.assertTrue(np.all(Do[:, 1:] >= Do[:, :-1]))
 
     def test_result_order_binhash(self):
         self.subtest_result_order(0)
 
     def test_result_order_multihash(self):
         self.subtest_result_order(3)
-
-
 
 
 """

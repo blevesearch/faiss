@@ -13,12 +13,12 @@ class TestCallbackPy(unittest.TestCase):
         super().setUp()
 
     def test_timeout(self) -> None:
-        n = 1000
-        k = 100
+        n = 20000
+        k = 5000
         d = 128
         niter = 1_000_000_000
 
-        x = np.random.rand(n, d).astype('float32')
+        x = np.random.rand(n, d).astype("float32")
         index = faiss.IndexFlat(d)
 
         cp = faiss.ClusteringParameters()

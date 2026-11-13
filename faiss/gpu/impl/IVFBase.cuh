@@ -10,6 +10,7 @@
 #include <faiss/Index.h>
 #include <faiss/MetricType.h>
 #include <faiss/gpu/GpuIndicesOptions.h>
+#include <faiss/impl/IDSelector.h>
 #include <faiss/gpu/utils/DeviceTensor.cuh>
 #include <faiss/gpu/utils/DeviceVector.cuh>
 #include <memory>
@@ -93,6 +94,14 @@ class IVFBase {
             Tensor<float, 2, true>& vecs,
             Tensor<idx_t, 1, true>& indices);
 
+    /// Encode/add vectors to precomputed IVF lists.
+    /// The input data, indices, and precomputed list ids must be on our current
+    /// device.
+    virtual idx_t addVectorsPreassigned(
+            Tensor<float, 2, true>& vecs,
+            Tensor<idx_t, 1, true>& indices,
+            Tensor<idx_t, 1, true>& precomputedIndices);
+
     /// Find the approximate k nearest neighbors for `queries` against
     /// our database
     virtual void search(
@@ -101,7 +110,8 @@ class IVFBase {
             int nprobe,
             int k,
             Tensor<float, 2, true>& outDistances,
-            Tensor<idx_t, 2, true>& outIndices) = 0;
+            Tensor<idx_t, 2, true>& outIndices,
+            const IDSelector* sel = nullptr) = 0;
 
     /// Performs search when we are already given the IVF cells to look at
     /// (GpuIndexIVF::search_preassigned implementation)
@@ -203,6 +213,15 @@ class IVFBase {
 
     /// Shared function to copy indices from CPU to GPU
     void addIndicesFromCpu_(idx_t listId, const idx_t* indices, idx_t numVecs);
+
+    /// Shared implementation after IVF list ids and residuals have been
+    /// computed.
+    idx_t addVectorsToLists_(
+            Tensor<float, 2, true>& vecs,
+            Tensor<float, 3, true>& residuals,
+            Tensor<idx_t, 1, true>& indices,
+            Tensor<idx_t, 2, true>& ivfIndices,
+            const std::vector<idx_t>& ivfIndicesHost);
 
    protected:
     /// Collection of GPU resources that we use
