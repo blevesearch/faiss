@@ -238,8 +238,8 @@ void StandardGpuResourcesImpl::setTempMemory(size_t size) {
 
         // We need to re-initialize memory resources for all current devices
         // that have been initialized. This should be safe to do, even if we are
-        // currently running work, because the cudaFree call that this implies
-        // will force-synchronize all GPUs with the CPU
+        // currently running work, because tearing down the temp memory stack
+        // implies deallocation that will force-synchronize all GPUs with the CPU
         for (auto& p : tempMemory_) {
             int device = p.first;
             // Free the existing memory first
@@ -296,7 +296,11 @@ void StandardGpuResourcesImpl::setDefaultStream(
         }
 
         if (prevStream != stream) {
-            streamWait({stream}, {prevStream});
+            addEventForStream(prevStream);
+            addEventForStream(stream);
+            std::vector<cudaStream_t> waitingStreams{stream};
+            std::vector<cudaStream_t> waitOnStreams{prevStream};
+            this->streamWait(waitingStreams, waitOnStreams);
         }
 #if defined USE_NVIDIA_CUVS
         // delete the raft handle for this device, which will be initialized
@@ -323,7 +327,11 @@ void StandardGpuResourcesImpl::revertDefaultStream(int device) {
             FAISS_ASSERT(defaultStreams_.count(device));
             cudaStream_t newStream = defaultStreams_[device];
 
-            streamWait({newStream}, {prevStream});
+            addEventForStream(prevStream);
+            addEventForStream(newStream);
+            std::vector<cudaStream_t> waitingStreams{newStream};
+            std::vector<cudaStream_t> waitOnStreams{prevStream};
+            this->streamWait(waitingStreams, waitOnStreams);
 
 #if defined USE_NVIDIA_CUVS
             // update the stream on the raft handle for this device

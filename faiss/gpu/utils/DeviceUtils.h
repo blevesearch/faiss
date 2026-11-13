@@ -169,7 +169,9 @@ class CudaEvent {
     } while (0)
 #endif
 
-/// Call for a collection of streams to wait on
+/// Call for a collection of streams to wait on.
+/// Prefer GpuResources::streamWait when a GpuResources object is available;
+/// it reuses per-stream CUDA events instead of creating/destroying them here.
 template <typename L1, typename L2>
 void streamWaitBase(const L1& listWaiting, const L2& listWaitOn) {
     // For all the streams we are waiting on, create an event
