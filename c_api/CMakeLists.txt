@@ -117,6 +117,13 @@ if(NOT WIN32)
   endif()
 endif()
 
+find_package(OpenMP REQUIRED)
+target_link_libraries(faiss_c PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx2 PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx512 PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx512_spr PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_sve PRIVATE OpenMP::OpenMP_CXX)
+
 function(faiss_install_headers headers p)
   foreach(h ${headers})
     get_filename_component(f ${h} DIRECTORY)
