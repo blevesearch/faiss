@@ -11,6 +11,7 @@
 
 #include "index_io_c_ex.h"
 #include <cstring>
+#include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/io.h>
 #include <faiss/index_io.h>
 #include "macros_impl.h"
@@ -35,18 +36,19 @@ struct FixedBufIOWriter : faiss::IOWriter {
     uint8_t* buf;
     size_t capacity;
     size_t pos = 0;
-    bool overflowed = false;
 
-    FixedBufIOWriter(uint8_t* b, size_t cap) : buf(b), capacity(cap) {}
+    FixedBufIOWriter(uint8_t* b, size_t cap) : buf(b), capacity(cap) {
+        name = "fixed buffer";
+    }
 
     size_t operator()(const void* ptr, size_t size, size_t nitems) override {
         const size_t n = size * nitems;
-        if (pos + n > capacity) {
-            // Report short so write_index fails rather than scribbling past
-            // the end of memory the caller owns.
-            overflowed = true;
-            return 0;
-        }
+        FAISS_THROW_IF_NOT_FMT(
+                pos + n <= capacity,
+                "serialized index does not fit: %zu bytes written, %zu more needed, buffer holds %zu",
+                pos,
+                n,
+                capacity);
         memcpy(buf + pos, ptr, n);
         pos += n;
         return nitems;
@@ -70,14 +72,11 @@ int faiss_write_index_into_buf(
         size_t capacity,
         size_t* written) {
     try {
-        if (buf == nullptr && capacity != 0) {
-            return -1;
-        }
+        FAISS_THROW_IF_NOT_MSG(
+                buf != nullptr || capacity == 0,
+                "null buffer passed with a non-zero capacity");
         FixedBufIOWriter writer(buf, capacity);
         faiss::write_index(reinterpret_cast<const Index*>(idx), &writer);
-        if (writer.overflowed) {
-            return -1;
-        }
         *written = writer.pos;
     }
     CATCH_AND_HANDLE
@@ -101,15 +100,12 @@ int faiss_write_index_binary_into_buf(
         size_t capacity,
         size_t* written) {
     try {
-        if (buf == nullptr && capacity != 0) {
-            return -1;
-        }
+        FAISS_THROW_IF_NOT_MSG(
+                buf != nullptr || capacity == 0,
+                "null buffer passed with a non-zero capacity");
         FixedBufIOWriter writer(buf, capacity);
         faiss::write_index_binary(
                 reinterpret_cast<const IndexBinary*>(idx), &writer);
-        if (writer.overflowed) {
-            return -1;
-        }
         *written = writer.pos;
     }
     CATCH_AND_HANDLE
