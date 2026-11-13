@@ -106,16 +106,24 @@ int faiss_Set_quantizers_binary(FaissIndexBinary* target, FaissIndexBinary* sour
     try {
         auto* tgt = reinterpret_cast<faiss::IndexBinary*>(target);
         auto* src = reinterpret_cast<faiss::IndexBinary*>(source);
-        assert(tgt && src);
+
+        if (tgt == nullptr || src == nullptr) {
+            return -1;
+        }
 
         if (auto* tgt_bivf = dynamic_cast<faiss::IndexBinaryIVF*>(tgt)) {
             auto* src_bivf = dynamic_cast<faiss::IndexBinaryIVF*>(src);
-            assert(src_bivf);
+            if (src_bivf == nullptr) {
+                return -1;
+            }
 
             tgt_bivf->quantizer = clone_binary_index(src_bivf->quantizer);
             tgt_bivf->is_trained = true;
             return 0;
         }
+
+        // Unsupported type
+        return -1;
     }
     CATCH_AND_HANDLE
 }
