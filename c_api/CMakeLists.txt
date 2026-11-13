@@ -13,6 +13,7 @@ set(FAISS_C_SRC
   AutoTune_c.cpp
   Clustering_c.cpp
   IndexFlat_c.cpp
+  IndexHNSW_c.cpp
   IndexIVFFlat_c.cpp
   IndexIVF_c.cpp
   IndexIVF_c_ex.cpp
@@ -115,6 +116,13 @@ if(NOT WIN32)
     target_compile_options(faiss_c_sve PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:RELEASE>>:-march=armv8-a+sve>)
   endif()
 endif()
+
+find_package(OpenMP REQUIRED)
+target_link_libraries(faiss_c PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx2 PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx512 PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_avx512_spr PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(faiss_c_sve PRIVATE OpenMP::OpenMP_CXX)
 
 function(faiss_install_headers headers p)
   foreach(h ${headers})
