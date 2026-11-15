@@ -13,6 +13,7 @@
 #include <faiss/gpu/StandardGpuResources.h>
 
 #include <faiss/IndexBinaryFlat.h>
+#include <faiss/IndexBinaryIVF.h>
 #include <faiss/IndexFlat.h>
 #if defined USE_NVIDIA_CUVS
 #include <faiss/IndexBinaryHNSW.h>
@@ -28,6 +29,7 @@
 #include <faiss/MetaIndexes.h>
 #include <faiss/gpu/GpuIndex.h>
 #include <faiss/gpu/GpuIndexBinaryFlat.h>
+#include <faiss/gpu/GpuIndexBinaryIVF.h>
 #if defined USE_NVIDIA_CUVS
 #include <faiss/gpu/GpuIndexBinaryCagra.h>
 #include <faiss/gpu/GpuIndexCagra.h>
@@ -538,6 +540,10 @@ faiss::IndexBinary* index_binary_gpu_to_cpu(
         IndexBinaryFlat* ret = new IndexBinaryFlat();
         ii->copyTo(ret);
         return ret;
+    } else if (auto ii = dynamic_cast<const GpuIndexBinaryIVF*>(gpu_index)) {
+        IndexBinaryIVF* ret = new IndexBinaryIVF();
+        ii->copyTo(ret);
+        return ret;
     }
 #if defined USE_NVIDIA_CUVS
     else if (auto ii = dynamic_cast<const GpuIndexBinaryCagra*>(gpu_index)) {
@@ -560,6 +566,18 @@ faiss::IndexBinary* index_binary_cpu_to_gpu(
         GpuIndexBinaryFlatConfig config;
         config.device = device;
         return new GpuIndexBinaryFlat(provider, ii, config);
+    } else if (auto ii = dynamic_cast<const IndexBinaryIVF*>(index)) {
+        GpuIndexBinaryIVFConfig config;
+        config.device = device;
+        if (options) {
+            config.indicesOptions = options->indicesOptions;
+            config.memorySpace = options->memorySpace;
+        }
+        auto res = new GpuIndexBinaryIVF(provider, ii, config);
+        if (options && options->reserveVecs > 0 && ii->ntotal == 0) {
+            res->reserveMemory(options->reserveVecs);
+        }
+        return res;
     }
 #if defined USE_NVIDIA_CUVS
     else if (
@@ -592,8 +610,41 @@ faiss::IndexBinary* index_binary_cpu_to_gpu_multiple(
         options = &defaults;
     }
     if (options->shard) {
+        if (auto* ivf = dynamic_cast<const IndexBinaryIVF*>(index)) {
+            // Each shard holds a slice of every inverted list and shares the
+            // coarse centroids; the ids are stored, so no translation
+            IndexBinaryShards* ret = new IndexBinaryShards(true, false);
+            for (int i = 0; i < n; i++) {
+                IndexBinaryIVF shard(ivf->quantizer, ivf->d, ivf->nlist);
+                shard.own_fields = false;
+                shard.nprobe = ivf->nprobe;
+                shard.cp = ivf->cp;
+                shard.is_trained = ivf->is_trained;
+                for (size_t l = 0; l < ivf->nlist; l++) {
+                    size_t len = ivf->invlists->list_size(l);
+                    size_t i0 = i * len / n;
+                    size_t i1 = (i + 1) * len / n;
+                    if (i1 == i0) {
+                        continue;
+                    }
+                    InvertedLists::ScopedCodes codes(ivf->invlists, l);
+                    InvertedLists::ScopedIds ids(ivf->invlists, l);
+                    shard.invlists->add_entries(
+                            l,
+                            i1 - i0,
+                            ids.get() + i0,
+                            codes.get() + i0 * ivf->code_size);
+                    shard.ntotal += i1 - i0;
+                }
+                ret->addIndex(index_binary_cpu_to_gpu(
+                        provider[i], devices[i], &shard, options));
+            }
+            ret->own_indices = true;
+            return ret;
+        }
         auto* fi = dynamic_cast<const IndexBinaryFlat*>(index);
-        FAISS_THROW_IF_NOT_MSG(fi, "only flat index cloning supported");
+        FAISS_THROW_IF_NOT_MSG(
+                fi, "only flat and IVF index cloning supported");
         IndexBinaryShards* ret = new IndexBinaryShards(true, true);
         for (int i = 0; i < n; i++) {
             IndexBinaryFlat fig(fi->d);
