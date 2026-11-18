@@ -14,8 +14,11 @@
 #include <faiss/impl/DistanceComputer.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/distances.h>
+#include <faiss/utils/utils.h>
 
+#include <algorithm>
 #include <cstring>
+#include <vector>
 
 namespace faiss {
 
@@ -25,12 +28,28 @@ void Index::train(idx_t /*n*/, const float* /*x*/) {
     // does nothing by default
 }
 
+void Index::train(const gpu::Dataset&) {
+    FAISS_THROW_MSG("Dataset training not implemented for this type of index");
+}
+
+void Index::add(const gpu::Dataset&) {
+    FAISS_THROW_MSG("Dataset addition not implemented for this type of index");
+}
+
+void Index::train_with_queries(
+        idx_t /*n*/,
+        const float* /*x*/,
+        idx_t /*n_train_q*/,
+        const float* /*xq_train*/) {
+    // does nothing by default
+}
+
 void Index::range_search(
         idx_t,
         const float*,
         float,
         RangeSearchResult*,
-        const SearchParameters* params) const {
+        const SearchParameters* /*params*/) const {
     FAISS_THROW_MSG("range search not implemented");
 }
 
@@ -48,7 +67,7 @@ void Index::add_with_ids(
 
 size_t Index::remove_ids(const IDSelector& /*sel*/) {
     FAISS_THROW_MSG("remove_ids not implemented for this type of index");
-    return -1;
+    return static_cast<size_t>(-1);
 }
 
 void Index::reconstruct(idx_t, float*) const {
@@ -106,19 +125,56 @@ void Index::search_and_reconstruct(
 }
 
 void Index::search_subset(
+        idx_t /*n*/,
+        const float* /*x*/,
+        idx_t /*k_base*/,
+        const idx_t* /*base_labels*/,
+        idx_t /*k*/,
+        float* /*distances*/,
+        idx_t* /*labels*/) const {
+    FAISS_THROW_MSG("search_subset not implemented for this type of index");
+}
+
+void Index::search_ex(
         idx_t n,
-        const float* x,
-        idx_t k_base,
-        const idx_t* base_labels,
+        const void* x,
+        NumericType numeric_type,
         idx_t k,
         float* distances,
-        idx_t* labels) const {
-    FAISS_THROW_MSG("search_subset not implemented for this type of index");
+        idx_t* labels,
+        const SearchParameters* params) const {
+    if (numeric_type == NumericType::Float32) {
+        search(n, static_cast<const float*>(x), k, distances, labels, params);
+        return;
+    }
+    FAISS_THROW_IF_NOT_MSG(
+            numeric_type == NumericType::Float16,
+            "Index::search: unsupported numeric type");
+    FAISS_THROW_IF_NOT(d > 0);
+    // widen blocks of at most 64 MiB of fp32 queries
+    const idx_t bs = std::max<idx_t>(
+            1, idx_t(64) * 1024 * 1024 / (sizeof(float) * idx_t(d)));
+    const uint16_t* x16 = static_cast<const uint16_t*>(x);
+    std::vector<float> buffer(size_t(std::min(n, bs)) * d);
+    for (idx_t i0 = 0; i0 < n; i0 += bs) {
+        const idx_t i1 = std::min(n, i0 + bs);
+        fp16_to_fp32(size_t(i1 - i0) * d, x16 + i0 * d, buffer.data());
+        search(i1 - i0,
+               buffer.data(),
+               k,
+               distances + i0 * k,
+               labels + i0 * k,
+               params);
+    }
+}
+
+void Index::search1(const float*, ResultHandler&, SearchParameters*) const {
+    FAISS_THROW_MSG("search1 not implemented for this type of index");
 }
 
 void Index::compute_residual(const float* x, float* residual, idx_t key) const {
     reconstruct(key, residual);
-    for (size_t i = 0; i < d; i++) {
+    for (int i = 0; i < d; i++) {
         residual[i] = x[i] - residual[i];
     }
 }
@@ -157,9 +213,10 @@ struct GenericDistanceComputer : DistanceComputer {
     size_t d;
     const Index& storage;
     std::vector<float> buf;
-    const float* q;
+    const float* q = nullptr;
 
-    explicit GenericDistanceComputer(const Index& storage) : storage(storage) {
+    explicit GenericDistanceComputer(const Index& storage_in)
+            : storage(storage_in) {
         d = storage.d;
         buf.resize(d * 2);
     }

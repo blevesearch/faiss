@@ -9,13 +9,15 @@
 
 #pragma once
 
+#include <optional>
 #include <vector>
-#include "faiss/Index.h"
 
+#include <faiss/Index.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexPQ.h>
 #include <faiss/IndexScalarQuantizer.h>
 #include <faiss/impl/HNSW.h>
+#include <faiss/impl/Panorama.h>
 #include <faiss/utils/utils.h>
 
 namespace faiss {
@@ -26,7 +28,7 @@ struct IndexHNSW;
  * link structure built on top */
 
 struct IndexHNSW : Index {
-    typedef HNSW::storage_idx_t storage_idx_t;
+    using storage_idx_t = HNSW::storage_idx_t;
 
     // the link structure
     HNSW hnsw;
@@ -47,11 +49,24 @@ struct IndexHNSW : Index {
     // used when GpuIndexCagra::copyFrom(IndexHNSWCagra*) is invoked.
     bool keep_max_size_level0 = false;
 
+    // When this index is the coarse quantizer of an IndexIVF, IndexIVF::train()
+    // calls add_level_0_links_from_sample() after it adds the centroids. The
+    // sample is the first min(n, level_0_link_samples_per_node * ntotal)
+    // training vectors, in the numeric type or encoding of the training data.
+    // 0 disables the call. Training does not call it when
+    // quantizer_trains_alone == 1 or when the quantizer is already trained.
+    // The index format does not store this value.
+    int level_0_link_samples_per_node = 3;
+
+    // See impl/VisitedTable.h.
+    std::optional<bool> use_visited_hashset;
+
     explicit IndexHNSW(int d = 0, int M = 32, MetricType metric = METRIC_L2);
     explicit IndexHNSW(Index* storage, int M = 32);
 
     ~IndexHNSW() override;
 
+    /// Adds vectors to the index. May not be called concurrently.
     void add(idx_t n, const float* x) override;
 
     /// Trains the storage if needed
@@ -72,6 +87,12 @@ struct IndexHNSW : Index {
             float radius,
             RangeSearchResult* result,
             const SearchParameters* params = nullptr) const override;
+
+    /** search one vector with a custom result handler */
+    void search1(
+            const float* x,
+            ResultHandler& handler,
+            SearchParameters* params = nullptr) const override;
 
     void reconstruct(idx_t key, float* recons) const override;
 
@@ -110,6 +131,35 @@ struct IndexHNSW : Index {
     void reorder_links();
 
     void link_singletons();
+
+    /** Adds level-0 links so that the search no longer stops at "sinks":
+     * nodes where it stops for many vectors whose nearest node is elsewhere.
+     * With a small efSearch, HNSW as a coarse quantizer will overfill the
+     * IVF lists. Call this function after adding all centroids to this
+     * quantizer. Called automatically through IndexIVF::train.
+     */
+    HNSWLevel0LinkStats add_level_0_links_from_sample(
+            idx_t n,
+            const float* x,
+            const HNSWLevel0LinkParameters& params =
+                    HNSWLevel0LinkParameters());
+
+    /// add_level_0_links_from_sample() for Float32 or packed Float16 vectors
+    HNSWLevel0LinkStats add_level_0_links_from_sample_ex(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            const HNSWLevel0LinkParameters& params =
+                    HNSWLevel0LinkParameters());
+
+    /// add_level_0_links_from_sample() for n vectors that `codec` encoded with
+    /// sa_encode()
+    HNSWLevel0LinkStats add_level_0_links_from_sample_encoded(
+            idx_t n,
+            const uint8_t* x,
+            const Index* codec,
+            const HNSWLevel0LinkParameters& params =
+                    HNSWLevel0LinkParameters());
 
     virtual void permute_entries(const idx_t* perm);
 
@@ -164,20 +214,11 @@ struct IndexHNSWFlatPanorama : IndexHNSWFlat {
 
     /// Inline for performance - called frequently in search hot path.
     const float* get_cum_sum(idx_t i) const {
-        return cum_sums.data() + i * (num_panorama_levels + 1);
+        return cum_sums.data() + i * (pano.n_levels + 1);
     }
 
-    /// Compute cumulative sums for a vector (used both for database points and
-    /// queries).
-    static void compute_cum_sums(
-            const float* x,
-            float* dst_cum_sums,
-            int d,
-            int num_panorama_levels,
-            int panorama_level_width);
-
     std::vector<float> cum_sums;
-    const size_t panorama_level_width;
+    Panorama pano;
     const size_t num_panorama_levels;
 };
 
@@ -205,6 +246,36 @@ struct IndexHNSWSQ : IndexHNSW {
             ScalarQuantizer::QuantizerType qtype,
             int M,
             MetricType metric = METRIC_L2);
+};
+
+/** HNSW index whose storage is RaBitQ-compressed.
+ *
+ * The graph is built directly from the compressed codes. Neighbor-diversity
+ * pruning uses a fast 1-bit symmetric L2 estimator, including when the storage
+ * contains multi-bit codes.
+ *
+ * With nb_bits >= 2 the codes carry a per-vector error factor, so search uses
+ * the staged search method: a 1-bit estimate for every neighbor and the full
+ * multi-bit distance only for candidates the error bound cannot rule out.
+ * nb_bits = 1 has no error factor and uses ordinary HNSW search.
+ */
+struct IndexHNSWRaBitQ : IndexHNSW {
+    IndexHNSWRaBitQ();
+    IndexHNSWRaBitQ(
+            int d,
+            int M,
+            uint8_t nb_bits = 1,
+            MetricType metric = METRIC_L2);
+
+    IndexHNSWRaBitQ& operator=(const IndexHNSWRaBitQ&) = delete;
+
+   private:
+    // clone_index() replaces the shallow-copied storage with a deep copy
+    // before returning it. Keep ordinary C++ copies from sharing ownership.
+    IndexHNSWRaBitQ(const IndexHNSWRaBitQ&) = default;
+#ifndef SWIG
+    friend IndexHNSW* clone_IndexHNSW(const IndexHNSW* index);
+#endif
 };
 
 /** 2-level code structure with fast random access
@@ -244,7 +315,7 @@ struct IndexHNSWCagra : IndexHNSW {
     /// searches only the base level knn graph of the HNSW index.
     /// This parameter selects the entry point by randomly selecting
     /// some points and using the best one.
-    int num_base_level_search_entrypoints = 32;
+    int num_base_level_search_entrypoints = 256;
 
     void add(idx_t n, const float* x) override;
 
@@ -257,9 +328,16 @@ struct IndexHNSWCagra : IndexHNSW {
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
 
+    void range_search(
+            idx_t n,
+            const float* x,
+            float radius,
+            RangeSearchResult* result,
+            const SearchParameters* params = nullptr) const override;
+
     faiss::NumericType get_numeric_type() const;
     void set_numeric_type(faiss::NumericType numeric_type);
-    NumericType numeric_type_;
+    NumericType numeric_type_ = Float32;
 };
 
 } // namespace faiss

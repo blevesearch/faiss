@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright 2026 Arm Limited and/or its affiliates <open-source-office@arm.com>
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -6,9 +7,11 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG').lstrip('v') %}
 {% set suffix = "_nightly" if environ.get('PACKAGE_TYPE') == 'nightly' else "" %}
 {% set number = GIT_DESCRIBE_NUMBER %}
-{% set cuda_constraints=">=12.6,<12.7" %}
-{% set libcublas_constraints=">=12.6,<12.7" %}
-{% set cudart_constraints=">=12.6,<12.7" %}
+{% set cuda_major = (cudatoolkit | default("12.0")).split('.')[0] | int %}
+{% set cuda_minor = (cudatoolkit | default("12.0")).split('.')[1] | int %}
+{% set cuda_constraints=">=13.2,<13.3" %}
+{% set libcublas_constraints=">=13.3,<13.4" %}  # libcublas 13.3 is actually for cuda 13.2
+{% set cudart_constraints=">=13.2,<13.3" %}
 
 package:
   name: faiss-pkg
@@ -44,11 +47,11 @@ outputs:
         - {{ compiler('cxx') }} =12.4
         - sysroot_linux-64 =2.17 # [linux64]
         - llvm-openmp  # [osx]
-        - cmake >=3.30.4
+        - cmake >=4.0
         - make =4.2 # [not win]
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
-        - mkl-devel >=2024.2.2,<2025.0a0  # [x86_64]
+        - mkl >=2024.2.2,<2026  # [x86_64]
+        - mkl-devel >=2024.2.2,<2026  # [x86_64]
         - cuda-toolkit {{ cudatoolkit }}
         - cuda-cudart {{ cudart_constraints }}
         - cuda-cudart-dev {{ cudart_constraints }}
@@ -58,19 +61,21 @@ outputs:
         - cuda-cudart-static_linux-64 {{ cudart_constraints }}  # [linux64]
       host:
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
-        - openblas =0.3.30 # [not x86_64]
-        - libcuvs =25.10
+        - mkl >=2024.2.2,<2026  # [x86_64]
+        - openblas =0.3.34 # [not x86_64]
+        - libcuvs =26.10
         - cuda-version {{ cuda_constraints }}
+        - libsvs-runtime =0.5.0  # [x86_64 and linux]
       run:
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
-        - openblas =0.3.30 # [not x86_64]
+        - mkl >=2024.2.2,<2026  # [x86_64]
+        - openblas =0.3.34 openmp_* # [not x86_64]
         - cuda-cudart {{ cuda_constraints }}
         - libcublas {{ libcublas_constraints }}
-        - libcuvs =25.10
+        - libcuvs =26.10
         - cuda-version {{ cuda_constraints }}
         - libnvjitlink
+        - libsvs-runtime =0.5.0  # [x86_64 and linux]
     test:
       requires:
         - conda-build
@@ -79,6 +84,7 @@ outputs:
         - test -f $PREFIX/lib/libfaiss_avx2$SHLIB_EXT  # [x86_64 and not win]
         - conda inspect linkages -p $PREFIX $PKG_NAME  # [not win]
         - conda inspect objects -p $PREFIX $PKG_NAME   # [osx]
+        - python -c "import ctypes; lib = ctypes.CDLL('libopenblas.so.0'); assert lib.openblas_get_parallel() == 2"  # [linux and not x86_64]
 
   - name: faiss-gpu-cuvs
     script: build-pkg.sh  # [x86_64 and not win and not osx]
@@ -89,22 +95,24 @@ outputs:
       string: "py{{ PY_VER }}_h{{ PKG_HASH }}_{{ number }}_cuda{{ cudatoolkit }}{{ suffix }}"
     requirements:
       build:
-        - {{ compiler('cxx') }} =12.4
-        - sysroot_linux-64 =2.17 # [linux64]
+        - {{ compiler('cxx') }} =14.2
+        - sysroot_linux-64 =2.34 # [linux64]
         - swig =4.0
-        - cmake >=3.26.4
+        - cmake >=4.0
         - make =4.2 # [not win]
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
+        - mkl >=2024.2.2,<2026  # [x86_64]
         - cuda-toolkit {{ cudatoolkit }}
       host:
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
+        - mkl >=2024.2.2,<2026  # [x86_64]
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
         - python {{ python }}
         - numpy >=2.0,<2.3
+        - setuptools
         - {{ pin_subpackage('libfaiss', exact=True) }}
+        - openblas =0.3.34 openmp_* # [not x86_64]
       run:
-        - mkl >=2024.2.2,<2025.0a0  # [x86_64]
+        - mkl >=2024.2.2,<2026  # [x86_64]
         - _openmp_mutex =4.5=2_kmp_llvm  # [x86_64]
         - python {{ python }}
         - numpy >=2.0,<2.3
@@ -114,16 +122,28 @@ outputs:
       requires:
         - numpy >=2.0,<2.3
         - scipy
+        - pytest
+        - pytest-timeout
+# pytorch-gpu on conda-forge requires CUDA >=12.9; skip for older CUDA 12.x.
+# TODO: remove guard when we move to PyPI (pytorch via PyPI works on CUDA 13)
+{% if cuda_major == 12 and cuda_minor >= 9 %}
         - pytorch-gpu >=2.7
+{% endif %}
       commands:
         - python -X faulthandler -m unittest discover -v -s tests/ -p "test_*"
+{% if cuda_major == 12 and cuda_minor >= 9 %}
         - python -X faulthandler -m unittest discover -v -s tests/ -p "torch_*"
+{% endif %}
         - cp tests/common_faiss_tests.py faiss/gpu/test
-        - python -X faulthandler -m unittest discover -v -s faiss/gpu/test/ -p "test_*"
-        - python -X faulthandler -m unittest discover -v -s faiss/gpu/test/ -p "torch_*"
+        - rc=0; for f in faiss/gpu/test/test_*.py; do echo "=== Running $f ==="; timeout --kill-after=30 900 pytest --timeout=600 -v "$f" || { echo "=== FAILED or TIMED OUT $f ==="; rc=1; }; done; exit $rc
+{% if cuda_major == 12 and cuda_minor >= 9 %}
+        - rc=0; for f in faiss/gpu/test/torch_*.py; do echo "=== Running $f ==="; timeout --kill-after=30 900 pytest --timeout=600 -v "$f" || { echo "=== FAILED or TIMED OUT $f ==="; rc=1; }; done; exit $rc
+{% endif %}
         - sh test_cpu_dispatch.sh  # [linux64]
       files:
         - test_cpu_dispatch.sh  # [linux64]
       source_files:
         - tests/
-        - faiss/gpu/test/
+        - faiss/  # faiss/gpu/test/, and the sources that tests/test_simd_registry.py checks
+        - benchs/e_means/dino_data.py
+        - benchs/e_means/ssd_streaming.py

@@ -22,7 +22,7 @@ struct TestException : public std::exception {};
 using idx_t = faiss::idx_t;
 
 struct MockIndex : public faiss::Index {
-    explicit MockIndex(idx_t d) : faiss::Index(d) {
+    explicit MockIndex(idx_t d_in) : faiss::Index(d_in) {
         resetMock();
     }
 
@@ -47,7 +47,7 @@ struct MockIndex : public faiss::Index {
             float* distances,
             idx_t* labels,
             const faiss::SearchParameters* params) const override {
-        FAISS_THROW_IF_NOT(!params);
+        FAISS_THROW_IF_MSG(params, "search params not supported");
         nCalled = n;
         xCalled = x;
         kCalled = k;
@@ -103,9 +103,7 @@ TEST(ThreadedIndex, SingleException) {
         }
     };
 
-    // Try with threading and without
     for (bool threaded : {true, false}) {
-        // clear flags
         for (auto& idx : idxs) {
             idx->resetMock();
         }
@@ -115,10 +113,8 @@ TEST(ThreadedIndex, SingleException) {
             ti.addIndex(idx.get());
         }
 
-        // The second index should throw
         EXPECT_THROW(ti.runOnIndex(fn), TestException);
 
-        // Index 0 and 2 should have processed
         EXPECT_TRUE(idxs[0]->flag);
         EXPECT_TRUE(idxs[2]->flag);
     }
@@ -141,9 +137,7 @@ TEST(ThreadedIndex, MultipleException) {
         }
     };
 
-    // Try with threading and without
     for (bool threaded : {true, false}) {
-        // clear flags
         for (auto& idx : idxs) {
             idx->resetMock();
         }
@@ -157,7 +151,6 @@ TEST(ThreadedIndex, MultipleException) {
         // FaissException
         EXPECT_THROW(ti.runOnIndex(fn), faiss::FaissException);
 
-        // Index 2 should have processed
         EXPECT_TRUE(idxs[2]->flag);
     }
 }
@@ -168,10 +161,9 @@ TEST(ThreadedIndex, TestReplica) {
     int d = 3;
     int k = 6;
 
-    // Try with threading and without
-    for ([[maybe_unused]] const bool threaded : {true, false}) {
+    for (const bool threaded : {true, false}) {
         std::vector<std::unique_ptr<MockIndex>> idxs;
-        faiss::IndexReplicas replica(d);
+        faiss::IndexReplicas replica(d, threaded);
 
         for (int i = 0; i < numReplicas; ++i) {
             idxs.emplace_back(new MockIndex(d));
@@ -184,7 +176,7 @@ TEST(ThreadedIndex, TestReplica) {
 
         replica.add(n, x.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             EXPECT_EQ(idxs[i]->nCalled, n);
             EXPECT_EQ(idxs[i]->xCalled, x.data());
         }
@@ -195,7 +187,7 @@ TEST(ThreadedIndex, TestReplica) {
 
         replica.search(n, x.data(), k, distances.data(), labels.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             auto perReplica = n / idxs.size();
 
             EXPECT_EQ(idxs[i]->nCalled, perReplica);
@@ -217,7 +209,6 @@ TEST(ThreadedIndex, TestShards) {
     int n = 10 * numShards;
     int k = 6;
 
-    // Try with threading and without
     for (bool threaded : {true, false}) {
         std::vector<std::unique_ptr<MockIndex>> idxs;
         faiss::IndexShards shards(d, threaded);
@@ -233,7 +224,7 @@ TEST(ThreadedIndex, TestShards) {
 
         shards.add(n, x.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             auto perShard = n / idxs.size();
 
             EXPECT_EQ(idxs[i]->nCalled, perShard);
@@ -246,7 +237,7 @@ TEST(ThreadedIndex, TestShards) {
 
         shards.search(n, x.data(), k, distances.data(), labels.data());
 
-        for (int i = 0; i < idxs.size(); ++i) {
+        for (size_t i = 0; i < idxs.size(); ++i) {
             EXPECT_EQ(idxs[i]->nCalled, n);
             EXPECT_EQ(idxs[i]->xCalled, x.data());
             EXPECT_EQ(idxs[i]->kCalled, k);

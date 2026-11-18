@@ -28,9 +28,14 @@
 #include <faiss/gpu/StandardGpuResources.h>
 #include <faiss/gpu/test/TestUtils.h>
 #include <faiss/gpu/utils/DeviceUtils.h>
+#include <faiss/impl/IDSelector.h>
+#include <faiss/utils/distances.h>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
+#include <random>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 // FIXME: figure out a better way to test fp16
@@ -354,6 +359,11 @@ TEST(TestGpuIndexIVFFlat, Float32_Query_IP) {
 }
 
 TEST(TestGpuIndexIVFFlat, LargeBatch) {
+    // With low-dim vectors, CPU will use non-BLAS. Force the CPU to use
+    // the BLAS for consistent comparison.
+    int saved_threshold = faiss::distance_compute_blas_threshold;
+    faiss::distance_compute_blas_threshold = 1;
+
     Options opt;
     opt.dim = 3;
     opt.numQuery = 100000;
@@ -364,6 +374,8 @@ TEST(TestGpuIndexIVFFlat, LargeBatch) {
     opt.indicesOpt = faiss::gpu::INDICES_64_BIT;
     queryTest(opt, faiss::METRIC_L2, false);
 #endif
+
+    faiss::distance_compute_blas_threshold = saved_threshold;
 }
 
 // float16 coarse quantizer
@@ -462,6 +474,101 @@ TEST(TestGpuIndexIVFFlat, Float32_32_CopyFrom) {
     copyFromTest(false, true);
 #endif
 }
+
+#if defined USE_NVIDIA_CUVS
+class TestCuvsGpuIndexIVFFlatCopyFrom
+        : public testing::TestWithParam<faiss::MetricType> {};
+
+TEST_P(TestCuvsGpuIndexIVFFlatCopyFrom, SearchLargeK) {
+    constexpr int numVecs = 16384;
+    constexpr int dim = 128;
+    constexpr int numCentroids = 32;
+    const auto metric = GetParam();
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<int> random(-30, 30);
+    std::vector<float> vecs(numVecs * dim);
+    for (auto& value : vecs) {
+        value = random(rng);
+    }
+
+    faiss::IndexFlat quantizer(dim, metric);
+    faiss::IndexIVFFlat cpuIndex(&quantizer, dim, numCentroids, metric);
+    cpuIndex.cp.niter = 5;
+    cpuIndex.train(numVecs, vecs.data());
+    cpuIndex.add(numVecs, vecs.data());
+    cpuIndex.nprobe = numCentroids;
+
+    faiss::gpu::StandardGpuResources res;
+    faiss::gpu::GpuIndexIVFFlatConfig config;
+    config.use_cuvs = true;
+    config.indicesOptions = faiss::gpu::INDICES_64_BIT;
+    faiss::gpu::GpuIndexIVFFlat gpuIndex(
+            &res, dim, numCentroids, metric, config);
+    gpuIndex.copyFrom(&cpuIndex);
+
+    faiss::IndexFlat exact(dim, metric);
+    exact.add(numVecs, vecs.data());
+    // k > 256 takes the cuVS path that sizes its workspace from the
+    // accumulated list sizes. Cloning must populate those sizes first.
+    for (int k : {256, 257, 500, 3500}) {
+        SCOPED_TRACE(testing::Message() << "k=" << k);
+        for (int numQueries : {1, 4}) {
+            SCOPED_TRACE(testing::Message() << "numQueries=" << numQueries);
+            std::vector<float> expected(numQueries * k);
+            std::vector<float> distances(numQueries * k);
+            std::vector<faiss::idx_t> expectedIds(numQueries * k);
+            std::vector<faiss::idx_t> ids(numQueries * k);
+            exact.search(
+                    numQueries,
+                    vecs.data(),
+                    k,
+                    expected.data(),
+                    expectedIds.data());
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                gpuIndex.search(
+                        numQueries,
+                        vecs.data(),
+                        k,
+                        distances.data(),
+                        ids.data());
+                for (int q = 0; q < numQueries; ++q) {
+                    std::unordered_set<faiss::idx_t> uniqueIds;
+                    for (int i = q * k; i < (q + 1) * k; ++i) {
+                        ASSERT_GE(ids[i], 0);
+                        ASSERT_LT(ids[i], numVecs);
+                        EXPECT_TRUE(uniqueIds.insert(ids[i]).second);
+                        float score = 0;
+                        for (int j = 0; j < dim; ++j) {
+                            float a = vecs[q * dim + j];
+                            float b = vecs[ids[i] * dim + j];
+                            score += metric == faiss::METRIC_L2
+                                    ? (a - b) * (a - b)
+                                    : a * b;
+                        }
+                        EXPECT_FLOAT_EQ(score, distances[i]);
+                    }
+                    // cuVS need not return sorted results, and tied scores
+                    // may select different IDs at the top-k boundary.
+                    std::vector<float> actual(
+                            distances.begin() + q * k,
+                            distances.begin() + (q + 1) * k);
+                    auto begin = expected.begin() + q * k;
+                    std::sort(begin, begin + k);
+                    std::sort(actual.begin(), actual.end());
+                    for (int i = 0; i < k; ++i) {
+                        EXPECT_FLOAT_EQ(begin[i], actual[i]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+        Cuvs,
+        TestCuvsGpuIndexIVFFlatCopyFrom,
+        testing::Values(faiss::METRIC_L2, faiss::METRIC_INNER_PRODUCT));
+#endif
 
 TEST(TestGpuIndexIVFFlat, Float32_negative) {
     Options opt;
@@ -908,6 +1015,53 @@ TEST(TestGpuIndexIVFFlat, Reconstruct_n) {
 
     EXPECT_EQ(gpuVals, cpuVals);
 }
+
+void testIDSelectorIVFFlat(faiss::MetricType metricType) {
+    Options opt;
+
+    std::vector<float> trainVecs = faiss::gpu::randVecs(opt.numTrain, opt.dim);
+    std::vector<float> addVecs = faiss::gpu::randVecs(opt.numAdd, opt.dim);
+
+    faiss::gpu::StandardGpuResources res;
+    res.noTempMemory();
+
+    faiss::gpu::GpuIndexIVFFlatConfig config;
+    config.device = opt.device;
+    config.indicesOptions = faiss::gpu::INDICES_64_BIT;
+    config.use_cuvs = true;
+
+    faiss::gpu::GpuIndexIVFFlat gpuIndex(
+            &res, opt.dim, opt.numCentroids, metricType, config);
+    gpuIndex.nprobe = opt.nprobe;
+
+    gpuIndex.train(opt.numTrain, trainVecs.data());
+    gpuIndex.add(opt.numAdd, addVecs.data());
+
+    auto queryVecs = faiss::gpu::randVecs(opt.numQuery, opt.dim);
+    faiss::gpu::TestIDSelectorStruct selector_struct(opt.numAdd);
+    faiss::SearchParametersIVF search_params;
+    search_params.nprobe = opt.nprobe;
+    for (auto& [selectorName, selector] : selector_struct.selector_map) {
+        search_params.sel = selector.get();
+        faiss::gpu::testIDSelectorSearch(
+                &gpuIndex,
+                &search_params,
+                queryVecs,
+                opt.numQuery,
+                opt.k,
+                selectorName);
+    }
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexIVFFlat, IDSelector_L2) {
+    testIDSelectorIVFFlat(faiss::METRIC_L2);
+}
+
+TEST(TestCuvsGpuIndexIVFFlat, IDSelector_IP) {
+    testIDSelectorIVFFlat(faiss::METRIC_INNER_PRODUCT);
+}
+#endif
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

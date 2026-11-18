@@ -1,0 +1,281 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+#include <faiss/impl/platform_macros.h>
+
+namespace faiss {
+
+#define COMPILE_SIMD_NONE
+
+enum class SIMDLevel {
+    NONE,
+    // x86
+    AVX2,
+    AVX512,
+    AVX512_SPR, // Sapphire Rapids: AVX512_VPOPCNT + BF16 + FP16 + VNNI
+    // arm & aarch64
+    ARM_NEON,
+    ARM_SVE, // Scalable Vector Extension (ARMv8.2+)
+    // riscv
+    // RISC-V Vector Extension. The minimum ISA for this level is rv64gcv
+    // plus Zvfhmin (FP16 vector conversion), which the QT_fp16 kernels
+    // require; RVV translation units are compiled with
+    // -march=rv64gcv_zvfhmin.
+    RISCV_RVV,
+
+    // Appended to preserve the numeric values of the existing public enum.
+    // AVX-512 core features plus AVX512_VPOPCNTDQ and AVX512_BITALG
+    // (Ice Lake, Zen 4, etc.).
+    AVX512_VPOPCNT,
+
+    COUNT
+};
+
+/***************************************************************
+ * FAISS_SIMD_TU(L): 1 if the library contains SIMD level L
+ * (COMPILE_SIMD_L) and the current translation unit can use the
+ * instructions of L (compiler macro), else 0. Use it to guard level
+ * code in headers that common files also include, for example
+ * `#if FAISS_SIMD_TU(AVX512)`. It is function-like, so a header that
+ * uses it without including this file fails to compile.
+ ***************************************************************/
+#ifdef SWIG
+#define FAISS_SIMD_TU(level) 0
+#else
+
+#if defined(COMPILE_SIMD_AVX2) && defined(__AVX2__)
+#define FAISS_SIMD_TU_AVX2 1
+#else
+#define FAISS_SIMD_TU_AVX2 0
+#endif
+
+#if defined(COMPILE_SIMD_AVX512) && defined(__AVX512F__)
+#define FAISS_SIMD_TU_AVX512 1
+#else
+#define FAISS_SIMD_TU_AVX512 0
+#endif
+
+#if defined(COMPILE_SIMD_AVX512_VPOPCNT) && defined(__AVX512VPOPCNTDQ__)
+#define FAISS_SIMD_TU_AVX512_VPOPCNT 1
+#else
+#define FAISS_SIMD_TU_AVX512_VPOPCNT 0
+#endif
+
+#if defined(COMPILE_SIMD_AVX512_SPR) && defined(__AVX512FP16__)
+#define FAISS_SIMD_TU_AVX512_SPR 1
+#else
+#define FAISS_SIMD_TU_AVX512_SPR 0
+#endif
+
+// __aarch64__ is not defined by MSVC, which cannot compile the NEON code.
+#if defined(COMPILE_SIMD_ARM_NEON) && defined(__aarch64__)
+#define FAISS_SIMD_TU_ARM_NEON 1
+#else
+#define FAISS_SIMD_TU_ARM_NEON 0
+#endif
+
+#if defined(COMPILE_SIMD_ARM_SVE) && defined(__ARM_FEATURE_SVE)
+#define FAISS_SIMD_TU_ARM_SVE 1
+#else
+#define FAISS_SIMD_TU_ARM_SVE 0
+#endif
+
+#if defined(COMPILE_SIMD_RISCV_RVV) && defined(__riscv_vector)
+#define FAISS_SIMD_TU_RISCV_RVV 1
+#else
+#define FAISS_SIMD_TU_RISCV_RVV 0
+#endif
+
+#define FAISS_SIMD_TU(level) FAISS_SIMD_TU_##level
+
+#endif // SWIG
+
+/***************************************************************
+ * SINGLE_SIMD_LEVEL: the SIMD level for code without explicit SL context.
+ *
+ * In static mode: resolves to the compiled-in level (zero overhead).
+ * In DD mode: resolves to NONE (emulated scalar). Code using
+ * SINGLE_SIMD_LEVEL is meant to be incrementally migrated to use
+ * proper SL dispatch — SINGLE_SIMD_LEVEL is migration scaffolding,
+ * not permanent API.
+ ***************************************************************/
+#ifdef FAISS_ENABLE_DD
+// DD dispatches to the highest optional SIMD level at runtime.
+// On ARM64, NEON is mandatory (always available via COMPILE_SIMD_ARM_NEON),
+// so the baseline is ARM_NEON. On x86, the baseline is NONE.
+#if defined(COMPILE_SIMD_ARM_NEON)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::ARM_NEON;
+#else
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::NONE;
+#endif
+#else
+#if defined(COMPILE_SIMD_AVX512_SPR)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::AVX512_SPR;
+#elif defined(COMPILE_SIMD_AVX512_VPOPCNT)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::AVX512_VPOPCNT;
+#elif defined(COMPILE_SIMD_AVX512)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::AVX512;
+#elif defined(COMPILE_SIMD_AVX2)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::AVX2;
+#elif defined(COMPILE_SIMD_ARM_SVE)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::ARM_SVE;
+#elif defined(COMPILE_SIMD_ARM_NEON)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::ARM_NEON;
+#elif defined(COMPILE_SIMD_RISCV_RVV)
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::RISCV_RVV;
+#else
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL = SIMDLevel::NONE;
+#endif
+#endif
+
+/***************************************************************
+ * Helper to select the appropriate 256-bit SIMD level.
+ *
+ * For 256-bit SIMD types (simd16uint16, simd32uint8, etc.), maps:
+ *   AVX512/AVX512_VPOPCNT/AVX512_SPR → AVX2
+ *   AVX2 → AVX2
+ *   ARM_NEON/ARM_SVE → ARM_NEON
+ *   NONE → NONE
+ ***************************************************************/
+template <SIMDLevel SL>
+struct simd256_level_selector {
+    static constexpr SIMDLevel value =
+            (SL == SIMDLevel::AVX512 || SL == SIMDLevel::AVX512_VPOPCNT ||
+             SL == SIMDLevel::AVX512_SPR)
+            ? SIMDLevel::AVX2
+            : (SL == SIMDLevel::ARM_SVE             ? SIMDLevel::ARM_NEON
+                       : SL == SIMDLevel::RISCV_RVV ? SIMDLevel::NONE
+                                                    : SL);
+};
+
+/// SINGLE_SIMD_LEVEL mapped to 256-bit: use this for 256-bit simd types
+/// (simd16uint16, simd32uint8, etc.) which don't have AVX512/SVE
+/// specializations.
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL_256 =
+        simd256_level_selector<SINGLE_SIMD_LEVEL>::value;
+
+/***************************************************************
+ * Helper to select the appropriate 512-bit SIMD level.
+ *
+ * For 512-bit SIMD types (simd32uint16, simd64uint8, etc.), maps:
+ *   AVX512_VPOPCNT/AVX512_SPR → AVX512 for generic 512-bit operations
+ *   AVX512 → AVX512
+ *   NONE → NONE
+ ***************************************************************/
+template <SIMDLevel SL>
+struct simd512_level_selector {
+    static constexpr SIMDLevel value =
+            (SL == SIMDLevel::AVX512_SPR || SL == SIMDLevel::AVX512_VPOPCNT)
+            ? SIMDLevel::AVX512
+            : (SL == SIMDLevel::RISCV_RVV) ? SIMDLevel::NONE
+                                           : SL;
+};
+
+/// SINGLE_SIMD_LEVEL mapped to 512-bit: use this for 512-bit simd types
+/// (simd32uint16, simd64uint8, etc.) which don't have AVX512_SPR
+/// specializations (AVX512_SPR uses the same 512-bit integer ops as AVX512).
+inline constexpr SIMDLevel SINGLE_SIMD_LEVEL_512 =
+        simd512_level_selector<SINGLE_SIMD_LEVEL>::value;
+
+/// Number of float32 lanes for a given SIMD level.
+/// ARM_SVE is variable-width (128–2048 bits); no single constant is correct.
+template <SIMDLevel SL>
+constexpr int simd_width() {
+    static_assert(
+            SL != SIMDLevel::ARM_SVE,
+            "simd_width<ARM_SVE> is not supported: SVE is variable-width");
+    static_assert(
+            SL != SIMDLevel::RISCV_RVV,
+            "simd_width<RISCV_RVV> is not supported: RVV is variable-width");
+    if constexpr (
+            SL == SIMDLevel::AVX512 || SL == SIMDLevel::AVX512_VPOPCNT ||
+            SL == SIMDLevel::AVX512_SPR) {
+        return 16;
+    } else if constexpr (SL == SIMDLevel::AVX2 || SL == SIMDLevel::ARM_NEON) {
+        return 8;
+    } else {
+        return 1;
+    }
+}
+
+/// Bitmask (1 << SIMDLevel) of the levels this binary holds code for,
+/// whether or not the CPU supports them.
+uint64_t compiled_simd_levels();
+
+/// Convert SIMDLevel to string. Throws FaissException for invalid level.
+std::string to_string(SIMDLevel level);
+
+/// Parse string to SIMDLevel. Throws FaissException for invalid strings.
+SIMDLevel to_simd_level(const std::string& level_str);
+
+/**
+ * Current SIMD configuration.
+ *
+ * This class provides a uniform API for querying and setting the SIMD level,
+ * regardless of whether faiss was built with Dynamic Dispatch (DD) or static
+ * SIMD selection.
+ *
+ * In DD mode:
+ *   - get_level() returns the runtime-detected or user-set level
+ *   - set_level() changes the runtime level (if level is supported)
+ *   - supported_simd_levels() returns bitmask of all compiled-in levels
+ *
+ * In static mode:
+ *   - get_level() returns the compiled-in level
+ *   - set_level() succeeds only if level matches compiled-in level
+ *   - supported_simd_levels() returns bitmask with single level
+ */
+struct FAISS_API SIMDConfig {
+    static SIMDLevel level;
+
+    /// Returns bitmask of supported SIMD levels (1 << SIMDLevel).
+    static uint64_t supported_simd_levels;
+
+    /// CPU implements AVX-512 by splitting over a 256-bit datapath
+    /// (AMD Zen 4 / Zen 4c "Bergamo", family 0x19). On such CPUs 512-bit
+    /// ops give no throughput gain, so the fast-scan QBS path prefers the
+    /// 256-bit kernel.
+    static bool avx512_split;
+
+    /// Scalar table lookups beat gathers (AMD Zen 3, Zen 4 and Zen 5,
+    /// families 0x19 and 0x1A), so the 8-bit PQ code-distance kernels use
+    /// the scalar path instead of gathers.
+    static bool scalar_gather;
+
+    /// Same CPUs as scalar_gather. The AVX-512 QT_fp16, QT_bf16 and QT_8bit
+    /// inner-product distance loops use four accumulators per code at a
+    /// large d.
+    static bool sq_avx512_4_accumulators;
+
+    static SIMDLevel auto_detect_simd_level();
+
+    /// Whether this faiss build dispatches SIMD at runtime.
+    static bool has_dynamic_dispatch();
+
+    SIMDConfig(const char** faiss_simd_level_env = nullptr);
+
+    /// Set the SIMD level. Throws FaissException if level is not supported.
+    static void set_level(SIMDLevel level);
+    static SIMDLevel get_level();
+    static std::string get_level_name();
+
+    /// Check if a SIMD level is available (compiled in).
+    static bool is_simd_level_available(SIMDLevel level);
+
+    /// Returns the SIMD level via the dispatch mechanism.
+    /// In DD mode, uses with_simd_level internally.
+    /// In static mode, returns the compiled-in level.
+    /// Useful for verification: get_level() == get_dispatched_level()
+    static SIMDLevel get_dispatched_level();
+};
+
+} // namespace faiss

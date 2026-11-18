@@ -27,7 +27,7 @@ namespace {
 // there can be NaNs in tables, they should be ignored
 float tab_min(const float* tab, size_t n) {
     float min = HUGE_VAL;
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         if (tab[i] < min) {
             min = tab[i];
         }
@@ -37,7 +37,7 @@ float tab_min(const float* tab, size_t n) {
 
 float tab_max(const float* tab, size_t n) {
     float max = -HUGE_VAL;
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         if (tab[i] > max) {
             max = tab[i];
         }
@@ -46,19 +46,32 @@ float tab_max(const float* tab, size_t n) {
 }
 
 void round_tab(float* tab, size_t n, float a, float bi) {
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         tab[i] = floorf((tab[i] - bi) * a + 0.5);
     }
 }
 
 template <typename T>
 void round_tab(const float* tab, size_t n, float a, float bi, T* tab_out) {
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         tab_out[i] = (T)floorf((tab[i] - bi) * a + 0.5);
     }
 }
 
 } // anonymous namespace
+
+float fastscan_lut_scale(
+        float max_column_span,
+        float max_sum_span,
+        size_t n_rounded_terms) {
+    const float headroom = 0.5f * float(n_rounded_terms);
+    const float sum_budget = 65535.0f - headroom;
+    const float a = std::min(
+            max_column_span > 0 ? 255.0f / max_column_span : HUGE_VALF,
+            (max_sum_span > 0 && sum_budget > 0) ? sum_budget / max_sum_span
+                                                 : HUGE_VALF);
+    return std::isfinite(a) ? a : 0.0f;
+}
 
 void round_uint8_per_column(
         float* tab,
@@ -67,17 +80,19 @@ void round_uint8_per_column(
         float* a_out,
         float* b_out) {
     float max_span = 0;
+    float total_span = 0;
     std::vector<float> mins(n);
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         mins[i] = tab_min(tab + i * d, d);
         float span = tab_max(tab + i * d, d) - mins[i];
         if (span > max_span) {
             max_span = span;
         }
+        total_span += span;
     }
-    float a = 255 / max_span;
+    float a = fastscan_lut_scale(max_span, total_span, n);
     float b = 0;
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         b += mins[i];
         round_tab(tab + i * d, d, a, mins[i]);
     }
@@ -97,11 +112,12 @@ void round_uint8_per_column_multi(
         float* a_out,
         float* b_out) {
     float max_span = 0;
+    float total_span = 0;
     std::vector<float> mins(n);
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         float min_i = HUGE_VAL;
         float max_i = -HUGE_VAL;
-        for (int j = 0; j < m; j++) {
+        for (size_t j = 0; j < m; j++) {
             min_i = std::min(min_i, tab_min(tab + (j * n + i) * d, d));
             max_i = std::max(max_i, tab_max(tab + (j * n + i) * d, d));
         }
@@ -110,12 +126,13 @@ void round_uint8_per_column_multi(
         if (span > max_span) {
             max_span = span;
         }
+        total_span += span;
     }
-    float a = 255 / max_span;
+    float a = fastscan_lut_scale(max_span, total_span, n);
     float b = 0;
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         b += mins[i];
-        for (int j = 0; j < m; j++) {
+        for (size_t j = 0; j < m; j++) {
             round_tab(tab + (j * n + i) * d, d, a, mins[i]);
         }
     }
@@ -143,20 +160,21 @@ void quantize_LUT_and_bias(
         float* b_out) {
     float a, b;
     if (!bias) {
-        FAISS_THROW_IF_NOT(!lut_is_3d);
+        FAISS_THROW_IF_MSG(
+                lut_is_3d, "3d LUT is not supported when bias is null");
         std::vector<float> mins(M);
         float max_span_LUT = -HUGE_VAL, max_span_dis = 0;
         b = 0;
-        for (int i = 0; i < M; i++) {
+        for (size_t i = 0; i < M; i++) {
             mins[i] = tab_min(LUT + i * ksub, ksub);
             float span = tab_max(LUT + i * ksub, ksub) - mins[i];
             max_span_LUT = std::max(max_span_LUT, span);
             max_span_dis += span;
             b += mins[i];
         }
-        a = std::min(255 / max_span_LUT, 65535 / max_span_dis);
+        a = fastscan_lut_scale(max_span_LUT, max_span_dis, M);
 
-        for (int i = 0; i < M; i++) {
+        for (size_t i = 0; i < M; i++) {
             round_tab(LUT + i * ksub, ksub, a, mins[i], LUTq + i * ksub);
         }
         memset(LUTq + M * ksub, 0, ksub * (M2 - M));
@@ -167,17 +185,17 @@ void quantize_LUT_and_bias(
         float bias_max = tab_max(bias, nprobe);
         max_span_dis = bias_max - bias_min;
         b = 0;
-        for (int i = 0; i < M; i++) {
+        for (size_t i = 0; i < M; i++) {
             mins[i] = tab_min(LUT + i * ksub, ksub);
             float span = tab_max(LUT + i * ksub, ksub) - mins[i];
             max_span_LUT = std::max(max_span_LUT, span);
             max_span_dis += span;
             b += mins[i];
         }
-        a = std::min(255 / max_span_LUT, 65535 / max_span_dis);
+        a = fastscan_lut_scale(max_span_LUT, max_span_dis, M);
         b += bias_min;
 
-        for (int i = 0; i < M; i++) {
+        for (size_t i = 0; i < M; i++) {
             round_tab(LUT + i * ksub, ksub, a, mins[i], LUTq + i * ksub);
         }
         memset(LUTq + M * ksub, 0, ksub * (M2 - M));
@@ -192,10 +210,10 @@ void quantize_LUT_and_bias(
 
         b = HUGE_VAL;
         size_t ij = 0;
-        for (int j = 0; j < nprobe; j++) {
+        for (size_t j = 0; j < nprobe; j++) {
             float max_span_dis_j = bias[j] - bias_min;
             float b2j = bias[j];
-            for (int i = 0; i < M; i++) {
+            for (size_t i = 0; i < M; i++) {
                 mins[ij] = tab_min(LUT + ij * ksub, ksub);
                 float span = tab_max(LUT + ij * ksub, ksub) - mins[ij];
                 max_span_LUT = std::max(max_span_LUT, span);
@@ -208,12 +226,12 @@ void quantize_LUT_and_bias(
             b = std::min(b, b2j);
         }
 
-        a = std::min(255 / max_span_LUT, 65535 / max_span_dis);
+        a = fastscan_lut_scale(max_span_LUT, max_span_dis, M);
 
         ij = 0;
         size_t ij_2 = 0;
-        for (int j = 0; j < nprobe; j++) {
-            for (int i = 0; i < M; i++) {
+        for (size_t j = 0; j < nprobe; j++) {
+            for (size_t i = 0; i < M; i++) {
                 round_tab(
                         LUT + ij * ksub, ksub, a, mins[ij], LUTq + ij_2 * ksub);
                 ij++;
@@ -230,10 +248,10 @@ void quantize_LUT_and_bias(
         std::vector<float> LUT2_storage(nprobe * M * ksub);
         float* LUT2 = LUT2_storage.data();
         size_t ijc = 0;
-        for (int j = 0; j < nprobe; j++) {
+        for (size_t j = 0; j < nprobe; j++) {
             float bias_j = bias[j] / M;
-            for (int i = 0; i < M; i++) {
-                for (int c = 0; c < ksub; c++) {
+            for (size_t i = 0; i < M; i++) {
+                for (size_t c = 0; c < ksub; c++) {
                     LUT2[ijc] = LUT[ijc] + bias_j;
                     ijc++;
                 }
@@ -241,8 +259,8 @@ void quantize_LUT_and_bias(
         }
         std::vector<float> mins(M, HUGE_VAL), maxs(M, -HUGE_VAL);
         size_t ij = 0;
-        for (int j = 0; j < nprobe; j++) {
-            for (int i = 0; i < M; i++) {
+        for (size_t j = 0; j < nprobe; j++) {
+            for (size_t i = 0; i < M; i++) {
                 mins[i] = std::min(mins[i], tab_min(LUT2 + ij * ksub, ksub));
                 maxs[i] = std::max(maxs[i], tab_max(LUT2 + ij * ksub, ksub));
                 ij++;
@@ -250,17 +268,19 @@ void quantize_LUT_and_bias(
         }
 
         float max_span = -HUGE_VAL;
+        float total_span = 0;
         b = 0;
-        for (int i = 0; i < M; i++) {
+        for (size_t i = 0; i < M; i++) {
             float span = maxs[i] - mins[i];
             max_span = std::max(max_span, span);
+            total_span += span;
             b += mins[i];
         }
-        a = 255 / max_span;
+        a = fastscan_lut_scale(max_span, total_span, M);
         ij = 0;
         size_t ij_2 = 0;
-        for (int j = 0; j < nprobe; j++) {
-            for (int i = 0; i < M; i++) {
+        for (size_t j = 0; j < nprobe; j++) {
+            for (size_t i = 0; i < M; i++) {
                 round_tab(
                         LUT2 + ij * ksub, ksub, a, mins[i], LUTq + ij_2 * ksub);
                 ij++;
@@ -298,17 +318,17 @@ void aq_quantize_LUT_and_bias(
     float bias_max = tab_max(bias, nprobe);
     max_span_dis = bias_max - bias_min;
     b = 0;
-    for (int i = 0; i < M; i++) {
+    for (size_t i = 0; i < M; i++) {
         mins[i] = tab_min(LUT + i * ksub, ksub);
         float span = tab_max(LUT + i * ksub, ksub) - mins[i];
         max_span_LUT = std::max(max_span_LUT, span);
         max_span_dis += (i >= M - M_norm ? span * norm_scale : span);
         b += mins[i];
     }
-    a = std::min(255 / max_span_LUT, 65535 / max_span_dis);
+    a = fastscan_lut_scale(max_span_LUT, max_span_dis, M);
     b += bias_min;
 
-    for (int i = 0; i < M; i++) {
+    for (size_t i = 0; i < M; i++) {
         round_tab(LUT + i * ksub, ksub, a, mins[i], LUTq + i * ksub);
     }
     memset(LUTq + M * ksub, 0, ksub * (M2 - M));
@@ -324,14 +344,14 @@ float aq_estimate_norm_scale(
         size_t M_norm,
         const float* LUT) {
     float max_span_LUT = -HUGE_VAL;
-    for (int i = 0; i < M - M_norm; i++) {
+    for (size_t i = 0; i < M - M_norm; i++) {
         float min = tab_min(LUT + i * ksub, ksub);
         float span = tab_max(LUT + i * ksub, ksub) - min;
         max_span_LUT = std::max(max_span_LUT, span);
     }
 
     float max_span_LUT_norm = -HUGE_VAL;
-    for (int i = M - M_norm; i < M; i++) {
+    for (size_t i = M - M_norm; i < M; i++) {
         float min = tab_min(LUT + i * ksub, ksub);
         float span = tab_max(LUT + i * ksub, ksub) - min;
         max_span_LUT_norm = std::max(max_span_LUT_norm, span);

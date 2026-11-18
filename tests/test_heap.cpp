@@ -5,12 +5,33 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <faiss/impl/ResultHandler.h>
 #include <faiss/utils/Heap.h>
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <numeric>
 
 using namespace faiss;
+
+// begin_multiple/end_multiple with no add_results must leave ids = -1, like
+// SingleResultHandler::begin.
+TEST(Top1BlockResultHandler, BeginMultipleInitializesIds) {
+    constexpr size_t nq = 16;
+    std::vector<float> dis_tab(nq, 12345.0f);
+    std::vector<int64_t> ids_tab(nq, 42);
+
+    Top1BlockResultHandler<CMax<float, int64_t>> handler(
+            nq, dis_tab.data(), ids_tab.data());
+
+    handler.begin_multiple(0, nq);
+    handler.end_multiple();
+
+    const std::vector<int64_t> expected_ids(nq, -1);
+    EXPECT_EQ(ids_tab, expected_ids);
+
+    const std::vector<float> expected_dis(nq, CMax<float, int64_t>::neutral());
+    EXPECT_EQ(dis_tab, expected_dis);
+}
 
 TEST(Heap, addn_with_ids) {
     size_t n = 1000;
@@ -22,8 +43,6 @@ TEST(Heap, addn_with_ids) {
     heaps.heapify();
     std::vector<int64_t> labels(n, 1);
     std::vector<float> distances(n, 0.0f);
-    std::vector<int64_t> subset(n);
-    std::iota(subset.begin(), subset.end(), 0);
     heaps.addn_with_ids(1, distances.data(), labels.data(), 1);
     heaps.reorder();
     EXPECT_TRUE(

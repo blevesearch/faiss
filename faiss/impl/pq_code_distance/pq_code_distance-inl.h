@@ -1,0 +1,417 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#pragma once
+
+/**
+ * @file pq_code_distance-inl.h
+ * @brief PQ code distance SIMD-dispatched implementations.
+ *
+ * This is a PRIVATE header — do not include in public APIs or user code.
+ * Only faiss internal .cpp files (the per-SIMD implementation files and
+ * pq_code_distance-generic.cpp) should include this header.
+ */
+
+#include <cstddef>
+#include <cstdint>
+#include <type_traits>
+
+#include <faiss/impl/ProductQuantizer.h>
+#include <faiss/impl/platform_macros.h>
+#include <faiss/impl/simd_dispatch.h>
+#include <faiss/utils/simd_levels.h>
+
+namespace faiss {
+namespace pq_code_distance {
+
+/*********************************************************************
+ * PQCodeDistance — SIMD-dispatched PQ code distance
+ *
+ * Computes the distance from a PQ-encoded vector to a query vector,
+ * given a precomputed table of sub-distances (one per subquantizer
+ * per centroid). Originally extracted from IndexIVFPQ.cpp.
+ *
+ * DESIGN:
+ *
+ * PQCodeDistance<PQDecoderT, SL> computes PQ code distances at a given
+ * SIMD level. The dispatch site (IndexIVFPQ.cpp, IndexPQ.cpp) uses
+ * with_simd_level to select SL at runtime, which instantiates
+ * PQCodeDistance for ALL decoder types (PQDecoder8, PQDecoder16,
+ * PQDecoderGeneric) at the chosen level.
+ *
+ * Only PQDecoder8 has SIMD-optimized implementations (AVX2, AVX512,
+ * ARM_SVE). The other decoders always use scalar code — their decode()
+ * method is inherently sequential, so SIMD doesn't help.
+ *
+ * The primary template is always complete (no forward declarations
+ * needed). For PQDecoder8, it delegates to _impl dispatch bridge
+ * functions whose specializations are defined in per-SIMD .cpp files
+ * and resolved at link time. For other decoders, it uses scalar.
+ *
+ * ADDING A NEW SIMD LEVEL:
+ *
+ *   1. Add the level to SIMDLevel enum (simd_levels.h)
+ *   2. Add dispatch_config entry (simd_dispatch.bzl)
+ *   3. Define pq_code_distance_8bit_single_impl<NEW_LEVEL> and
+ *      pq_code_distance_8bit_four_impl<NEW_LEVEL> specializations in a
+ *      new .cpp file compiled with appropriate SIMD flags
+ *   4. Add the .cpp to the build (CMakeLists.txt, xplat.bzl)
+ *********************************************************************/
+
+/// Scalar PQ code distance implementation.
+/// Used directly by non-PQDecoder8 decoders (PQDecoder16,
+/// PQDecoderGeneric) and as fallback for PQDecoder8 at NONE/NEON.
+// SL keeps each SIMD-level TU's instantiation a distinct symbol. Without it
+// the linker merges them and may keep one compiled with -mavx512*, which
+// then runs on the AVX2 path and raises SIGILL on CPUs without AVX512.
+// The default keeps callers outside faiss that name only the decoder (e.g.
+// unicorn/features/encoders/PQFSTable.h) compiling; faiss passes SL itself.
+template <typename PQDecoderT, SIMDLevel SL = SIMDLevel::NONE>
+struct PQCodeDistanceScalar {
+    using PQDecoder = PQDecoderT;
+
+    static float distance_single_code(
+            // number of subquantizers
+            size_t M,
+            size_t nbits,
+            // precomputed distances, layout (M, ksub)
+            const float* sim_table,
+            const uint8_t* code) {
+        PQDecoderT decoder(code, nbits);
+        const size_t ksub = 1 << nbits;
+
+        const float* tab = sim_table;
+        float result = 0;
+
+        for (size_t m = 0; m < M; m++) {
+            result += tab[decoder.decode()];
+            tab += ksub;
+        }
+
+        return result;
+    }
+
+    static void distance_four_codes(
+            size_t M,
+            size_t nbits,
+            const float* sim_table,
+            const uint8_t* __restrict code0,
+            const uint8_t* __restrict code1,
+            const uint8_t* __restrict code2,
+            const uint8_t* __restrict code3,
+            float& result0,
+            float& result1,
+            float& result2,
+            float& result3) {
+        PQDecoderT decoder0(code0, nbits);
+        PQDecoderT decoder1(code1, nbits);
+        PQDecoderT decoder2(code2, nbits);
+        PQDecoderT decoder3(code3, nbits);
+        const size_t ksub = 1 << nbits;
+
+        const float* tab = sim_table;
+        result0 = 0;
+        result1 = 0;
+        result2 = 0;
+        result3 = 0;
+
+        for (size_t m = 0; m < M; m++) {
+            result0 += tab[decoder0.decode()];
+            result1 += tab[decoder1.decode()];
+            result2 += tab[decoder2.decode()];
+            result3 += tab[decoder3.decode()];
+            tab += ksub;
+        }
+    }
+};
+
+/// 8-bit scalar kernel with four partial sums (one running sum serializes on
+/// add latency). Used instead of the gather kernels where
+/// SIMDConfig::scalar_gather is set. Both functions use the same per-code
+/// summation order (partial sum m % 4, tail into the first), so single-code
+/// and four-code results are bit-identical. SL as in PQCodeDistanceScalar.
+template <SIMDLevel SL>
+struct PQCodeDistanceScalar8 {
+    static constexpr size_t ksub = 256;
+
+    static float distance_single_code(
+            size_t M,
+            const float* tab,
+            const uint8_t* code) {
+        float a[4] = {};
+        size_t m = 0;
+        for (; m + 4 <= M; m += 4, tab += 4 * ksub) {
+            for (size_t j = 0; j < 4; j++) {
+                a[j] += tab[j * ksub + code[m + j]];
+            }
+        }
+        for (; m < M; m++, tab += ksub) {
+            a[0] += tab[code[m]];
+        }
+        return (a[0] + a[1]) + (a[2] + a[3]);
+    }
+
+    static void distance_four_codes(
+            size_t M,
+            const float* tab,
+            const uint8_t* __restrict code0,
+            const uint8_t* __restrict code1,
+            const uint8_t* __restrict code2,
+            const uint8_t* __restrict code3,
+            float& result0,
+            float& result1,
+            float& result2,
+            float& result3) {
+        const uint8_t* codes[4] = {code0, code1, code2, code3};
+        float a[4][4] = {};
+        size_t m = 0;
+        for (; m + 4 <= M; m += 4, tab += 4 * ksub) {
+            for (size_t j = 0; j < 4; j++) {
+                for (size_t c = 0; c < 4; c++) {
+                    a[c][j] += tab[j * ksub + codes[c][m + j]];
+                }
+            }
+        }
+        for (; m < M; m++, tab += ksub) {
+            for (size_t c = 0; c < 4; c++) {
+                a[c][0] += tab[codes[c][m]];
+            }
+        }
+        float* out[4] = {&result0, &result1, &result2, &result3};
+        for (size_t c = 0; c < 4; c++) {
+            *out[c] = (a[c][0] + a[c][1]) + (a[c][2] + a[c][3]);
+        }
+    }
+};
+
+/// SIMDConfig::scalar_gather is set and the gather kernel of level SL is
+/// slower than PQCodeDistanceScalar8: the AVX2 kernel at any M, the AVX-512
+/// kernel at M >= 16. The callers check this once per scan, not per code.
+template <SIMDLevel SL>
+inline bool use_scalar_8bit_kernel(size_t M) {
+    if constexpr (SL == SIMDLevel::AVX2) {
+        return SIMDConfig::scalar_gather;
+    } else if constexpr (SL == SIMDLevel::AVX512) {
+        return SIMDConfig::scalar_gather && M >= 16;
+    } else {
+        return false;
+    }
+}
+
+template <SIMDLevel SL>
+constexpr bool has_scalar_8bit_kernel() {
+    return SL == SIMDLevel::AVX2 || SL == SIMDLevel::AVX512;
+}
+
+/// PQCodeDistance interface of PQCodeDistanceScalar8.
+template <SIMDLevel SL>
+struct PQCodeDistanceScalar8Dist {
+    using PQDecoder = PQDecoder8;
+    static constexpr SIMDLevel simd_level = SL;
+
+    static float distance_single_code(
+            size_t M,
+            size_t /* nbits */,
+            const float* sim_table,
+            const uint8_t* code) {
+        return PQCodeDistanceScalar8<SL>::distance_single_code(
+                M, sim_table, code);
+    }
+
+    static void distance_four_codes(
+            size_t M,
+            size_t /* nbits */,
+            const float* sim_table,
+            const uint8_t* __restrict code0,
+            const uint8_t* __restrict code1,
+            const uint8_t* __restrict code2,
+            const uint8_t* __restrict code3,
+            float& result0,
+            float& result1,
+            float& result2,
+            float& result3) {
+        PQCodeDistanceScalar8<SL>::distance_four_codes(
+                M,
+                sim_table,
+                code0,
+                code1,
+                code2,
+                code3,
+                result0,
+                result1,
+                result2,
+                result3);
+    }
+};
+
+/*********************************************************************
+ * Dispatch bridge — function templates for PQDecoder8 SIMD dispatch.
+ *
+ * Primary declarations only; specializations are defined in per-SIMD
+ * .cpp files (AVX2, AVX512, ARM_SVE) and pq_code_distance-generic.cpp
+ * (NONE, ARM_NEON). Same pattern as fvec_L2sqr et al. in distances.h.
+ *********************************************************************/
+
+template <SIMDLevel SL>
+float pq_code_distance_8bit_single_impl(
+        size_t M,
+        const float* sim_table,
+        const uint8_t* code);
+
+template <SIMDLevel SL>
+void pq_code_distance_8bit_four_impl(
+        size_t M,
+        const float* sim_table,
+        const uint8_t* __restrict code0,
+        const uint8_t* __restrict code1,
+        const uint8_t* __restrict code2,
+        const uint8_t* __restrict code3,
+        float& result0,
+        float& result1,
+        float& result2,
+        float& result3);
+
+/// Primary template — always complete.
+/// For PQDecoder8, delegates to _impl dispatch bridges (resolved at
+/// link time to per-SIMD implementations). For other decoders, uses
+/// scalar — their sequential decode() methods don't benefit from SIMD.
+template <typename PQDecoderT, SIMDLevel SL>
+struct PQCodeDistance {
+    using PQDecoder = PQDecoderT;
+    static constexpr SIMDLevel simd_level = SL;
+
+    static float distance_single_code(
+            size_t M,
+            size_t nbits,
+            const float* sim_table,
+            const uint8_t* code) {
+        if constexpr (std::is_same_v<PQDecoderT, PQDecoder8>) {
+            return pq_code_distance_8bit_single_impl<SL>(M, sim_table, code);
+        } else {
+            return PQCodeDistanceScalar<PQDecoderT, SL>::distance_single_code(
+                    M, nbits, sim_table, code);
+        }
+    }
+
+    static void distance_four_codes(
+            size_t M,
+            size_t nbits,
+            const float* sim_table,
+            const uint8_t* __restrict code0,
+            const uint8_t* __restrict code1,
+            const uint8_t* __restrict code2,
+            const uint8_t* __restrict code3,
+            float& result0,
+            float& result1,
+            float& result2,
+            float& result3) {
+        if constexpr (std::is_same_v<PQDecoderT, PQDecoder8>) {
+            pq_code_distance_8bit_four_impl<SL>(
+                    M,
+                    sim_table,
+                    code0,
+                    code1,
+                    code2,
+                    code3,
+                    result0,
+                    result1,
+                    result2,
+                    result3);
+        } else {
+            PQCodeDistanceScalar<PQDecoderT, SL>::distance_four_codes(
+                    M,
+                    nbits,
+                    sim_table,
+                    code0,
+                    code1,
+                    code2,
+                    code3,
+                    result0,
+                    result1,
+                    result2,
+                    result3);
+        }
+    }
+};
+
+/*********************************************************************
+ * Non-templated PQ code distance dispatch (PQDecoder8 only).
+ *
+ * These follow the same pattern as distances.h: the caller does not
+ * name a SIMDLevel. Internally they dispatch via with_simd_level
+ * to the best available SIMD implementation (DD: runtime detection,
+ * static: compile-time selection). Definitions are in
+ * pq_code_distance-generic.cpp.
+ *********************************************************************/
+
+/// Compute PQ distance for a single code, dispatching to the best
+/// available SIMD level.
+FAISS_API float pq_code_distance_8bit_single(
+        size_t M,
+        const float* sim_table,
+        const uint8_t* code);
+
+/// Compute PQ distances for four codes simultaneously, dispatching
+/// to the best available SIMD level.
+FAISS_API void pq_code_distance_8bit_four(
+        size_t M,
+        const float* sim_table,
+        const uint8_t* __restrict code0,
+        const uint8_t* __restrict code1,
+        const uint8_t* __restrict code2,
+        const uint8_t* __restrict code3,
+        float& result0,
+        float& result1,
+        float& result2,
+        float& result3);
+
+/*********************************************************************
+ * Standalone PQ scan — SIMD-dispatched full-index scan.
+ *
+ * Scans all ncodes PQ codes against a precomputed distance table,
+ * maintaining a k-nearest-neighbor heap. Uses the SIMD PQ distance
+ * kernels (AVX2 gathers, etc.), or PQCodeDistanceScalar8 where
+ * use_scalar_8bit_kernel() selects it, inlined into the scan loop in
+ * each per-SIMD TU.
+ *
+ * Definitions are in pq_scan_impl.h (per-SIMD TUs) and
+ * pq_code_distance-generic.cpp (dispatch wrapper).
+ *********************************************************************/
+
+template <SIMDLevel SL>
+void pq_scan_8bit_impl(
+        size_t M,
+        const float* dis_table,
+        const uint8_t* codes,
+        size_t ncodes,
+        size_t k,
+        float* heap_dis,
+        int64_t* heap_ids,
+        bool max_heap);
+
+/// Scan all ncodes 8-bit PQ codes, dispatching to the best SIMD level.
+/// max_heap=true for L2 (CMax), false for IP (CMin).
+FAISS_API void pq_scan_8bit(
+        size_t M,
+        const float* dis_table,
+        const uint8_t* codes,
+        size_t ncodes,
+        size_t k,
+        float* heap_dis,
+        int64_t* heap_ids,
+        bool max_heap);
+
+} // namespace pq_code_distance
+
+// Re-export public API into namespace faiss for convenience
+using pq_code_distance::pq_code_distance_8bit_four;
+using pq_code_distance::pq_code_distance_8bit_single;
+using pq_code_distance::pq_scan_8bit;
+using pq_code_distance::PQCodeDistance;
+using pq_code_distance::PQCodeDistanceScalar;
+
+} // namespace faiss

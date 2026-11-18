@@ -45,9 +45,7 @@ def is_perf_counter(key: str) -> bool:
 
 
 def accumulate_perf_counter(
-    phase: str,
-    t: PerfCounters,
-    counters: Dict[str, int]
+    phase: str, t: PerfCounters, counters: Dict[str, int]
 ):
     counters[f"{phase}_wall_time_us"] = int(t.wall_time_s * US_IN_S)
     counters[f"{phase}_user_time_us"] = int(t.user_time_s * US_IN_S)
@@ -72,8 +70,13 @@ def run_on_dataset(
     k = 10
     # pyre-ignore[16]: Module `faiss` has no attribute `omp_set_num_threads`.
     faiss.omp_set_num_threads(num_threads)
-    index = faiss.IndexHNSWFlat(d, M)
-    index.hnsw.efConstruction = efConstruction  # default
+    if M == 0:
+        index = faiss.IndexFlatL2(d)
+    else:
+        index = faiss.IndexHNSWFlat(d, M)
+        index.hnsw.efConstruction = efConstruction  # default
+        index.hnsw.efSearch = efSearch
+        index.hnsw.search_bounded_queue = search_bounded_queue
     with timed_execution() as t:
         for _ in range(num_add_iterations):
             index.add(xb)
@@ -82,8 +85,6 @@ def run_on_dataset(
     counters["nb"] = nb
     counters["num_add_iterations"] = num_add_iterations
 
-    index.hnsw.efSearch = efSearch
-    index.hnsw.search_bounded_queue = search_bounded_queue
     with timed_execution() as t:
         for _ in range(num_search_iterations):
             D, I = index.search(xq, k)
@@ -195,8 +196,8 @@ def main():
     for counter, values in result.items():
         if is_perf_counter(counter):
             print(
-                "%s t=%.3f us (± %.4f)" % 
-                (counter, np.mean(values), np.std(values))
+                "%s t=%.3f us (± %.4f)"
+                % (counter, np.mean(values), np.std(values))
             )
 
 

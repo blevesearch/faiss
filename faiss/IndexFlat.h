@@ -31,6 +31,17 @@ struct IndexFlat : IndexFlatCodes {
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
 
+    /// Float16 queries with METRIC_L2 / METRIC_INNER_PRODUCT are searched
+    /// natively (knn_L2sqr_fp16 / knn_inner_product_fp16).
+    void search_ex(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
+
     void range_search(
             idx_t n,
             const float* x,
@@ -74,7 +85,7 @@ struct IndexFlat : IndexFlatCodes {
 };
 
 struct IndexFlatIP : IndexFlat {
-    explicit IndexFlatIP(idx_t d) : IndexFlat(d, METRIC_INNER_PRODUCT) {}
+    explicit IndexFlatIP(idx_t d_in) : IndexFlat(d_in, METRIC_INNER_PRODUCT) {}
     IndexFlatIP() {}
 };
 
@@ -88,7 +99,7 @@ struct IndexFlatL2 : IndexFlat {
     /**
      * @param d dimensionality of the input vectors
      */
-    explicit IndexFlatL2(idx_t d) : IndexFlat(d, METRIC_L2) {}
+    explicit IndexFlatL2(idx_t d_in) : IndexFlat(d_in, METRIC_L2) {}
     IndexFlatL2() {}
 
     // override for l2 norms cache.
@@ -113,15 +124,16 @@ struct IndexFlatPanorama : IndexFlat {
      * @param batch_size batch size for Panorama storage
      */
     explicit IndexFlatPanorama(
-            idx_t d,
+            idx_t d_in,
             MetricType metric,
-            size_t n_levels,
-            size_t batch_size)
-            : IndexFlat(d, metric),
-              batch_size(batch_size),
-              n_levels(n_levels),
-              pano(code_size, n_levels, batch_size) {
-        FAISS_THROW_IF_NOT(metric == METRIC_L2);
+            size_t n_levels_in,
+            size_t batch_size_in)
+            : IndexFlat(d_in, metric),
+              batch_size(batch_size_in),
+              n_levels(n_levels_in),
+              pano(code_size, n_levels_in, batch_size_in) {
+        FAISS_THROW_IF_NOT(
+                metric == METRIC_L2 || metric == METRIC_INNER_PRODUCT);
     }
 
     void add(idx_t n, const float* x) override;
@@ -129,6 +141,16 @@ struct IndexFlatPanorama : IndexFlat {
     void search(
             idx_t n,
             const float* x,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
+
+    /// widens Float16 queries for search() (Index::search_ex default)
+    void search_ex(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,
@@ -173,10 +195,27 @@ struct IndexFlatL2Panorama : IndexFlatPanorama {
      * @param batch_size batch size for Panorama storage
      */
     explicit IndexFlatL2Panorama(
-            idx_t d,
-            size_t n_levels,
-            size_t batch_size = 512)
-            : IndexFlatPanorama(d, METRIC_L2, n_levels, batch_size) {}
+            idx_t d_in,
+            size_t n_levels_in,
+            size_t batch_size_in = Panorama::kDefaultBatchSize)
+            : IndexFlatPanorama(d_in, METRIC_L2, n_levels_in, batch_size_in) {}
+};
+
+struct IndexFlatIPPanorama : IndexFlatPanorama {
+    /**
+     * @param d dimensionality of the input vectors
+     * @param n_levels number of Panorama levels
+     * @param batch_size batch size for Panorama storage
+     */
+    explicit IndexFlatIPPanorama(
+            idx_t d_in,
+            size_t n_levels_in,
+            size_t batch_size_in = Panorama::kDefaultBatchSize)
+            : IndexFlatPanorama(
+                      d_in,
+                      METRIC_INNER_PRODUCT,
+                      n_levels_in,
+                      batch_size_in) {}
 };
 
 /// optimized version for 1D "vectors".
@@ -199,6 +238,16 @@ struct IndexFlat1D : IndexFlatL2 {
     void search(
             idx_t n,
             const float* x,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
+
+    /// widens Float16 queries for search() (Index::search_ex default)
+    void search_ex(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,

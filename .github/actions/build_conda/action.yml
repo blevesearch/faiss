@@ -20,19 +20,22 @@ runs:
       shell: bash
       id: choose_shell
       run: |
-        # Use pwsh on Windows; bash everywhere else
-        if [ "${{ runner.os }}" != "Windows" ]; then
-          echo "shell=bash" >> "$GITHUB_OUTPUT"
-        else
-          echo "shell=pwsh" >> "$GITHUB_OUTPUT"
-        fi
+        # bash on all platforms. On Windows, the conda of the pinned
+        # Miniforge (24.11.2-1) passes empty arguments to conda.exe from its
+        # PowerShell wrapper, and conda.exe rejects them ("invalid choice:
+        # ''"). conda works in bash through the setup-miniconda PATH setup.
+        echo "shell=bash" >> "$GITHUB_OUTPUT"
     - name: Setup miniconda
       uses: conda-incubator/setup-miniconda@v3
       with:
-        python-version: '3.11'
-        miniforge-version: latest # ensures conda-forge channel is used.
+        python-version: '3.12'
+        # Miniforge3 26.9.4-0 fails `conda init` on Windows runners ("needs
+        # sudo" for Scripts\conda.exe). Keep the Windows pin in sync with the
+        # windows-x86_64-DD-cmake job in workflows/build-pull-request.yml.
+        miniforge-version: ${{ runner.os == 'Windows' && '24.11.2-1' || 'latest' }}
         channels: conda-forge
         conda-remove-defaults: 'true'
+        activate-environment: 'base'
         # Set to runner.arch=aarch64 if we're on arm64 because
         # there's no miniforge ARM64 package, just aarch64.
         # They are the same thing, just named differently.
@@ -43,7 +46,7 @@ runs:
       run: |
         # Ensure starting packages are from conda-forge.
         conda list --show-channel-urls
-        conda install -y -q "conda!=24.11.0,<=25.07"
+        conda install -y -q "conda!=24.11.0,<25.7"
         conda install -y -q "conda-build=25.3.1" "liblief=0.14.1"
     - name: Enable anaconda uploads
       if: inputs.label != ''
@@ -54,13 +57,17 @@ runs:
         conda list --show-channel-urls
         conda install -y -q anaconda-client
         conda config --set anaconda_upload yes
+    - name: Print GPU info
+      if: inputs.cuda != ''
+      shell: ${{ steps.choose_shell.outputs.shell }}
+      run: nvidia-smi
     - name: Conda build (CPU)
       if: inputs.label == '' && inputs.cuda == ''
       shell: ${{ steps.choose_shell.outputs.shell }}
       working-directory: conda
       run: |
         conda list --show-channel-urls
-        conda build faiss --python 3.11 -c pytorch
+        conda build faiss --python 3.12 -c pytorch
     - name: Conda build (CPU) w/ anaconda upload
       if: inputs.label != '' && inputs.cuda == ''
       shell: ${{ steps.choose_shell.outputs.shell }}
@@ -69,14 +76,14 @@ runs:
         PACKAGE_TYPE: ${{ inputs.label }}
       run: |
         conda list --show-channel-urls
-        conda build faiss --user pytorch --label ${{ inputs.label }} -c pytorch
+        conda build faiss --python 3.12 --user pytorch --label ${{ inputs.label }} -c pytorch
     - name: Conda build (GPU)
       if: inputs.label == '' && inputs.cuda != '' && inputs.cuvs == ''
       shell: ${{ steps.choose_shell.outputs.shell }}
       working-directory: conda
       run: |
         conda list --show-channel-urls
-        conda build faiss-gpu --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
+        conda build faiss-gpu --python 3.12 --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
             -c pytorch -c nvidia/label/cuda-${{ inputs.cuda }} -c nvidia
     - name: Conda build (GPU) w/ anaconda upload
       if: inputs.label != '' && inputs.cuda != '' && inputs.cuvs == ''
@@ -86,7 +93,7 @@ runs:
         PACKAGE_TYPE: ${{ inputs.label }}
       run: |
         conda list --show-channel-urls
-        conda build faiss-gpu --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
+        conda build faiss-gpu --python 3.12 --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
             --user pytorch --label ${{ inputs.label }} -c pytorch -c nvidia/label/cuda-${{ inputs.cuda }} -c nvidia
     - name: Conda build (GPU w/ cuVS)
       if: inputs.label == '' && inputs.cuda != '' && inputs.cuvs != ''
@@ -94,8 +101,8 @@ runs:
       working-directory: conda
       run: |
         conda list --show-channel-urls
-        conda build faiss-gpu-cuvs --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
-            -c pytorch -c rapidsai -c rapidsai-nightly -c conda-forge -c nvidia
+        conda build faiss-gpu-cuvs --python 3.12 --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
+            -c pytorch -c rapidsai -c conda-forge -c nvidia
     - name: Conda build (GPU w/ cuVS) w/ anaconda upload
       if: inputs.label != '' && inputs.cuda != '' && inputs.cuvs != ''
       shell: ${{ steps.choose_shell.outputs.shell }}
@@ -104,8 +111,8 @@ runs:
         PACKAGE_TYPE: ${{ inputs.label }}
       run: |
         conda list --show-channel-urls
-        conda build faiss-gpu-cuvs --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
-            --user pytorch --label ${{ inputs.label }} -c pytorch -c rapidsai -c rapidsai-nightly -c conda-forge -c nvidia
+        conda build faiss-gpu-cuvs --python 3.12 --variants '{ "cudatoolkit": "${{ inputs.cuda }}" }' \
+            --user pytorch --label ${{ inputs.label }} -c pytorch -c rapidsai -c conda-forge -c nvidia
     - name: Check installed packages channel
       shell: ${{ steps.choose_shell.outputs.shell }}
       run: |

@@ -14,11 +14,10 @@
 #include <faiss/impl/FaissAssert.h>
 
 #include <cstdio>
-#include <sstream>
 
 #define FAISS_VERSION_MAJOR 1
-#define FAISS_VERSION_MINOR 13
-#define FAISS_VERSION_PATCH 2
+#define FAISS_VERSION_MINOR 16
+#define FAISS_VERSION_PATCH 0
 
 // Macro to combine the version components into a single string
 #ifndef FAISS_STRINGIFY
@@ -50,11 +49,18 @@
 
 namespace faiss {
 
+namespace gpu {
+class Dataset;
+}
+
 /// Forward declarations see impl/AuxIndexStructures.h, impl/IDSelector.h
 /// and impl/DistanceComputer.h
 struct IDSelector;
 struct RangeSearchResult;
 struct DistanceComputer;
+template <typename T, typename TI>
+struct ResultHandlerUnordered;
+using ResultHandler = ResultHandlerUnordered<float, idx_t>;
 
 enum NumericType {
     Float32,
@@ -112,8 +118,8 @@ struct Index {
     MetricType metric_type;
     float metric_arg; ///< argument of the metric type
 
-    explicit Index(idx_t d = 0, MetricType metric = METRIC_L2)
-            : d(d),
+    explicit Index(idx_t d_in = 0, MetricType metric = METRIC_L2)
+            : d(static_cast<int>(d_in)),
               ntotal(0),
               verbose(false),
               is_trained(true),
@@ -128,6 +134,23 @@ struct Index {
      * @param x      training vectors, size n * d
      */
     virtual void train(idx_t n, const float* x);
+
+    /// Train from caller-controlled storage. Unsupported by default.
+    virtual void train(const gpu::Dataset& dataset);
+
+    /** Perform training on a representative set of vectors and a representative
+     * set of queries
+     *
+     * @param n         nb of training vectors
+     * @param x         training vectors, size n * d
+     * @param n_train_q nb of training queries
+     * @param xq_train  training queries, size n_train_q * d
+     */
+    virtual void train_with_queries(
+            idx_t n,
+            const float* x,
+            idx_t n_train_q,
+            const float* xq_train);
 
     virtual void train_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::Float32) {
@@ -146,6 +169,9 @@ struct Index {
      * @param x      input matrix, size n * d
      */
     virtual void add(idx_t n, const float* x) = 0;
+
+    /// Add caller-controlled storage. Unsupported by default.
+    virtual void add(const gpu::Dataset& dataset);
 
     virtual void add_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::Float32) {
@@ -196,6 +222,12 @@ struct Index {
             idx_t* labels,
             const SearchParameters* params = nullptr) const = 0;
 
+    /** search() for queries of the given numeric type
+     *
+     * Float32 calls search(). By default, Float16 queries (packed IEEE
+     * binary16, size n * d) are widened to fp32 in bounded blocks and passed
+     * to search(); indexes with a native fp16 search override this.
+     */
     virtual void search_ex(
             idx_t n,
             const void* x,
@@ -203,18 +235,13 @@ struct Index {
             idx_t k,
             float* distances,
             idx_t* labels,
-            const SearchParameters* params = nullptr) const {
-        if (numeric_type == NumericType::Float32) {
-            search(n,
-                   static_cast<const float*>(x),
-                   k,
-                   distances,
-                   labels,
-                   params);
-        } else {
-            FAISS_THROW_MSG("Index::search: unsupported numeric type");
-        }
-    }
+            const SearchParameters* params = nullptr) const;
+
+    /** search one vector with a custom result handler */
+    virtual void search1(
+            const float* x,
+            ResultHandler& handler,
+            SearchParameters* params = nullptr) const;
 
     /** query n vectors of dimension d to the index.
      *

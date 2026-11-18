@@ -64,7 +64,7 @@ void ToCPUCloner::merge_index(Index* dst, Index* src, bool successive_ids) {
         FAISS_ASSERT(ifl2);
         ifl->merge_from(*ifl2, successive_ids ? ifl->ntotal : 0);
     } else {
-        FAISS_ASSERT(!"merging not implemented for this type of class");
+        FAISS_ASSERT(false && "merging not implemented for this type of class");
     }
 }
 
@@ -152,8 +152,8 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.device = device;
         config.memorySpace = memorySpace;
         config.useFloat16 = true;
-        FAISS_THROW_IF_NOT_MSG(
-                !use_cuvs, "this type of index is not implemented for cuVS");
+        FAISS_THROW_IF_MSG(
+                use_cuvs, "this type of index is not implemented for cuVS");
         GpuIndexFlat* gif = new GpuIndexFlat(
                 provider, index->d, index->metric_type, config);
         // transfer data by blocks
@@ -174,6 +174,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
         config.use_cuvs = use_cuvs;
         config.allowCpuCoarseQuantizer = allowCpuCoarseQuantizer;
+        config.deterministic_tie_break = deterministic_tie_break;
 
         GpuIndexIVFFlat* res = new GpuIndexIVFFlat(
                 provider, ifl->d, ifl->nlist, ifl->metric_type, config);
@@ -191,8 +192,9 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.memorySpace = memorySpace;
         config.indicesOptions = indicesOptions;
         config.flatConfig.useFloat16 = useFloat16CoarseQuantizer;
-        FAISS_THROW_IF_NOT_MSG(
-                !use_cuvs, "this type of index is not implemented for cuVS");
+        config.use_cuvs = use_cuvs;
+        config.allowCpuCoarseQuantizer = allowCpuCoarseQuantizer;
+        config.deterministic_tie_break = deterministic_tie_break;
 
         GpuIndexIVFScalarQuantizer* res = new GpuIndexIVFScalarQuantizer(
                 provider,
@@ -229,6 +231,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.use_cuvs = use_cuvs;
         config.interleavedLayout = use_cuvs;
         config.allowCpuCoarseQuantizer = allowCpuCoarseQuantizer;
+        config.deterministic_tie_break = deterministic_tie_break;
 
         GpuIndexIVFPQ* res = new GpuIndexIVFPQ(provider, ipq, config);
 
@@ -243,10 +246,10 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         GpuIndexCagraConfig config;
         config.device = device;
         config.memorySpace = memorySpace;
-        GpuIndexCagra* res =
-                new GpuIndexCagra(provider, icg->d, icg->metric_type, config);
-        res->copyFrom_ex(icg, icg->get_numeric_type());
-        return res;
+        auto res = std::make_unique<GpuIndexCagra>(
+                provider, icg->d, icg->metric_type, config);
+        res->copyFrom(icg);
+        return res.release();
     }
 #endif
     else {
@@ -555,7 +558,7 @@ faiss::IndexBinary* index_binary_cpu_to_gpu(
         GpuResourcesProvider* provider,
         int device,
         const faiss::IndexBinary* index,
-        const GpuClonerOptions* options) {
+        const GpuClonerOptions* /*options*/) {
     if (auto ii = dynamic_cast<const IndexBinaryFlat*>(index)) {
         GpuIndexBinaryFlatConfig config;
         config.device = device;
@@ -566,10 +569,10 @@ faiss::IndexBinary* index_binary_cpu_to_gpu(
             auto ii = dynamic_cast<const faiss::IndexBinaryHNSWCagra*>(index)) {
         GpuIndexCagraConfig config;
         config.device = device;
-        GpuIndexBinaryCagra* res =
-                new GpuIndexBinaryCagra(provider, ii->d, config);
+        auto res =
+                std::make_unique<GpuIndexBinaryCagra>(provider, ii->d, config);
         res->copyFrom(ii);
-        return res;
+        return res.release();
     }
 #endif
     else {

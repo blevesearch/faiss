@@ -41,17 +41,7 @@ struct DistanceComputer {
             float& dis0,
             float& dis1,
             float& dis2,
-            float& dis3) {
-        // compute first, assign next
-        const float d0 = this->operator()(idx0);
-        const float d1 = this->operator()(idx1);
-        const float d2 = this->operator()(idx2);
-        const float d3 = this->operator()(idx3);
-        dis0 = d0;
-        dis1 = d1;
-        dis2 = d2;
-        dis3 = d3;
-    }
+            float& dis3);
 
     /// compute distance between two stored vectors
     virtual float symmetric_dis(idx_t i, idx_t j) = 0;
@@ -66,8 +56,8 @@ struct NegativeDistanceComputer : DistanceComputer {
     /// owned by this
     DistanceComputer* basedis;
 
-    explicit NegativeDistanceComputer(DistanceComputer* basedis)
-            : basedis(basedis) {}
+    explicit NegativeDistanceComputer(DistanceComputer* basedis_)
+            : basedis(basedis_) {}
 
     void set_query(const float* x) override {
         basedis->set_query(x);
@@ -116,18 +106,38 @@ struct FlatCodesDistanceComputer : DistanceComputer {
     const float* q = nullptr; // not used in all distance computers
 
     FlatCodesDistanceComputer(
-            const uint8_t* codes,
-            size_t code_size,
-            const float* q = nullptr)
-            : codes(codes), code_size(code_size), q(q) {}
+            const uint8_t* codes_,
+            size_t code_size_,
+            const float* q_ = nullptr)
+            : codes(codes_), code_size(code_size_), q(q_) {}
 
-    explicit FlatCodesDistanceComputer(const float* q)
-            : codes(nullptr), code_size(0), q(q) {}
+    explicit FlatCodesDistanceComputer(const float* q_)
+            : codes(nullptr), code_size(0), q(q_) {}
 
     FlatCodesDistanceComputer() : codes(nullptr), code_size(0), q(nullptr) {}
 
     float operator()(idx_t i) override {
         return distance_to_code(codes + i * code_size);
+    }
+
+    void distances_batch_4(
+            const idx_t idx0,
+            const idx_t idx1,
+            const idx_t idx2,
+            const idx_t idx3,
+            float& dis0,
+            float& dis1,
+            float& dis2,
+            float& dis3) override {
+        distance_to_code_batch_4(
+                codes + idx0 * code_size,
+                codes + idx1 * code_size,
+                codes + idx2 * code_size,
+                codes + idx3 * code_size,
+                dis0,
+                dis1,
+                dis2,
+                dis3);
     }
 
     /// Computes a partial dot product over a slice of the query vector.
@@ -161,12 +171,24 @@ struct FlatCodesDistanceComputer : DistanceComputer {
     virtual float partial_dot_product(
             const idx_t /* i */,
             const uint32_t /* offset */,
-            const uint32_t /* num_components */) {
-        FAISS_THROW_MSG("partial_dot_product not implemented");
-    }
+            const uint32_t /* num_components */);
 
     /// compute distance of current query to an encoded vector
     virtual float distance_to_code(const uint8_t* code) = 0;
+    virtual void distance_to_code_batch_4(
+            const uint8_t* c1,
+            const uint8_t* c2,
+            const uint8_t* c3,
+            const uint8_t* c4,
+            float& d1,
+            float& d2,
+            float& d3,
+            float& d4) {
+        d1 = distance_to_code(c1);
+        d2 = distance_to_code(c2);
+        d3 = distance_to_code(c3);
+        d4 = distance_to_code(c4);
+    }
 
     /// Compute partial dot products of current query to 4 stored vectors.
     /// See `partial_dot_product` for more details.
@@ -180,21 +202,7 @@ struct FlatCodesDistanceComputer : DistanceComputer {
             float& dp2,
             float& dp3,
             const uint32_t offset,
-            const uint32_t num_components) {
-        // default implementation for correctness
-        const float d0 =
-                this->partial_dot_product(idx0, offset, num_components);
-        const float d1 =
-                this->partial_dot_product(idx1, offset, num_components);
-        const float d2 =
-                this->partial_dot_product(idx2, offset, num_components);
-        const float d3 =
-                this->partial_dot_product(idx3, offset, num_components);
-        dp0 = d0;
-        dp1 = d1;
-        dp2 = d2;
-        dp3 = d3;
-    }
+            const uint32_t num_components);
 
     virtual ~FlatCodesDistanceComputer() override {}
 };

@@ -48,6 +48,14 @@ size_t get_mem_usage_kb();
 
 uint64_t get_cycles();
 
+/** Enable or disable the collection of global search statistics (enabled by
+ * default). The flag is process-wide. When it is disabled, searches may skip
+ * updates to global stats objects, so their values are unspecified. At the
+ * moment, the flag controls hnsw_stats and rabitq_stats.
+ */
+void set_search_stats_enabled(bool enabled);
+bool get_search_stats_enabled();
+
 /***************************************************************************
  * Misc  matrix and vector manipulation functions
  ***************************************************************************/
@@ -122,6 +130,14 @@ uint64_t bvec_checksum(size_t n, const uint8_t* a);
  */
 void bvecs_checksum(size_t n, size_t d, const uint8_t* a, uint64_t* cs);
 
+/// rep[i]: lowest row whose code equals code i (codes: n x code_size).
+/// Returns the number of distinct codes.
+size_t find_duplicate_codes(
+        size_t n,
+        size_t code_size,
+        const uint8_t* codes,
+        int64_t* rep);
+
 /** random subsamples a set of vectors if there are too many of them
  *
  * @param d      dimension of the vectors
@@ -156,6 +172,14 @@ void binary_to_real(size_t d, const uint8_t* x_in, float* x_out);
  */
 void real_to_binary(size_t d, const float* x_in, uint8_t* x_out);
 
+/** Convert packed IEEE binary16 values to fp32 (exact).
+ *
+ * @param n    number of values
+ * @param x    input fp16 values, size n
+ * @param out  output fp32 values, size n
+ */
+void fp16_to_fp32(size_t n, const uint16_t* x, float* out);
+
 /** A reasonable hashing function */
 uint64_t hash_bytes(const uint8_t* bytes, int64_t n);
 
@@ -172,8 +196,8 @@ struct CombinerRangeKNN {
     T r2;          /// range search radius
     bool keep_max; /// whether to keep max values instead of min.
 
-    CombinerRangeKNN(int64_t nq, size_t k, T r2, bool keep_max)
-            : nq(nq), k(k), r2(r2), keep_max(keep_max) {}
+    CombinerRangeKNN(int64_t nq_in, size_t k_in, T r2_in, bool keep_max_in)
+            : nq(nq_in), k(k_in), r2(r2_in), keep_max(keep_max_in) {}
 
     /// Knn search results
     const int64_t* I = nullptr; /// size nq * k
@@ -200,7 +224,7 @@ struct CodeSet {
     size_t d;
     std::set<std::vector<uint8_t>> s;
 
-    explicit CodeSet(size_t d) : d(d) {}
+    explicit CodeSet(size_t d_in) : d(d_in) {}
     void insert(size_t n, const uint8_t* codes, bool* inserted);
 };
 

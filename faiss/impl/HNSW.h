@@ -7,7 +7,10 @@
 
 #pragma once
 
+#include <functional>
+#include <optional>
 #include <queue>
+#include <utility>
 #include <vector>
 
 #include <omp.h>
@@ -17,7 +20,6 @@
 #include <faiss/impl/DistanceComputer.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/maybe_owned_vector.h>
-#include <faiss/impl/platform_macros.h>
 #include <faiss/utils/Heap.h>
 #include <faiss/utils/random.h>
 
@@ -26,6 +28,10 @@ namespace faiss {
 // Forward declarations to avoid circular dependency.
 struct IndexHNSW;
 struct IndexHNSWFlatPanorama;
+template <class HC_>
+struct MinimaxHeapT;
+using MinimaxHeap = MinimaxHeapT<CMax<float, int32_t>>;
+class LockVector;
 
 /** Implementation of the Hierarchical Navigable Small World
  * datastructure.
@@ -46,8 +52,6 @@ struct IndexHNSWFlatPanorama;
 struct VisitedTable;
 struct DistanceComputer; // from AuxIndexStructures
 struct HNSWStats;
-template <class C>
-struct ResultHandler;
 
 struct SearchParametersHNSW : SearchParameters {
     int efSearch = 16;
@@ -61,55 +65,51 @@ struct HNSW {
     /// internal storage of vectors (32 bits: this is expensive)
     using storage_idx_t = int32_t;
 
-    // for now we do only these distances
-    using C = CMax<float, int64_t>;
+    // The two comparator flavors HNSW supports. CMax (smaller-is-better)
+    // is the default; CMin (larger-is-better) is used when `is_similarity`
+    // is set on the owning index.
+    using C_distance = CMax<float, int64_t>;
+    using C_similarity = CMin<float, int64_t>;
+
+    // Back-compat alias: keeps `HNSW::C` resolving to the distance
+    // (CMax) comparator everywhere the type is referenced directly.
+    using C = C_distance;
 
     typedef std::pair<float, storage_idx_t> Node;
 
-    /** Heap structure that allows fast access and updates.
-     */
-    struct MinimaxHeap {
-        int n;
-        int k;
-        int nvalid;
-
-        std::vector<storage_idx_t> ids;
-        std::vector<float> dis;
-        typedef faiss::CMax<float, storage_idx_t> HC;
-
-        explicit MinimaxHeap(int n) : n(n), k(0), nvalid(0), ids(n), dis(n) {}
-
-        void push(storage_idx_t i, float v);
-
-        float max() const;
-
-        int size() const;
-
-        void clear();
-
-        int pop_min(float* vmin_out = nullptr);
-
-        int count_below(float thresh);
-    };
-
     /// to sort pairs of (id, distance) from nearest to farthest or the reverse
-    struct NodeDistCloser {
+    template <class CT>
+    struct NodeDistCloserT {
         float d;
         int id;
-        NodeDistCloser(float d, int id) : d(d), id(id) {}
-        bool operator<(const NodeDistCloser& obj1) const {
-            return d < obj1.d;
+        NodeDistCloserT(float d_in, int id_in) : d(d_in), id(id_in) {}
+        bool operator<(const NodeDistCloserT& obj1) const {
+            // priority_queue keeps the "worst" element at the top so that
+            // when the queue is full we can pop it. For CMax (distance) the
+            // worst element is the largest d; for CMin (similarity) it is
+            // the smallest d. Equivalent to: obj1.d "better than" d.
+            return CT::cmp(obj1.d, d);
         }
     };
 
-    struct NodeDistFarther {
+    template <class CT>
+    struct NodeDistFartherT {
         float d;
         int id;
-        NodeDistFarther(float d, int id) : d(d), id(id) {}
-        bool operator<(const NodeDistFarther& obj1) const {
-            return d > obj1.d;
+        NodeDistFartherT(float d_in, int id_in) : d(d_in), id(id_in) {}
+        bool operator<(const NodeDistFartherT& obj1) const {
+            // priority_queue here keeps the "best" element at the top so we
+            // can process the nearest candidate first. For CMax (distance)
+            // the best is the smallest d; for CMin (similarity) the best is
+            // the largest d. Equivalent to: d "better than" obj1.d.
+            return CT::cmp(d, obj1.d);
         }
     };
+
+    // Back-compat aliases: default to the distance (CMax) comparator so
+    // existing call sites that mention `HNSW::NodeDist*` keep working.
+    using NodeDistCloser = NodeDistCloserT<C_distance>;
+    using NodeDistFarther = NodeDistFartherT<C_distance>;
 
     /// assignment probability to each layer (sum=1)
     std::vector<double> assign_probas;
@@ -144,6 +144,10 @@ struct HNSW {
     /// expansion factor at search time
     int efSearch = 16;
 
+    /// when pruning, leave room for more neighbors to avoid O(n^2)
+    /// costs and lock contention on frequently-pruned nodes.
+    float prune_headroom = 0.2f;
+
     /// during search: do we check whether the next best distance is good
     /// enough?
     bool check_relative_distance = true;
@@ -151,8 +155,23 @@ struct HNSW {
     /// use bounded queue during exploration
     bool search_bounded_queue = true;
 
-    /// use Panorama progressive pruning in search
-    bool is_panorama = false;
+    /// Specialized level-0 search implementations. This state is derived from
+    /// the owning IndexHNSW subtype after construction or deserialization.
+    enum Search_method_t : uint8_t {
+        SM_DEFAULT,
+        SM_PANORAMA,
+        SM_RABITQ,
+    };
+    Search_method_t search_method = SM_DEFAULT;
+
+    /// distance comparison semantics: when true, distances are treated as
+    /// similarity scores (larger is better). Default false matches the
+    /// historical L2/Hamming behavior (smaller is better).
+    /// Not serialized: must be re-set by the owning Index after loading.
+    bool is_similarity = false;
+
+    // See impl/VisitedTable.h.
+    std::optional<bool> use_visited_hashset;
 
     // methods that initialize the tree sizes
 
@@ -190,18 +209,31 @@ struct HNSW {
             storage_idx_t nearest,
             float d_nearest,
             int level,
-            omp_lock_t* locks,
+            LockVector& locks,
             VisitedTable& vt,
             bool keep_max_size_level0 = false);
 
-    /** add point pt_id on all levels <= pt_level and build the link
-     * structure for them. */
-    void add_with_locks(
+    /** Deterministic build, phase A: write pt_id's forward links against an
+     * immutable snapshot, touching only pt_id's own slots. Reciprocal edges
+     * are collected in `pt_reverse_edges` for phase B, not applied. Requires
+     * entry_point set. */
+    void compute_forward_links_deterministic(
             DistanceComputer& ptdis,
             int pt_level,
-            int pt_id,
-            std::vector<omp_lock_t>& locks,
+            storage_idx_t pt_id,
             VisitedTable& vt,
+            std::vector<std::pair<storage_idx_t, int>>& pt_reverse_edges,
+            bool keep_max_size_level0 = false);
+
+    /** Deterministic build, phase B: merge `incoming` into `node` and
+     * re-prune in a total order (distance, ties by id) so the result is
+     * order-independent. Touches only `node`'s slots; `incoming` is sorted
+     * and deduplicated in place. */
+    void merge_reverse_links_deterministic(
+            DistanceComputer& dis,
+            storage_idx_t node,
+            int level,
+            std::vector<storage_idx_t>& incoming,
             bool keep_max_size_level0 = false);
 
     /// Search interface for 1 point, single thread
@@ -213,14 +245,14 @@ struct HNSW {
     HNSWStats search(
             DistanceComputer& qdis,
             const IndexHNSW* index,
-            ResultHandler<C>& res,
+            ResultHandler& res,
             VisitedTable& vt,
             const SearchParameters* params = nullptr) const;
 
     /// search only in level 0 from a given vertex
     void search_level_0(
             DistanceComputer& qdis,
-            ResultHandler<C>& res,
+            ResultHandler& res,
             idx_t nprobe,
             const storage_idx_t* nearest_i,
             const float* nearest_d,
@@ -236,15 +268,104 @@ struct HNSW {
 
     int prepare_level_tab(size_t n, bool preset_levels = false);
 
+    template <class C = C_distance>
     static void shrink_neighbor_list(
             DistanceComputer& qdis,
-            std::priority_queue<NodeDistFarther>& input,
-            std::vector<NodeDistFarther>& output,
-            int max_size,
+            std::priority_queue<NodeDistFartherT<C>>& input,
+            std::vector<NodeDistFartherT<C>>& output,
+            size_t max_size,
             bool keep_max_size_level0 = false);
 
     void permute_entries(const idx_t* map);
 };
+
+/** Deterministic, lock-free HNSW graph build. This is the only graph build
+ * that add() uses, and it is shared by IndexHNSW and
+ * IndexBinaryHNSW. The callbacks let both share the algorithm:
+ * `make_distance_computer()` returns a fresh DistanceComputer per thread
+ * (caller-owned) and `set_query(dc, pt_id)` points it at pt_id's vector. */
+void hnsw_add_vertices_deterministic(
+        HNSW& hnsw,
+        size_t n0,
+        size_t n,
+        int d,
+        bool init_level0,
+        bool keep_max_size_level0,
+        bool preset_levels,
+        bool verbose,
+        const std::function<DistanceComputer*()>& make_distance_computer,
+        const std::function<void(DistanceComputer&, HNSW::storage_idx_t)>&
+                set_query);
+
+/// Parameters of add_level_0_links_from_sample() of IndexHNSW and
+/// IndexBinaryHNSW.
+struct HNSWLevel0LinkParameters {
+    /// The search that the new links are for. nullptr: the search settings
+    /// of the index, which the IVF assignment with a coarse quantizer uses.
+    const SearchParametersHNSW* search_params = nullptr;
+    /// A sink receives at least this factor times the mean number of
+    /// vectors per node.
+    float min_mean_factor = 3.0f;
+    /// For at least this fraction of the vectors that the search sends to a
+    /// sink, an exact search finds a nearer node.
+    float min_closer_fraction = 0.5f;
+    /// Maximum number of level-0 links added to one sink in one round.
+    int max_links_per_sink = 32;
+    /// Maximum number of rounds that find sinks and add links.
+    int max_rounds = 3;
+};
+
+struct HNSWLevel0LinkStats {
+    /// Sinks found in the first round.
+    size_t n_sinks_found = 0;
+    /// Sinks found after the last round.
+    size_t n_sinks_remaining = 0;
+    /// Level-0 links written into free slots.
+    size_t n_links_added = 0;
+    /// Level-0 links that replaced a link.
+    size_t n_links_replaced = 0;
+    /// Rounds that changed links.
+    int n_rounds = 0;
+    /// Exact searches with the storage, in all rounds.
+    size_t n_exact_searches = 0;
+};
+
+/** The two searches of the sample vectors that
+ * hnsw_add_level_0_links_from_sample() compares. IndexHNSW and IndexBinaryHNSW
+ * implement them for their vector types. */
+struct HNSWLinkSampleSearch {
+    /// number of sample vectors
+    idx_t n = 0;
+
+    virtual ~HNSWLinkSampleSearch() = default;
+
+    /// HNSW search (k = 1) of the m sample vectors `ids` (null: the first m).
+    virtual void search(
+            const SearchParametersHNSW* params,
+            size_t m,
+            const idx_t* ids,
+            idx_t* labels) const = 0;
+
+    /** Exact search (k = 1) of the m sample vectors `ids`. nearer[j] is 1 when
+     * exact[j] is nearer than found[j] by more than rounding differences. */
+    virtual void search_exact(
+            size_t m,
+            const idx_t* ids,
+            const idx_t* found,
+            idx_t* exact,
+            uint8_t* nearer) const = 0;
+};
+
+/** add_level_0_links_from_sample() of IndexHNSW and IndexBinaryHNSW.
+ * `dis` computes distances between nodes. `similarity` is true when a larger
+ * distance is nearer. */
+HNSWLevel0LinkStats hnsw_add_level_0_links_from_sample(
+        HNSW& hnsw,
+        size_t ntotal,
+        DistanceComputer& dis,
+        bool similarity,
+        const HNSWLinkSampleSearch& sample,
+        const HNSWLevel0LinkParameters& params);
 
 struct HNSWStats {
     size_t n1 = 0; /// number of vectors searched
@@ -265,16 +386,23 @@ struct HNSWStats {
         ndis += other.ndis;
         nhops += other.nhops;
     }
+
+    void combine_atomic(const HNSWStats& other);
 };
 
 // global var that collects them all
 FAISS_API extern HNSWStats hnsw_stats;
 
+/// Internal HNSW algorithm helpers. These are not part of the public API; they
+/// are exposed here only so that unit tests (and a few cross-TU callers such as
+/// the Panorama search variant) can reach them.
+namespace hnsw_detail {
+
 int search_from_candidates(
         const HNSW& hnsw,
         DistanceComputer& qdis,
-        ResultHandler<HNSW::C>& res,
-        HNSW::MinimaxHeap& candidates,
+        ResultHandler& res,
+        MinimaxHeap& candidates,
         VisitedTable& vt,
         HNSWStats& stats,
         int level,
@@ -289,8 +417,8 @@ int search_from_candidates_panorama(
         const HNSW& hnsw,
         const IndexHNSW* index,
         DistanceComputer& qdis,
-        ResultHandler<HNSW::C>& res,
-        HNSW::MinimaxHeap& candidates,
+        ResultHandler& res,
+        MinimaxHeap& candidates,
         VisitedTable& vt,
         HNSWStats& stats,
         int level,
@@ -321,5 +449,7 @@ void search_neighbors_to_add(
         int level,
         VisitedTable& vt,
         bool reference_version = false);
+
+} // namespace hnsw_detail
 
 } // namespace faiss

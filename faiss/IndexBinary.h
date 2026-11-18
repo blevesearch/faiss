@@ -52,13 +52,17 @@ struct IndexBinary {
      * @param x      training vectors, size n * d / 8
      */
     virtual void train(idx_t n, const uint8_t* x);
+
+    /// Train from caller-controlled storage. Unsupported by default.
+    virtual void train(const gpu::Dataset& dataset);
+
     virtual void train_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::UInt8) {
             train(n, static_cast<const uint8_t*>(x));
         } else {
             FAISS_THROW_MSG("IndexBinary::train: unsupported numeric type");
         }
-    };
+    }
 
     /** Add n vectors of dimension d to the index.
      *
@@ -66,13 +70,17 @@ struct IndexBinary {
      * @param x      input matrix, size n * d / 8
      */
     virtual void add(idx_t n, const uint8_t* x) = 0;
+
+    /// Add caller-controlled storage. Unsupported by default.
+    virtual void add(const gpu::Dataset& dataset);
+
     virtual void add_ex(idx_t n, const void* x, NumericType numeric_type) {
         if (numeric_type == NumericType::UInt8) {
             add(n, static_cast<const uint8_t*>(x));
         } else {
             FAISS_THROW_MSG("IndexBinary::add: unsupported numeric type");
         }
-    };
+    }
 
     /** Same as add, but stores xids instead of sequential ids.
      *
@@ -93,7 +101,7 @@ struct IndexBinary {
             FAISS_THROW_MSG(
                     "IndexBinary::add_with_ids: unsupported numeric type");
         }
-    };
+    }
 
     /** Query n vectors of dimension d to the index.
      *
@@ -129,7 +137,7 @@ struct IndexBinary {
         } else {
             FAISS_THROW_MSG("IndexBinary::search: unsupported numeric type");
         }
-    };
+    }
 
     /** Query n vectors of dimension d to the index.
      *

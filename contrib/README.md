@@ -8,8 +8,6 @@ The contrib directory contains helper modules for Faiss for various tasks.
 The contrib directory gets compiled in the module faiss.contrib.
 Note that although some of the modules may depend on additional modules (eg. GPU Faiss, pytorch, hdf5), they are not necessarily compiled in to avoid adding dependencies. It is the user's responsibility to provide them.
 
-In contrib, we are progressively dropping python2 support.
-
 ## List of contrib modules
 
 ### rpc.py
@@ -69,6 +67,11 @@ Contains:
 - a Python implementation of kmeans, that can be used for special datatypes (eg. sparse matrices).
 
 - a 2-level clustering routine and a function that can apply it to train an IndexIVF
+
+### e_means
+
+Mini-batch k-means with FP32 centroid state and exponential moving averages.
+See the [E-means documentation](e_means/README.md) for the public `Emeans` API.
 
 ### big_batch_search.py
 

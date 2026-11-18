@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <cstdint>
 #include <cstdio>
 
@@ -24,6 +26,15 @@ namespace faiss {
  */
 
 namespace quantize_lut {
+
+/** Scale for a fast scan LUT, bounding both the uint8 entry and the uint16
+ *  sum the kernel accumulates. `n_rounded_terms` is how many rounded values
+ *  land in one accumulator: the columns, plus one for a rounded bias term.
+ */
+float fastscan_lut_scale(
+        float max_column_span,
+        float max_sum_span,
+        size_t n_rounded_terms);
 
 /* affine quantizer, a and b are the affine coefficients, marginalize over d
  *
@@ -50,7 +61,7 @@ void round_uint8_per_column_multi(
 
 /** LUT quantization to uint8 and bias to uint16.
  *
- * (nprobe, M, ksub, lut_is_3d) determine the size of the the LUT
+ * (nprobe, M, ksub, lut_is_3d) determine the size of the LUT
  *
  *  LUT input:
  *  - 2D size (M, ksub): single matrix per probe (lut_is_3d=false)

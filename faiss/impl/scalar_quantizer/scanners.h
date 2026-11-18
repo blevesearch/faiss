@@ -1,0 +1,238 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+// Private implementation header for per-SIMD scalar quantizer TUs.
+// Do not include in public APIs.
+
+#pragma once
+
+#include <faiss/impl/ScalarQuantizer.h>
+#include <faiss/impl/simdlib/simdlib_dispatch.h>
+#include <faiss/utils/simd_levels.h>
+
+#include <faiss/impl/simd_dispatch.h>
+
+#include <faiss/IndexIVF.h>
+#include <faiss/impl/FaissAssert.h>
+#include <faiss/impl/IDSelector.h>
+#include <faiss/impl/expanded_scanners.h>
+#include <faiss/utils/bf16.h>
+#include <faiss/utils/fp16.h>
+
+#include <faiss/impl/scalar_quantizer/codecs.h>
+#include <faiss/impl/scalar_quantizer/distance_computers.h>
+#include <faiss/impl/scalar_quantizer/quantizers.h>
+#include <faiss/impl/scalar_quantizer/similarities.h>
+
+namespace faiss {
+
+namespace scalar_quantizer {
+
+using QuantizerType = ScalarQuantizer::QuantizerType;
+using SQDistanceComputer = ScalarQuantizer::SQDistanceComputer;
+
+// True when query_to_codes_batch_4 matches four query_to_code calls. The SIMD
+// DCTemplate batch differs from the single path only for the uniform
+// quantizers, whose single path predecodes the query, so those stay on the
+// scalar scan and batched results never differ from scalar.
+template <class DC>
+constexpr bool sq_batch_4_is_exact() {
+    if constexpr (requires { DC::has_decode_raw(); }) {
+        return !DC::has_decode_raw();
+    } else {
+        return true;
+    }
+}
+
+/*******************************************************************
+ * IVFSQScannerIP / IVFSQScannerL2 — moved from anonymous namespace
+ * in ScalarQuantizer.cpp
+ *******************************************************************/
+
+template <class DCClass>
+struct IVFSQScannerIP : InvertedListScanner {
+    DCClass dc;
+    bool by_residual;
+
+    float accu0; /// added to all distances
+
+    IVFSQScannerIP(
+            int d,
+            const std::vector<float>& trained,
+            size_t code_size,
+            bool store_pairs,
+            const IDSelector* sel,
+            bool by_residual)
+            : dc(d, trained), by_residual(by_residual), accu0(0) {
+        this->store_pairs = store_pairs;
+        this->sel = sel;
+        this->code_size = code_size;
+        this->keep_max = true;
+    }
+
+    void set_query(const float* query) override {
+        dc.set_query(query);
+    }
+
+    void set_list(idx_t list_no, float coarse_dis) override {
+        this->list_no = list_no;
+        accu0 = by_residual ? coarse_dis : 0;
+    }
+
+    float distance_to_code(const uint8_t* code) const final {
+        return accu0 + dc.query_to_code(code);
+    }
+
+    void distance_to_codes_batch_4(
+            const uint8_t* code_0,
+            const uint8_t* code_1,
+            const uint8_t* code_2,
+            const uint8_t* code_3,
+            float& dis0,
+            float& dis1,
+            float& dis2,
+            float& dis3) const {
+        dc.query_to_codes_batch_4(
+                code_0, code_1, code_2, code_3, dis0, dis1, dis2, dis3);
+        dis0 += accu0;
+        dis1 += accu0;
+        dis2 += accu0;
+        dis3 += accu0;
+    }
+
+    size_t scan_codes(
+            size_t list_size,
+            const uint8_t* codes,
+            const idx_t* ids,
+            ResultHandler& handler) const override {
+        if constexpr (sq_batch_4_is_exact<DCClass>()) {
+            return run_scan_codes4_fix_C<CMin<float, idx_t>>(
+                    *this, list_size, codes, ids, handler);
+        } else {
+            return run_scan_codes_fix_C<CMin<float, idx_t>>(
+                    *this, list_size, codes, ids, handler);
+        }
+    }
+};
+
+template <class DCClass>
+struct IVFSQScannerL2 : InvertedListScanner {
+    DCClass dc;
+
+    bool by_residual;
+    const Index* quantizer;
+    const float* x; /// current query
+
+    std::vector<float> tmp;
+
+    IVFSQScannerL2(
+            int d,
+            const std::vector<float>& trained,
+            size_t code_size,
+            const Index* quantizer,
+            bool store_pairs,
+            const IDSelector* sel,
+            bool by_residual)
+            : dc(d, trained),
+              by_residual(by_residual),
+              quantizer(quantizer),
+              x(nullptr),
+              tmp(d) {
+        this->store_pairs = store_pairs;
+        this->sel = sel;
+        this->code_size = code_size;
+    }
+
+    void set_query(const float* query) override {
+        x = query;
+        if (!quantizer) {
+            dc.set_query(query);
+        }
+    }
+
+    void set_list(idx_t list_no, float /*coarse_dis*/) override {
+        this->list_no = list_no;
+        if (by_residual) {
+            quantizer->compute_residual(x, tmp.data(), list_no);
+            dc.set_query(tmp.data());
+        } else {
+            dc.set_query(x);
+        }
+    }
+
+    float distance_to_code(const uint8_t* code) const final {
+        return dc.query_to_code(code);
+    }
+
+    void distance_to_codes_batch_4(
+            const uint8_t* code_0,
+            const uint8_t* code_1,
+            const uint8_t* code_2,
+            const uint8_t* code_3,
+            float& dis0,
+            float& dis1,
+            float& dis2,
+            float& dis3) const {
+        dc.query_to_codes_batch_4(
+                code_0, code_1, code_2, code_3, dis0, dis1, dis2, dis3);
+    }
+
+    size_t scan_codes(
+            size_t list_size,
+            const uint8_t* codes,
+            const idx_t* ids,
+            ResultHandler& handler) const override {
+        if constexpr (sq_batch_4_is_exact<DCClass>()) {
+            return run_scan_codes4_fix_C<CMax<float, idx_t>>(
+                    *this, list_size, codes, ids, handler);
+        } else {
+            return run_scan_codes_fix_C<CMax<float, idx_t>>(
+                    *this, list_size, codes, ids, handler);
+        }
+    }
+};
+
+/*******************************************************************
+ * Forward declaration of inverts list scanner
+ *******************************************************************/
+
+template <SIMDLevel SL>
+InvertedListScanner* sq_select_InvertedListScanner(
+        QuantizerType qtype,
+        MetricType mt,
+        size_t d,
+        size_t code_size,
+        const std::vector<float>& trained,
+        const Index* quantizer,
+        bool store_pairs,
+        const IDSelector* sel,
+        bool by_residual);
+
+/// Scanner for QT_0bit / centroid-only distance: always returns the
+/// coarse distance that was set via set_list().
+struct IVFCoarseDistanceScanner : InvertedListScanner {
+    float coarse_dis = 0;
+
+    IVFCoarseDistanceScanner(
+            bool is_similarity,
+            bool store_pairs,
+            const IDSelector* sel)
+            : InvertedListScanner(store_pairs, sel) {
+        code_size = 0;
+        keep_max = is_similarity;
+    }
+
+    void set_query(const float* /*query_vector*/) override {}
+
+    void set_list(idx_t list_no_in, float coarse_dis_in) override;
+
+    float distance_to_code(const uint8_t* /*code*/) const override;
+};
+
+} // namespace scalar_quantizer
+
+} // namespace faiss

@@ -15,8 +15,8 @@ struct Tempfilename {
     pthread_mutex_t* mutex;
     std::string filename;
 
-    Tempfilename(pthread_mutex_t* mutex, std::string filename_template) {
-        this->mutex = mutex;
+    Tempfilename(pthread_mutex_t* mutex_in, std::string filename_template) {
+        this->mutex = mutex_in;
         this->filename = filename_template;
         pthread_mutex_lock(mutex);
         int fd = mkstemp(&this->filename[0]);
@@ -25,7 +25,7 @@ struct Tempfilename {
     }
 
     ~Tempfilename() {
-        if (access(filename.c_str(), F_OK)) {
+        if (access(filename.c_str(), F_OK) == 0) {
             unlink(filename.c_str());
         }
     }
