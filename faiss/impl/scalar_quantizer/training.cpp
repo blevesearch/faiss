@@ -366,19 +366,18 @@ void train_NonUniform(
     } else {
         // transpose
         std::vector<float> xt(n * d);
-        for (idx_t i = 1; i < n; i++) {
+        for (idx_t i = 0; i < n; i++) {
             const float* xi = x + i * d;
             for (int j = 0; j < d; j++) {
                 xt[j * n + i] = xi[j];
             }
         }
-        std::vector<float> trained_d(2);
-
 // Add an openMP guard here to prevent spawning threads
 // when d = 1 (which would indicate sequential execution).
 // This is for bleve, more in MB-61930.
 #pragma omp parallel for if (d > 1) num_threads(num_omp_threads)
         for (int j = 0; j < d; j++) {
+            std::vector<float> trained_d(2);
             train_Uniform(rs, rs_arg, n, k, xt.data() + j * n, trained_d);
             vmin[j] = trained_d[0];
             vmax[j] = trained_d[1];

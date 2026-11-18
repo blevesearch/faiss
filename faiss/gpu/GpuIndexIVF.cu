@@ -407,6 +407,7 @@ void GpuIndexIVF::searchImpl_(
 
     const IDSelector* sel = params ? params->sel : nullptr;
 
+    baseIndex_->setDeterministicTieBreak(ivfConfig_.deterministic_tie_break);
     baseIndex_->search(
             quantizer, queries, use_nprobe, k, outDistances, outLabels, sel);
 }
@@ -478,6 +479,7 @@ void GpuIndexIVF::search_preassigned(
     auto outIndicesDevice = toDeviceTemporary<idx_t, 2>(
             resources_.get(), config_.device, labels, stream, {n, k});
 
+    baseIndex_->setDeterministicTieBreak(ivfConfig_.deterministic_tie_break);
     baseIndex_->searchPreassigned(
             quantizer,
             vecsDevice,
